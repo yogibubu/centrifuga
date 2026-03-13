@@ -1,0 +1,131 @@
+=== Van Vleck effective Hamiltonian to 4th order ===
+order 1: terms=0, quartic-ground=0
+order 2: terms=163, quartic-ground=81
+order 3: terms=0, quartic-ground=0
+order 4: terms=644, quartic-ground=81
+
+=== Quartic tau tensor coefficients (primary output) ===
+tau_xxxx = A*(-5707986565*A*C**2*hbar - 6484601733120*A + 40246112256*B*C*hbar)/6742112993280
+tau_yyyy = A*(-279203581*A*C**2*hbar - 170893836288*A + 3121085184*B*C*hbar)/299649466368
+tau_zzzz = A*(-26757909533*A*C**2*hbar - 16129568931840*A + 405951006720*B*C*hbar)/299649466368000
+tau_xxyy = A*(-1745597263771*A*C**2*hbar - 1758972466298880*A + 15961082757120*B*C*hbar)/866843099136000
+tau_xxzz = A*(-49547809517*A*C**2*hbar - 98078347100160*A + 817080701952*B*C*hbar)/48157949952000
+tau_yyzz = A*(-306625975513*A*C**2*hbar - 222723829923840*A + 7026513575424*B*C*hbar)/168552824832000
+
+=== Quartic tau tensor by perturbative order ===
+
+order 1:
+  tau_xxxx = 0
+  tau_yyyy = 0
+  tau_zzzz = 0
+  tau_xxyy = 0
+  tau_xxzz = 0
+  tau_yyzz = 0
+
+order 2:
+  tau_xxxx = -277*A**2/288
+  tau_yyyy = -73*A**2/128
+  tau_zzzz = -689*A**2/12800
+  tau_xxyy = -525961*A**2/259200
+  tau_xxzz = -29327*A**2/14400
+  tau_yyzz = -4757*A**2/3600
+
+order 3:
+  tau_xxxx = 0
+  tau_yyyy = 0
+  tau_zzzz = 0
+  tau_xxyy = 0
+  tau_xxzz = 0
+  tau_yyzz = 0
+
+order 4:
+  tau_xxxx = A*C*hbar*(-5707986565*A*C + 40246112256*B)/6742112993280
+  tau_yyyy = A*C*hbar*(-279203581*A*C + 3121085184*B)/299649466368
+  tau_zzzz = A*C*hbar*(-26757909533*A*C + 405951006720*B)/299649466368000
+  tau_xxyy = A*C*hbar*(-1745597263771*A*C + 15961082757120*B)/866843099136000
+  tau_xxzz = A*C*hbar*(-49547809517*A*C + 817080701952*B)/48157949952000
+  tau_yyzz = A*C*hbar*(-306625975513*A*C + 7026513575424*B)/168552824832000
+
+=== Fourth-order tau contributions by Hmn class ===
+
+origin ('H12', 'H30'):
+  tau_xxxx = A*C*hbar*(-5707986565*A*C + 40246112256*B)/6742112993280
+  tau_yyyy = A*C*hbar*(-279203581*A*C + 3121085184*B)/299649466368
+  tau_zzzz = A*C*hbar*(-26757909533*A*C + 405951006720*B)/299649466368000
+  tau_xxyy = A*C*hbar*(-1745597263771*A*C + 15961082757120*B)/866843099136000
+  tau_xxzz = A*C*hbar*(-49547809517*A*C + 817080701952*B)/48157949952000
+  tau_yyzz = A*C*hbar*(-306625975513*A*C + 7026513575424*B)/168552824832000
+
+=== Fourth-order tau contributions by symbolic class ===
+
+class other:
+  tau_xxxx = A*C*hbar*(-5707986565*A*C + 40246112256*B)/6742112993280
+  tau_yyyy = A*C*hbar*(-279203581*A*C + 3121085184*B)/299649466368
+  tau_zzzz = A*C*hbar*(-26757909533*A*C + 405951006720*B)/299649466368000
+  tau_xxyy = A*C*hbar*(-1745597263771*A*C + 15961082757120*B)/866843099136000
+  tau_xxzz = A*C*hbar*(-49547809517*A*C + 817080701952*B)/48157949952000
+  tau_yyzz = A*C*hbar*(-306625975513*A*C + 7026513575424*B)/168552824832000
+
+=== Watson A-reduction constants (derived from tau) ===
+DJ = A*(1745597263771*A*C**2*hbar + 1758972466298880*A - 15961082757120*B*C*hbar)/1733686198272000
+DJK = -A*(447300160949*A*C**2*hbar + 265605307269120*A + 8278218660096*B*C*hbar)/758487711744000
+DK = A*(-7957365870253*A*C**2*hbar - 14819749612093440*A + 455476124178432*B*C*hbar)/24271606775808000
+d1 = A*(-88805761469*A*C**2*hbar + 80366923284480*A + 2777820745728*B*C*hbar)/224737099776000
+d2 = A*(1061216893*A*C**2*hbar - 487170754560*A - 30511370616*B*C*hbar)/3009871872000
+
+=== Watson S-reduction constants (derived from tau) ===
+DJ = A*(1745597263771*A*C**2*hbar + 1758972466298880*A - 15961082757120*B*C*hbar)/1733686198272000
+DJK = A*(180291630385*A*C**2*hbar + 307755218534400*A - 7124532809856*B*C*hbar)/168552824832000
+DK = A*(26757909533*A*C**2*hbar + 16129568931840*A - 405951006720*B*C*hbar)/299649466368000
+d1 = A*(-1148188015*A*C**2*hbar + 5278980833280*A + 59956608768*B*C*hbar)/26968451973120
+d2 = A*(-88805761469*A*C**2*hbar + 80366923284480*A + 2777820745728*B*C*hbar)/224737099776000
+
+=== Symbol presence in final tau coefficients ===
+mu1 contributes: False
+mu2 contributes: False
+phi3 contributes: False
+phi4 contributes: False
+
+=== Example quartic operator coefficients (first 10) ===
+(Jx, Jx, Jx, Jx) : -A*(6484601733120*A + C*hbar*(5707986565*A*C - 40246112256*B))/6742112993280
+(Jx, Jx, Jx, Jy) : -A*(5173635317760*A + C*hbar*(5161838165*A*C - 71025545472*B))/50565847449600
+(Jx, Jx, Jx, Jz) : -A*(13741737246720*A + C*hbar*(6726973055*A*C - 184381903104*B))/33710564966400
+(Jx, Jx, Jy, Jx) : -A*(9808838000640*A + C*hbar*(5088527855*A*C - 58239240192*B))/13484225986560
+(Jx, Jx, Jy, Jy) : -A*(222396088320*A + C*hbar*(315354065*A*C - 2690735488*B))/374561832960
+(Jx, Jx, Jy, Jz) : -A*(3909489131520*A + C*hbar*(2630860055*A*C - 187883533824*B))/33710564966400
+(Jx, Jx, Jz, Jx) : -A*(23573985361920*A + C*hbar*(10823086055*A*C - 243421000704*B))/33710564966400
+(Jx, Jx, Jz, Jy) : -A*(228248616960*A + C*hbar*(262116255*A*C - 2994114368*B))/280921374720
+(Jx, Jx, Jz, Jz) : -A*(7889208606720*A + C*hbar*(11638038925*A*C - 139936269312*B))/44947419955200
+(Jx, Jy, Jx, Jx) : -A*(5173635317760*A + C*hbar*(5161838165*A*C - 71025545472*B))/50565847449600
+
+=== Family polynomial decomposition (A=mu1, B=mu2, C=phi3, D=phi4) ===
+
+tau_xxxx:
+  A^1 B^1 C^1 D^0 : 467891*hbar/78382080
+  A^2 B^0 C^0 D^0 : -277/288
+  A^2 B^0 C^2 D^0 : -1141597313*hbar/1348422598656
+
+tau_yyyy:
+  A^1 B^1 C^1 D^0 : 82937*hbar/7962624
+  A^2 B^0 C^0 D^0 : -73/128
+  A^2 B^0 C^2 D^0 : -279203581*hbar/299649466368
+
+tau_zzzz:
+  A^1 B^1 C^1 D^0 : 1887793*hbar/1393459200
+  A^2 B^0 C^0 D^0 : -689/12800
+  A^2 B^0 C^2 D^0 : -26757909533*hbar/299649466368000
+
+tau_xxyy:
+  A^1 B^1 C^1 D^0 : 5412151*hbar/293932800
+  A^2 B^0 C^0 D^0 : -525961/259200
+  A^2 B^0 C^2 D^0 : -1745597263771*hbar/866843099136000
+
+tau_xxzz:
+  A^1 B^1 C^1 D^0 : 265976791*hbar/15676416000
+  A^2 B^0 C^0 D^0 : -29327/14400
+  A^2 B^0 C^2 D^0 : -49547809517*hbar/48157949952000
+
+tau_yyzz:
+  A^1 B^1 C^1 D^0 : 653507587*hbar/15676416000
+  A^2 B^0 C^0 D^0 : -4757/3600
+  A^2 B^0 C^2 D^0 : -306625975513*hbar/168552824832000

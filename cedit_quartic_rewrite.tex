@@ -1,0 +1,281 @@
+\subsection{Quartic centrifugal distortion: tensorial formulation}
+
+A compact tensorial representation of quartic centrifugal distortion is obtained
+most naturally in terms of the reduced symmetric tensor $\Tau'$, rather than in
+terms of the full fourth-rank tensor
+$\tau_{\alpha\beta\gamma\delta}$.
+For a quartic rotational operator of pair--pair type, the six independent tensor
+components are
+\[
+\boldsymbol\tau^{(4)}=
+\bigl(
+\tau_{aaaa},\tau_{bbbb},\tau_{cccc},
+\tau_{aabb},\tau_{aacc},\tau_{bbcc}
+\bigr)^T,
+\]
+and the corresponding Gaussian-consistent reduced matrix is
+\begin{align}
+\Tau'_{aa} &= \tau_{aaaa}, &
+\Tau'_{bb} &= \tau_{bbbb}, &
+\Tau'_{cc} &= \tau_{cccc}, \\
+\Tau'_{ab} &= \tfrac12 \tau_{aabb}, &
+\Tau'_{ac} &= \tfrac12 \tau_{aacc}, &
+\Tau'_{bc} &= \tfrac12 \tau_{bbcc}.
+\end{align}
+Thus
+\begin{equation}
+\Tau'=
+\begin{pmatrix}
+\tau_{aaaa} & \tau_{aabb}/2 & \tau_{aacc}/2 \\
+\tau_{aabb}/2 & \tau_{bbbb} & \tau_{bbcc}/2 \\
+\tau_{aacc}/2 & \tau_{bbcc}/2 & \tau_{cccc}
+\end{pmatrix}.
+\label{eq:tauprime_matrix}
+\end{equation}
+
+This object is a real symmetric $3\times 3$ tensor in the molecular principal
+axis frame.  It therefore admits the spectral decomposition
+\begin{equation}
+\Tau' = R\,\mathrm{diag}(\lambda_1,\lambda_2,\lambda_3)\,R^{T},
+\label{eq:tauprime_spectral}
+\end{equation}
+where $\lambda_1,\lambda_2,\lambda_3$ are the eigenvalues of $\Tau'$ and
+$R\in SO(3)$ specifies the orientation of the principal frame of $\Tau'$ with
+respect to the molecular inertial axes.  At this level the quartic tensor is
+therefore described by three spectral invariants and three orientation
+coordinates.  Under a change of principal-axis representation,
+\begin{equation}
+\Tau' \longrightarrow P^{T}\Tau' P,
+\end{equation}
+where $P$ is the permutation matrix associated with the relabeling of the
+inertial axes.  The eigenvalues of $\Tau'$ are therefore representation
+invariants.
+
+This observation provides the natural geometric starting point for the standard
+$H_{12}H_{12}$ quartic contribution.  In particular, it clarifies that the
+previously introduced Coriolis tensor
+\begin{equation}
+M_{\mu\nu}=
+\sum_k \frac{G_{k\mu}G_{k\nu}}{\omega_k^2}
+\end{equation}
+should be regarded as an auxiliary Coriolis invariant tensor, not as the
+quartic tensor itself.  The spectroscopically relevant quartic object is
+$\Tau'$, because it is $\Tau'$ that enters directly into the projection onto
+Watson's quartic centrifugal distortion constants.
+
+\paragraph{Forward projection to Watson constants.}
+
+Once $\Tau'$ has been constructed, the remaining steps are the standard
+Gaussian-consistent quartic projection.  One defines the Cartesian quartic
+matrix
+\begin{equation}
+T_{ij}=\frac{\Tau'_{ij}}{4},
+\label{eq:T_from_tauprime}
+\end{equation}
+forms the cylindrical quartic combinations
+\begin{align}
+T_{400} &= \frac{3T_{aa}+3T_{bb}+2T_{ab}}{8}, \\
+T_{220} &= T_{ac}+T_{bc}-2T_{400}, \\
+T_{040} &= T_{cc}-T_{220}-T_{400}, \\
+T_{202} &= \frac{T_{aa}-T_{bb}}{4}, \\
+T_{022} &= \frac{T_{ac}-T_{bc}}{2}-T_{202}, \\
+T_{004} &= \frac{T_{aa}+T_{bb}-2T_{ab}}{16},
+\label{eq:cylindrical_quartic}
+\end{align}
+and finally evaluates the quartic constants in Watson's $A$ reduction,
+\begin{align}
+\Delta_J   &= -T_{400}-2T_{004}, \\
+\Delta_{JK}&= -T_{220}+12T_{004}, \\
+\Delta_K   &= -T_{040}-10T_{004}, \\
+\delta_J   &= -T_{202}, \\
+\delta_K   &= -T_{022}-4\Sigma T_{004},
+\label{eq:watson_A_quartic}
+\end{align}
+with
+\begin{equation}
+\Sigma=\frac{2A-B-C}{B-C},
+\end{equation}
+or, equivalently, the $S$-reduced constants
+\begin{align}
+D_J   &= -T_{400}+\frac12 T_{022}\Sigma_1, \\
+D_{JK}&= -T_{220}-3T_{022}\Sigma_1, \\
+D_K   &= -T_{040}+\frac52 T_{022}\Sigma_1, \\
+d_1   &= T_{202}, \\
+d_2   &= T_{004}+\frac14 T_{022}\Sigma_1,
+\label{eq:watson_S_quartic}
+\end{align}
+with
+\begin{equation}
+\Sigma_1=\frac{B-C}{2A-B-C}=\Sigma^{-1}.
+\end{equation}
+The forward projection from the tensorial description to Watson's quartic
+constants is therefore unique once the pair--pair tensor has been specified.
+
+\paragraph{Inverse reconstruction and affine gauge family.}
+
+The inverse problem is different.  The spectroscopic constants in a fixed
+Watson reduction provide only five independent quartic parameters, whereas the
+pair--pair tensor contains six coordinates.  Consequently, the linear map
+\begin{equation}
+\boldsymbol\tau^{(4)} \longmapsto \mathbf D^{(4)}
+\end{equation}
+has rank five and therefore a one-dimensional null space.  In the $A$
+reduction, if
+\begin{equation}
+\Sigma=\frac{2A-B-C}{B-C},
+\end{equation}
+a null vector can be written as
+\begin{equation}
+\mathbf n =
+\left(
+0,\,
+0,\,
+0,\,
+1,\,
+\frac{\Sigma-1}{2},\,
+-\frac{\Sigma+1}{2}
+\right)^T.
+\label{eq:quartic_null_vector}
+\end{equation}
+In terms of $\Tau'$, the corresponding null matrix is
+\begin{equation}
+N'=
+\begin{pmatrix}
+0 & 1/2 & (\Sigma-1)/4 \\
+1/2 & 0 & -(\Sigma+1)/4 \\
+(\Sigma-1)/4 & -(\Sigma+1)/4 & 0
+\end{pmatrix}.
+\label{eq:quartic_null_matrix}
+\end{equation}
+Therefore, if $\Tau'$ is any quartic tensor consistent with a given set of
+Watson constants, then
+\begin{equation}
+\Tau' \;\sim\; \Tau' + \eta N'
+\label{eq:quartic_affine_family}
+\end{equation}
+for arbitrary scalar $\eta$ yields exactly the same spectroscopic quartic
+constants.
+
+This is the key structural point: the one-dimensional null space does not
+express a physical constraint on quartic centrifugal distortion.  Rather, it
+defines an affine gauge family of tensor representatives associated with a fixed
+set of Watson constants.  The inverse reconstruction of the tensor from
+spectroscopic constants therefore requires a gauge choice.
+
+\paragraph{Moore--Penrose pseudoinverse as gauge fixing.}
+
+In the present implementation the tensor is reconstructed by means of the
+Moore--Penrose pseudoinverse,
+\begin{equation}
+\boldsymbol\tau^{(4)}=
+\mathbf R_4^{+}(A,B,C)\,\mathbf D^{(4)},
+\label{eq:quartic_pseudoinverse}
+\end{equation}
+where $\mathbf R_4^{+}$ denotes the pseudoinverse of the quartic projection
+matrix in the reduced pair--pair tensor space.  This does not impose a physical
+condition on the quartic tensor; it merely selects one distinguished
+representative inside the affine family of Eq.~\eqref{eq:quartic_affine_family}.
+The corresponding gauge-fixing condition is
+\begin{equation}
+\tau_{aabb}+\frac{\Sigma-1}{2}\tau_{aacc}
+-\frac{\Sigma+1}{2}\tau_{bbcc}=0,
+\label{eq:pseudoinverse_gauge_tau}
+\end{equation}
+or, equivalently,
+\begin{equation}
+2\Tau'_{ab}+(\Sigma-1)\Tau'_{ac}-(\Sigma+1)\Tau'_{bc}=0.
+\label{eq:pseudoinverse_gauge_tauprime}
+\end{equation}
+Equation~\eqref{eq:pseudoinverse_gauge_tauprime} must therefore be interpreted
+as a pseudoinverse gauge condition, not as an intrinsic physical law.
+
+\paragraph{Representation transforms.}
+
+Within this tensorial framework, a change of principal-axis representation is
+performed by three steps:
+\begin{enumerate}
+\item reconstruct the pair--pair tensor $\boldsymbol\tau^{(4)}$ from Watson's
+constants by pseudoinverse reconstruction;
+\item permute the tensor according to the corresponding relabeling of the
+principal axes;
+\item reproject the permuted tensor to Watson's quartic constants by the unique
+forward map of Eqs.~\eqref{eq:T_from_tauprime}--\eqref{eq:watson_S_quartic}.
+\end{enumerate}
+This procedure replaces the explicit analytical transformation matrices usually
+written for particular operator parametrizations by a tensor-based algorithm
+defined directly in the pair--pair tensor space.
+
+\paragraph{Role of the spectral description.}
+
+The spectral form of Eq.~\eqref{eq:tauprime_spectral} shows that the quartic
+tensor has a natural $3+3$ description in terms of three eigenvalues and three
+orientation coordinates.  Since Watson's quartic Hamiltonian contains only five
+independent parameters, this six-dimensional tensorial description is necessarily
+reduced in passing to the spectroscopic constants.  The reduction, however, does
+not arise by discarding one Euler angle.  Instead, the five-dimensional
+spectroscopic space is obtained as the quotient of the six-dimensional tensor
+space by the one-dimensional affine gauge family generated by $N'$.
+
+From this perspective, the spectroscopic constants describe equivalence classes
+of quartic tensors, whereas the tensor $\Tau'$ itself retains the full spatial
+information prior to the gauge choice associated with inverse reconstruction.
+This distinction is useful both conceptually and algorithmically: it separates
+the intrinsic tensorial content of quartic centrifugal distortion from the
+particular parametrization chosen in Watson's Hamiltonian.
+
+\paragraph{Diagnostic role of $s_{111}$.}
+
+The parameter $s_{111}$ should still be retained in the practical analysis, but
+its role is different from that of the tensorial variables introduced above.  It
+is not taken here as a fundamental coordinate of the quartic tensor.  Instead,
+it is a useful diagnostic quantity associated with the unitary transformation
+that connects different parametrizations of Watson's effective Hamiltonian.
+\cite{Watson1968JCP}
+Specifically,
+\[
+\tilde H=e^{iS}He^{-iS}
+\]
+with
+\[
+S=s_{111}(J_xJ_yJ_z+J_zJ_yJ_x).
+\]
+For the $A$ reduction one has
+\begin{equation}
+s_{111}^{(A)} =
+\frac{1}{2(A-B)}
+\left(
+\frac{\delta_J}{B-C}
+-\frac{\delta_K}{A-C}
+\right),
+\label{eq:s111_A}
+\end{equation}
+whereas for the $S$ reduction
+\begin{equation}
+s_{111}^{(S)} =
+\frac{1}{2(A-B)}
+\left(
+\frac{d_1}{B-C}
+-\frac{d_2}{A-C}
+\right).
+\label{eq:s111_S}
+\end{equation}
+When comparing different principal-axis representations, the rotational
+constants must of course be permuted according to the corresponding relabeling
+of the axes.  In the present framework, $s_{111}$ is therefore best regarded as
+an auxiliary gauge diagnostic associated with a chosen Watson parametrization,
+not as one of the primary tensorial coordinates of quartic centrifugal
+distortion.
+
+\paragraph{Comment on the Yamada convention.}
+
+Care is required when comparing these equations with the formulas of Yamada and
+Winnewisser.\cite{Yamada1976}  The discrepancy is not limited to a simple
+overall sign change.  In the anisotropic quartic sector, the Yamada operator
+convention does not coincide term by term with the modern
+Watson/SPFIT/Gaussian convention, particularly for the term associated with
+$d_K$ (or equivalently $\delta_K$ in the $A$ reduction).  In practice this
+means that the mapping from Yamada's constants to Watson's constants involves
+both a sign change and a different normalization of the corresponding operator
+coefficient.  In the present work all quartic constants are defined directly in
+the modern Watson convention, and the equations above are used consistently
+throughout.

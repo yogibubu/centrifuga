@@ -1,0 +1,281 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single}
+
+\title{Symbolic Van Vleck Derivation of Quartic Centrifugal Distortion Constants\\
+\large A $\tau$-First Formulation in Terms of the $H_{mn}$ Blocks}
+\author{Codex + custom SymPy workflow}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Aim}
+The purpose of this implementation is to derive symbolically the quartic rotational block
+of the rovibrational effective Hamiltonian starting from the standard block decomposition
+\begin{equation}
+H = H_{20} + H_{02} + H_{12} + H_{30} + H_{22} + H_{40},
+\end{equation}
+where
+\begin{align}
+H_{20} &= \sum_i \hbar\omega_i\left(a_i^\dagger a_i + \frac12\right),\\
+H_{02} &= \text{rigid-rotor block},\\
+H_{12} &= \frac12 \sum_{\alpha\beta k} \mu_{\alpha\beta,k} q_k J_\alpha J_\beta,\\
+H_{22} &= \frac14 \sum_{\alpha\beta kl} \mu_{\alpha\beta,kl} q_k q_l J_\alpha J_\beta,\\
+H_{30} &= \frac16 \sum_{ijk} \Phi_{ijk} q_i q_j q_k,\\
+H_{40} &= \frac1{24} \sum_{ijkl} \Phi_{ijkl} q_i q_j q_k q_l.
+\end{align}
+The normal coordinates are written as
+\begin{equation}
+q_i = \sqrt{\frac{\hbar}{2\omega_i}}\,(a_i + a_i^\dagger),
+\end{equation}
+with bosonic commutator
+\begin{equation}
+[a_i,a_j^\dagger]=\delta_{ij}.
+\end{equation}
+
+The key design choice is that the symbolic derivation stops first at the quartic tensor
+\(\tau\), rather than directly at Watson constants. Watson A- or S-reduction constants are
+then obtained by linear projection of \(\tau\).
+
+\section{Perturbative Organization}
+The perturbation expansion is organized according to the standard rovibrational power counting,
+\begin{align}
+H^{(0)} &= H_{20} + H_{02},\\
+H^{(1)} &= H_{12} + H_{30},\\
+H^{(2)} &= H_{22} + H_{40}.
+\end{align}
+With this assignment, the quartic rotational block of the effective Hamiltonian is naturally
+resolved into the following contribution classes:
+\begin{itemize}
+\item \((H_{12},H_{12})\),
+\item \((H_{22})\),
+\item \((H_{12},H_{30})\),
+\item \((H_{30},H_{30})\),
+\item \((H_{40})\).
+\end{itemize}
+
+This classification is also used as an explicit filtering criterion in the code, so that only
+physically relevant terms are retained during the symbolic expansion.
+
+\section{Implementation}
+The implementation is contained in
+\begin{center}
+\texttt{/Users/vincenzobarone/centrifugal/derive\_watson\_quartic\_vanvleck.py}
+\end{center}
+
+\subsection{Operator Algebra}
+The code represents each operator monomial explicitly as
+\begin{itemize}
+\item a vibrational word, i.e. a tuple of \texttt{("a",k)} and \texttt{("ad",k)},
+\item a non-commuting rotational word in \(J_x,J_y,J_z\),
+\item metadata tracking the \(H_{mn}\) origin of the term.
+\end{itemize}
+
+The following operations are implemented:
+\begin{itemize}
+\item multiplication of operator expressions,
+\item commutators \([A,B]=AB-BA\),
+\item recursive bosonic normal ordering using
+\[
+a_i a_j^\dagger \rightarrow a_j^\dagger a_i + \delta_{ij}.
+\]
+\end{itemize}
+
+\subsection{Van Vleck Construction}
+The effective Hamiltonian is constructed by a Lie transform,
+\begin{equation}
+K = e^{S} H e^{-S}
+  = H + [S,H] + \frac{1}{2!}[S,[S,H]] + \frac{1}{3!}[S,[S,[S,H]]] + \cdots,
+\end{equation}
+with
+\begin{equation}
+S = \sum_{n\ge1} S^{(n)}.
+\end{equation}
+At each perturbative order \(m\), \(S^{(m)}\) is chosen so as to remove the vibrationally
+off-diagonal part of \(K^{(m)}\).
+
+\subsection{Filtering Layer}
+To keep the symbolic derivation tractable, each operator monomial is filtered using three
+criteria:
+\begin{itemize}
+\item rotational degree \(\le 4\),
+\item even bosonic degree,
+\item allowed contribution class in the set
+\[
+(H_{12},H_{12}),\ (H_{22}),\ (H_{12},H_{30}),\ (H_{30},H_{30}),\ (H_{40}).
+\]
+\end{itemize}
+Only surviving terms are passed to the full normal-ordering and Lie-transform machinery.
+
+\subsection{Physical Output}
+After bosonic normal ordering and projection onto the vibrational ground state,
+only the quartic rotational block is retained. The primary physical output is the symmetric
+quartic tensor
+\begin{equation}
+(\tau_{xxxx},\tau_{yyyy},\tau_{zzzz},\tau_{xxyy},\tau_{xxzz},\tau_{yyzz}),
+\end{equation}
+which multiplies
+\begin{equation}
+J_x^4,\ J_y^4,\ J_z^4,\ J_x^2J_y^2,\ J_x^2J_z^2,\ J_y^2J_z^2.
+\end{equation}
+Watson constants in either A or S reduction are obtained afterwards by linear projection.
+
+\section{Commands Used}
+\begin{lstlisting}
+python3 derive_watson_quartic_vanvleck.py --max-order 2
+python3 derive_watson_quartic_vanvleck.py --max-order 3
+python3 derive_watson_quartic_vanvleck.py --max-order 4
+\end{lstlisting}
+
+\section{Notation}
+For the reduced symbolic runs discussed below (one mode, diagonal ansatz), the following
+publication-style notation is used:
+\begin{align}
+\mu_{xx}^{(1)} &\equiv \mu_{xx,1}, &
+\mu_{yy}^{(1)} &\equiv \mu_{yy,1}, &
+\mu_{zz}^{(1)} &\equiv \mu_{zz,1},\\
+\mu_{xx}^{(2)} &\equiv \mu_{xx,11}, &
+\mu_{yy}^{(2)} &\equiv \mu_{yy,11}, &
+\mu_{zz}^{(2)} &\equiv \mu_{zz,11},\\
+\Phi^{(3)} &\equiv \Phi_{111}, &
+\Phi^{(4)} &\equiv \Phi_{1111}, &
+\omega &\equiv \omega_1.
+\end{align}
+
+\section{Results}
+\subsection{Second Order}
+\paragraph{Contribution class \((H_{12},H_{12})\).}
+At second order, the quartic tensor receives contributions only from the class
+\((H_{12},H_{12})\). In index form, this means that the effective quartic tensor is bilinear
+in the first rovibrational coupling tensor \(\mu_{\alpha\beta,k}\mu_{\gamma\delta,k}\), with
+the expected harmonic denominators. In the monomial basis used by the code,
+\[
+J_x^4,\ J_y^4,\ J_z^4,\ J_x^2J_y^2,\ J_x^2J_z^2,\ J_y^2J_z^2,
+\]
+the exact second-order coefficients are
+\begin{align}
+\tau_{\alpha\alpha\alpha\alpha}^{(2)} &=
+-\sum_k \frac{\mu_{\alpha\alpha,k}^2}{8\omega_k^2},\\
+\tau_{\alpha\alpha\beta\beta}^{(2)} &=
+-\sum_k \frac{\mu_{\alpha\alpha,k}\mu_{\beta\beta,k}}{4\omega_k^2},
+\qquad \alpha \neq \beta.
+\end{align}
+This is the standard known second-order result in the present normalization, and the symbolic
+code is used here as an internal validation benchmark: it must reproduce exactly this structure
+before the higher-order channels are analyzed.
+
+In the reduced one-mode diagonal run used for explicit symbolic verification, this becomes
+\begin{align}
+\tau_{xxxx} &= -\frac{\left(\mu_{xx}^{(1)}\right)^2}{8\omega^2}, &
+\tau_{yyyy} &= -\frac{\left(\mu_{yy}^{(1)}\right)^2}{8\omega^2}, &
+\tau_{zzzz} &= -\frac{\left(\mu_{zz}^{(1)}\right)^2}{8\omega^2},\\
+\tau_{xxyy} &= -\frac{\mu_{xx}^{(1)}\mu_{yy}^{(1)}}{4\omega^2}, &
+\tau_{xxzz} &= -\frac{\mu_{xx}^{(1)}\mu_{zz}^{(1)}}{4\omega^2}, &
+\tau_{yyzz} &= -\frac{\mu_{yy}^{(1)}\mu_{zz}^{(1)}}{4\omega^2}.
+\end{align}
+
+Projection of this tensor onto Watson A reduction yields, for the same reduced run,
+\begin{align}
+D_J &= \frac{\mu_{xx}^{(1)}\mu_{yy}^{(1)}}{8\omega^2},\\
+D_{JK} &= \frac{-2\mu_{xx}^{(1)}\mu_{yy}^{(1)} + \mu_{xx}^{(1)}\mu_{zz}^{(1)} + \mu_{yy}^{(1)}\mu_{zz}^{(1)}}{8\omega^2},\\
+D_K &= \frac{\mu_{xx}^{(1)}\mu_{yy}^{(1)} - \mu_{xx}^{(1)}\mu_{zz}^{(1)} - \mu_{yy}^{(1)}\mu_{zz}^{(1)} + \left(\mu_{zz}^{(1)}\right)^2}{8\omega^2},\\
+d_1 &= \frac{\mu_{zz}^{(1)}\left(\mu_{xx}^{(1)}-\mu_{yy}^{(1)}\right)}{8\omega^2},\\
+d_2 &= \frac{\left(\mu_{xx}^{(1)}\right)^2 - \left(\mu_{yy}^{(1)}\right)^2 - 2\mu_{zz}^{(1)}\left(\mu_{xx}^{(1)}-\mu_{yy}^{(1)}\right)}{16\omega^2}.
+\end{align}
+Thus, at second order, the quartic Watson constants arise exclusively from the
+\((H_{12},H_{12})\) channel. No contribution from \(H_{22}\), \(H_{30}\), or \(H_{40}\)
+appears yet.
+
+\subsection{Third Order}
+In the current symbolic run, no new quartic ground-state contribution is produced at third order:
+\(K^{(3)}\) does not add new \(J^4\) terms. In terms of the \(H_{mn}\) classification, the
+candidate odd-order channels do not generate an additional effective contribution to \(\tau\)
+in the present setup.
+
+\subsection{Fourth Order}
+\paragraph{Contribution classes \((H_{22})\), \((H_{12},H_{30})\), \((H_{30},H_{30})\), \((H_{40})\).}
+At fourth order, the code produces nonzero corrections to the quartic tensor. In general one
+expects contributions from the classes
+\begin{itemize}
+\item terms linear in \(\mu_{\alpha\alpha}^{(2)}\), associated with \(H_{22}\),
+\item terms linear in \(\Phi^{(4)}\), associated with \(H_{40}\),
+\item terms quadratic in \(\Phi^{(3)}\), associated with \((H_{30},H_{30})\),
+\item mixed terms \(\mu_{\alpha\alpha}^{(1)}\mu_{\beta\beta}^{(2)}\Phi^{(3)}\), associated with the \((H_{12},H_{30})\) channel.
+\end{itemize}
+
+Accordingly, the fourth-order quartic block is expected to have the schematic structure
+\begin{align}
+\tau^{(4)} &= \tau[H_{22}] + \tau[H_{40}] + \tau[H_{30},H_{30}] + \tau[H_{12},H_{30}],
+\end{align}
+with schematic dependence
+\begin{align}
+\tau[H_{22}] &\sim \hbar\,\mu^{(2)},\\
+\tau[H_{40}] &\sim \hbar\,\mu^{(1)}\mu^{(1)}\Phi^{(4)},\\
+\tau[H_{30},H_{30}] &\sim \hbar\,\mu^{(1)}\mu^{(1)}\left(\Phi^{(3)}\right)^2,\\
+\tau[H_{12},H_{30}] &\sim \hbar\,\mu^{(1)}\mu^{(2)}\Phi^{(3)}.
+\end{align}
+
+In the present one-mode run, however, the explicit symbolic output separates only into the two
+nonzero channels
+\begin{align}
+\tau^{(4)} = \tau[H_{30},H_{30}] + \tau[H_{12},H_{30}],
+\end{align}
+while no standalone \(\tau[H_{22}]\) or \(\tau[H_{40}]\) term survives in this restricted setup.
+
+For the diagonal tensor elements,
+\begin{align}
+\tau_{\alpha\alpha\alpha\alpha}^{(4)} &=
+-\frac{\hbar\,\mu_{\alpha\alpha}^{(1)}\mu_{\alpha\alpha}^{(1)}\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}
++\frac{\hbar\,\mu_{\alpha\alpha}^{(1)}\mu_{\alpha\alpha}^{(2)}\Phi^{(3)}}{144\,\omega^5}.
+\end{align}
+The mixed components \(\tau_{\alpha\alpha\beta\beta}^{(4)}\) have the same two-channel structure.
+Explicit one-mode formulas are reported in Appendix~\ref{app:onemode}.
+
+\section{Scope and Generality}
+The explicit expressions above were obtained in a reduced symbolic setup (one mode, diagonal
+tensor ansatz) to keep the closed-form formulas readable. The implementation itself is more general:
+\begin{itemize}
+\item rotational operators remain non-commuting throughout the derivation,
+\item bosonic normal ordering is exact,
+\item diagonal and off-diagonal parts are separated recursively to construct \(S^{(n)}\),
+\item the filtering layer keeps the multi-mode derivation tractable.
+\end{itemize}
+
+Explicit tensor symmetries such as
+\(\Phi_{ijk}=\Phi_{\mathrm{perm}}\) and \(\Phi_{ijkl}=\Phi_{\mathrm{perm}}\)
+may be imposed afterwards by symbolic substitutions if a more reduced final form is desired.
+
+\appendix
+\section{Explicit One-Mode Fourth-Order \texorpdfstring{$\tau$}{tau} Formulas}
+\label{app:onemode}
+For completeness, the explicit one-mode fourth-order tensor coefficients obtained in the reduced
+symbolic run are
+\begin{align}
+\tau_{xxxx}^{(4)} &=
+-\frac{\hbar\,\left(\mu_{xx}^{(1)}\right)^2\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}
++\frac{\hbar\,\mu_{xx}^{(1)}\mu_{xx}^{(2)}\Phi^{(3)}}{144\,\omega^5},\\
+\tau_{yyyy}^{(4)} &=
+-\frac{\hbar\,\left(\mu_{yy}^{(1)}\right)^2\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}
++\frac{\hbar\,\mu_{yy}^{(1)}\mu_{yy}^{(2)}\Phi^{(3)}}{144\,\omega^5},\\
+\tau_{zzzz}^{(4)} &=
+-\frac{\hbar\,\left(\mu_{zz}^{(1)}\right)^2\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}
++\frac{\hbar\,\mu_{zz}^{(1)}\mu_{zz}^{(2)}\Phi^{(3)}}{144\,\omega^5},\\
+\tau_{xxyy}^{(4)} &=
+-\frac{\hbar\,\left(2\mu_{xx}^{(1)}\mu_{yy}^{(1)}+\left(\mu_{xy}^{(1)}\right)^2+2\mu_{xy}^{(1)}\mu_{yx}^{(1)}+\left(\mu_{yx}^{(1)}\right)^2\right)\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}\nonumber\\
+&\quad +\frac{\hbar\,\Phi^{(3)}\left(\mu_{xx}^{(1)}\mu_{yy}^{(2)}+\mu_{xy}^{(1)}\mu_{xy}^{(2)}+\mu_{xy}^{(1)}\mu_{yx}^{(2)}+\mu_{yx}^{(1)}\mu_{xy}^{(2)}+\mu_{yx}^{(1)}\mu_{yx}^{(2)}+\mu_{yy}^{(1)}\mu_{xx}^{(2)}\right)}{144\,\omega^5},\\
+\tau_{xxzz}^{(4)} &=
+-\frac{\hbar\,\left(2\mu_{xx}^{(1)}\mu_{zz}^{(1)}+\left(\mu_{xz}^{(1)}\right)^2+2\mu_{xz}^{(1)}\mu_{zx}^{(1)}+\left(\mu_{zx}^{(1)}\right)^2\right)\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}\nonumber\\
+&\quad +\frac{\hbar\,\Phi^{(3)}\left(\mu_{xx}^{(1)}\mu_{zz}^{(2)}+\mu_{xz}^{(1)}\mu_{xz}^{(2)}+\mu_{xz}^{(1)}\mu_{zx}^{(2)}+\mu_{zx}^{(1)}\mu_{xz}^{(2)}+\mu_{zx}^{(1)}\mu_{zx}^{(2)}+\mu_{zz}^{(1)}\mu_{xx}^{(2)}\right)}{144\,\omega^5},\\
+\tau_{yyzz}^{(4)} &=
+-\frac{\hbar\,\left(2\mu_{yy}^{(1)}\mu_{zz}^{(1)}+\left(\mu_{yz}^{(1)}\right)^2+2\mu_{yz}^{(1)}\mu_{zy}^{(1)}+\left(\mu_{zy}^{(1)}\right)^2\right)\left(\Phi^{(3)}\right)^2}{1728\,\omega^7}\nonumber\\
+&\quad +\frac{\hbar\,\Phi^{(3)}\left(\mu_{yy}^{(1)}\mu_{zz}^{(2)}+\mu_{yz}^{(1)}\mu_{yz}^{(2)}+\mu_{yz}^{(1)}\mu_{zy}^{(2)}+\mu_{zy}^{(1)}\mu_{yz}^{(2)}+\mu_{zy}^{(1)}\mu_{zy}^{(2)}+\mu_{zz}^{(1)}\mu_{yy}^{(2)}\right)}{144\,\omega^5}.
+\end{align}
+
+\end{document}

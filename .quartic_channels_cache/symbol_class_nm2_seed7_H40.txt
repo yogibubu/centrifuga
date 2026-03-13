@@ -1,0 +1,6 @@
+tau_xxxx = 0
+tau_yyyy = 0
+tau_zzzz = 0
+tau_xxyy = 0
+tau_xxzz = 0
+tau_yyzz = 0

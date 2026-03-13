@@ -1,0 +1,6 @@
+tau_xxxx = 3*A*B*C*hbar/5120
+tau_yyyy = 7*A*B*C*hbar/57600
+tau_zzzz = A*B*C*hbar/4800
+tau_xxyy = 1471*A*B*C*hbar/691200
+tau_xxzz = 7*A*B*C*hbar/5120
+tau_yyzz = 8587*A*B*C*hbar/1152000

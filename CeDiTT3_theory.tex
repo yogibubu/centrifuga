@@ -1,0 +1,678 @@
+\section{Perturbative and Tensorial Framework}
+
+In this section we introduce the perturbative and tensorial framework
+used in the present work at the level required for the main text.
+The aim is not to rederive rovibrational perturbation theory in full
+detail, but to clarify the structure of the tensorial objects entering
+the centrifugal distortion problem and their relation to the
+quantities obtained in standard VPT-based calculations. Detailed
+derivations of the quartic and sextic tensor constructions, explicit
+projection formulas, and full channel algebra are deferred to the
+appendices.
+
+The key point is that the present framework is built around two
+logically distinct layers. The first is the standard linear sector, in
+which quartic and standard sextic centrifugal distortion can be lifted
+from Watson constants to tensor representatives, transported between
+representations, and reprojected onto the desired Hamiltonian
+parametrization. The second is the first breakdown of that picture,
+which occurs when new tensorial objects appear that cannot be absorbed
+into the first-level linear sector.
+
+At the most basic conceptual level, the framework may be read as
+follows. Watson constants are not treated as primitive quantities, but
+as projected coordinates of underlying tensor representatives. These
+representatives are reconstructed by pseudoinverse gauge fixing,
+transported linearly between representations within the standard
+sector, and then reprojected onto the desired Hamiltonian
+parametrization. The main theoretical problem is therefore to identify
+which contributions belong to this minimal linear sector and which ones
+do not.
+
+This distinction should not be read as a mere change of coordinates in
+the parameter space of the Watson Hamiltonian. The purpose of the
+tensorial formulation is to identify the minimal linear transport
+sector underlying the standard quartic and sextic problems and then to
+locate the first contribution that lies outside it.
+
+In operational terms, the standard problem is organized by a simple
+sequence:
+\begin{equation}
+\text{Watson constants}
+\;\longrightarrow\;
+\text{tensor representative}
+\;\longrightarrow\;
+\text{transport}
+\;\longrightarrow\;
+\text{reprojection}.
+\end{equation}
+Conceptually, the procedure therefore involves three steps:
+reconstruction of tensor representatives from Watson constants, linear
+transport of these tensors under representation or axis changes, and
+projection onto the desired Hamiltonian parametrization.
+Because the inverse step is rank-deficient, the tensor representative
+is selected by Moore--Penrose pseudoinversion and should be understood
+as a gauge-fixed representative rather than as a uniquely defined
+object, with the pseudoinverse providing a natural gauge fixing of the
+reconstruction problem.\cite{Penrose1955} The standard quartic and sextic sectors are precisely those for
+which this gauge-fixed transport remains linear.
+
+The purpose of the present section is therefore threefold: to specify
+the perturbative partition underlying the channel language, to identify
+the tensorial objects spanning the standard linear sector, and to show
+how the first quartic and sextic diagnostics of breakdown arise once
+that sector ceases to be sufficient.
+The derivation therefore proceeds by identifying the minimal tensor
+objects required to generate centrifugal distortion constants and by
+analyzing how their projections define the parameters of the effective
+Hamiltonian.
+
+For readers approaching the problem from standard rotational
+spectroscopy rather than from tensor methods, the logical progression
+of the section is straightforward. We first define the perturbative
+partition, then identify the tensorial objects generating the standard
+quartic and standard sextic sectors, and finally show how the first
+genuinely new tensor structures appear once one leaves this minimal
+linear sector.
+
+\begin{table}[h]
+\centering
+\caption{Minimal notation used in the main text.}
+\begin{tabular}{ll}
+\hline
+Symbol & Meaning \\
+\hline
+Watson constants & Quartic or sextic effective-Hamiltonian parameters \\
+Tensor representative & Gauge-fixed tensor object reconstructed from Watson constants \\
+Transported tensor & Tensor representative after axis/reduction transport \\
+$\mu_1$ & First derivative of the inverse inertia tensor with respect to $Q$ \\
+$\tau$ & Standard quartic tensor entering quartic/sextic transport \\
+$H_{22}$ & First quartic channel outside the minimal linear sector \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Perturbative framework and partition convention}
+
+The rovibrational Hamiltonian is expanded in terms of vibrational
+coordinates and rotational operators. Following standard notation,
+individual contributions may be grouped into blocks $H_{nm}$, where
+$n$ denotes the vibrational order and $m$ the rotational order.
+These labels identify the vibrational--rotational bidegree of the
+individual terms but do not, by themselves, determine the perturbative
+order. The latter is defined only after the Van Vleck contact
+transformation is applied and the Baker--Campbell--Hausdorff expansion
+is evaluated, which generates the familiar combinatorial prefactors
+and factorial denominators of rovibrational perturbation
+theory.\cite{Watson1967,Watson1968,Watson1968JCP,AlievWatson1976}
+
+In the present work the standard Watson/VPT2-style partition is used.
+Within this convention,
+\begin{equation}
+H_{03},\; H_{12},\; H_{30}
+\end{equation}
+are treated as first-order terms, whereas
+\begin{equation}
+H_{40},\; H_{22},\; H_{13},\; H_{31},\; H_{04}
+\end{equation}
+are treated as second-order terms. This convention is standard in the
+present context, but it is not universal. In alternative formulations,
+including state-summation schemes that are also often denoted as VPT2,
+the same blocks may be assigned to a different effective perturbative
+order.\cite{Franke2023}
+
+Within a fixed perturbative partition and truncation order, the
+effective quartic and sextic rotational Hamiltonians may be decomposed
+into channels such as
+\begin{equation}
+H_{12}H_{12},\qquad H_{22},\qquad H_{12}H_{30},\qquad
+H_{30}H_{30},\qquad H_{04},
+\end{equation}
+and analogous higher-order sextic contributions. This channel
+decomposition is exact only within the adopted perturbative framework,
+that is, after fixing the partition, the truncation order, and the
+effective-Hamiltonian construction. The symbolic channel labels do not
+by themselves determine the numerical weights of the corresponding
+terms. Once the Van Vleck contact transformation is expanded, the
+Baker--Campbell--Hausdorff series generates the usual combinatorial
+prefactors and factorial denominators. Accordingly, the exact
+weighting of each channel is the one induced by the chosen
+perturbative construction, not by the labels $H_{nm}$ taken in
+isolation.
+
+Table~\ref{tab:channel_hierarchy_summary} summarizes the practical
+organization adopted in the present work. The important distinction is
+not simply between different perturbative channels, but between those
+contributions that remain inside the minimal linear tensor sector and
+those that introduce genuinely new tensorial structures. In this
+sense, the table should be read as the Watson/VPT2 language recast in
+tensor-hierarchy form.\cite{Watson1968,Watson1977,Mills1972}
+
+\begin{table*}[t]
+\centering
+\caption{Summary of the main quartic and sextic contributions discussed in the
+present work, organized by perturbative source, primitive tensorial content,
+and role with respect to the minimal linear tensor sector.}
+\begin{tabular}{lllll}
+\toprule
+Sector & Perturbative source / channel & Primitive tensor objects & In linear sector? & Main role \\
+\midrule
+Standard quartic & $H_{12}H_{12}$ & $\mu_1$, Coriolis & Yes & Standard quartic distortion constants \\
+Standard sextic geometry & Sextic geometry closure in $c_1$, $c_2$, $\tau$ & $\mu_1$, Coriolis, $\tau$ & Yes & Standard sextic geometry sector \\
+Standard sextic anharmonicity & Cubic-force contribution & $\phi_3$ & First nonlinear layer & Standard sextic anharmonic contribution \\
+First quartic breakdown & $H_{22}$ & $\mu_2 = B(\mu_1)-N$ & No & First breakdown diagnostic for quartics \\
+First sextic breakdown & Linear response in $\tau(H_{22})$ & $\tau(H_{22})$ & No & First breakdown diagnostic for sextics \\
+\bottomrule
+\end{tabular}
+\label{tab:channel_hierarchy_summary}
+\end{table*}
+
+\subsection{Physical meaning of the tensor representatives}
+
+Within this perturbative framework the quantities entering centrifugal
+distortion theory can be organized in terms of tensorial objects
+constructed from derivatives of the inertia tensor and from the usual
+rovibrational coupling terms. In particular, the first derivative of
+the inverse inertia tensor with respect to vibrational coordinates,
+\begin{equation}
+\mu_1 = \frac{\partial I^{-1}}{\partial Q},
+\end{equation}
+plays a central role in the construction of the standard quartic
+centrifugal distortion sector.
+The tensor $\mu_1$ represents the first derivative of the inverse
+inertia tensor with respect to vibrational coordinates and therefore
+describes the leading geometric coupling between rotational motion and
+vibrational displacements. In the present formulation it plays a
+central role, since it generates the minimal tensorial structure
+underlying quartic centrifugal distortion constants and forms the basic
+building block of the linear tensor sector discussed below. Within
+this framework, higher-order distortion constants arise from
+combinations and projections of these first-level tensor objects,
+whereas genuinely new tensor structures appear only when anharmonic
+force constants enter the expansion.
+
+The tensor representatives used in the present work are therefore
+directly connected to the quantities appearing in standard
+rovibrational perturbation theory. They should not be viewed as
+auxiliary algebraic encodings layered on top of VPT2, but rather as
+a compact tensorial representation of the same physical objects that
+enter conventional derivations of centrifugal distortion constants.
+They are therefore not directly measurable quantities in the same sense
+as transition frequencies, but gauge-fixed representatives of the
+underlying rovibrational content encoded in the effective Hamiltonian.
+In the harmonic quartic problem, the basic object is precisely the
+first derivative of the inverse inertia tensor or, equivalently in the
+standard harmonic setting, its Coriolis-coupling description.
+
+More explicitly, if
+\begin{equation}
+\mu = I^{-1},
+\end{equation}
+then differentiation of the identity $I^{-1}I=\mathbf 1$ with respect to
+a normal coordinate $Q_k$ gives
+\begin{equation}
+\frac{\partial I^{-1}}{\partial Q_k}
+=
+-\,I^{-1}\frac{\partial I}{\partial Q_k}I^{-1}.
+\end{equation}
+The standard quartic tensor is then generated by the familiar
+second-order perturbative contraction
+\begin{equation}
+\tau_{\alpha\beta\gamma\delta}
+=
+-\frac12\sum_k
+\frac{
+\mu_{\alpha\beta}^{(k)}\mu_{\gamma\delta}^{(k)}
+}{\omega_k^2},
+\end{equation}
+where $\mu_{\alpha\beta}^{(k)}=\partial\mu_{\alpha\beta}/\partial Q_k$.
+
+The same quartic content may be written in Coriolis form. If
+\begin{equation}
+G_{k\mu}=\sum_i m_i\left(\mathbf r_i\times \mathbf l_{ik}\right)_\mu
+\end{equation}
+denotes the vibrational angular-momentum vector associated with mode
+$k$, the corresponding symmetric Coriolis tensor is
+\begin{equation}
+M_{\mu\nu}=\sum_k\frac{G_{k\mu}G_{k\nu}}{\omega_k^2}.
+\end{equation}
+For the standard quartic contribution, the reduced tensor
+representative $\tau'$ is linearly related to this Coriolis tensor.
+Thus the passage from inertia derivatives to Coriolis couplings is not
+an additional approximation, but an alternative tensorial
+representation of the same standard quartic rovibrational content.
+
+More concretely, the standard quartic tensor is generated by the
+harmonic dependence of the inverse inertia tensor on the normal
+coordinates. In the usual force-field language this means that the
+quartic distortion constants are determined by the equilibrium
+geometry, the Cartesian Hessian, and the associated harmonic normal
+modes. In the present implementation these are the same data from
+which the first inertia derivatives, Coriolis couplings, and harmonic
+quartic tensor are constructed.
+
+The same physical interpretation extends to the standard sextic
+sector. The standard sextic formulas involve the quartic tensor,
+Coriolis couplings, and the explicit anharmonic cubic force
+constants. The important point established here is that the standard
+sextic geometry sector does not require second derivatives of the
+inertia tensor as primitive objects. Instead, it closes on the same
+first-level geometric language that already governs the standard
+quartic sector, with the cubic force constants entering only as the
+explicit anharmonic contribution.
+
+In the formulation adopted here, this statement is made explicit by
+writing the sextic standard sector in terms of the working quantities
+$c_1$, $c_2$, and $\tau$, which organize the geometric part of the
+problem, plus a separate cubic-force contribution. At the structural
+level one may therefore write
+\begin{equation}
+\Phi^{(6)} = \Phi^{(6)}_{\mathrm{geom}}(c_1,c_2,\tau)
++ \Phi^{(6)}_{\mathrm{cubic}}(\phi_3).
+\end{equation}
+This is already more explicit than the usual black-box presentation of
+the sextic formulas, because it isolates the tensorial geometry from
+the explicit anharmonic input.
+
+For the present purposes it is also useful to refine the cubic term as
+\begin{equation}
+\Phi^{(6)}_{\mathrm{cubic}}
+=
+\Phi^{(6)}_{\mathrm{cubic,sd}}
++
+\Phi^{(6)}_{\mathrm{cubic,3ind}},
+\end{equation}
+where the first piece collects the semi-diagonal cubic-force
+contributions and the second the genuinely three-index remainder. This
+separation is interesting in its own right, because it aligns the
+sextic theory with the computational hierarchy that is realistic for
+medium-sized molecules.
+
+Schematically, the standard sextic structure is organized by
+\begin{equation}
+\mu_1,\qquad \zeta,\qquad \phi_3,
+\end{equation}
+where $\zeta$ denotes Coriolis coupling data and $\phi_3$ the cubic
+force constants. In this sense, standard quartics and standard sextics
+belong to the same physical layer of rovibrational perturbation
+theory: they differ in the way the same first-level geometric objects
+are combined, not in the primitive tensorial level required to
+describe them.
+The present formulation therefore reveals a natural hierarchy: harmonic
+geometry defines the inertia tensor, the first derivative $\mu_1$
+generates the linear tensor sector responsible for standard quartic and
+standard sextic distortion, and cubic force constants introduce the
+first genuinely nonlinear layer.
+
+Accordingly, the present standard-sector construction should not be
+read as an alternative to Watson/VPT2 perturbation theory, but as a
+tensorial reformulation of its usual content. The required inputs are
+the same ones used in standard force-field based treatments:
+equilibrium geometry, Cartesian Hessian, normal coordinates, Coriolis
+data, and, for the sextic standard sector, the cubic force constants
+entering the explicit anharmonic contribution.
+
+The same structural content may also be written in coordinate
+languages different from the Cartesian-normal-mode one used here. In
+particular, recent treatments based on internal-coordinate
+formulations of vibrational and rovibrational corrections employ a
+different working notation, but at the harmonic and standard-VPT2
+levels the underlying rovibrational structure is the same.\cite{cubic-internal_2024}
+From the present point of view, this means that the tensorial
+hierarchy is not tied to a specific coordinate choice: what changes is
+only the parametrization of the intermediate quantities, not the
+first-level geometric content. In particular, the same families of
+quantities that enter vibrational corrections to the rotational
+constants (the usual $\alpha$ terms) also provide the natural building
+blocks of the standard sextic structure once written in the present
+tensor language.
+
+In the curvilinear-internal-coordinate formulation this equivalence
+appears already at the level of the generalized coordinate set,
+\begin{equation}
+\xi = \{s_1,\ldots,s_N,\phi_1,\ldots,\phi_{N_r},
+X_{\mathrm{COM}},Y_{\mathrm{COM}},Z_{\mathrm{COM}}\},
+\end{equation}
+where the $s_i$ are internal vibrational coordinates and the $\phi_i$
+describe the body-fixed orientation.\cite{cubic-internal_2024} In
+that language, second-order vibrational and rovibrational corrections
+are built from the same core ingredients that appear here in the
+Cartesian-normal-mode formulation, namely harmonic frequencies,
+Coriolis couplings, and semidiagonal third derivatives of the force
+field. The harmonic rotation-vibration block is therefore the same
+object in the two formulations, merely written in different
+coordinates. The present tensor language should thus be read as a
+coordinate-independent structural interpretation of the same
+first-level rovibrational information, rather than as a separate
+formalism alongside the internal-coordinate treatment.
+
+More explicitly, in the internal-coordinate formulation the
+rovibrational Hamiltonian is written in block form as
+\begin{equation}
+H_{\mathrm{vr}}
+=
+\frac12 \sum_{\tau\tau'} J_\tau g^{r}_{\tau\tau'} J_{\tau'}
++ \frac12 \sum_{i\tau}\left(J_\tau g^{vr}_{\tau i} p_i + p_i g^{vr}_{i\tau} J_\tau\right)
++ \frac12 \sum_{ij} p_i g^{v}_{ij} p_j
++ g + V,
+\end{equation}
+where $g^r$, $g^{vr}$, and $g^v$ are the rotational,
+rotation-vibration, and vibrational blocks of the rovibrational
+metric.\cite{cubic-internal_2024} This is the same harmonic
+content that, in the Cartesian-normal-mode formulation used in the
+present paper, appears through the inverse inertia tensor, its first
+derivative $\mu_1$, and the corresponding Coriolis couplings.
+The equivalence is therefore structural: the rotational block
+corresponds to the inertia tensor itself, the mixed block to the same
+first-order rotation-vibration coupling encoded here by $\mu_1$ and
+$\zeta$, and the vibrational block to the harmonic metric defining the
+normal modes. The tensor formulation adopted in the present work is
+thus best understood as a coordinate-independent rewriting of the same
+harmonic rovibrational block rather than as an alternative formal
+construction.
+
+Within this scope, the present formulation is intended to be
+equivalent to the standard perturbative theory rather than an
+additional approximation to it. The tensor representatives reorganize
+the same standard content into a transport-friendly language; they do
+not discard standard VPT2 terms from the quartic or standard sextic
+sector.
+
+\subsection{Pseudoinverse reconstruction as gauge fixing}
+
+Once one adopts the tensor representatives as primary objects, the
+inverse problem becomes conceptually transparent. In the quartic case,
+the reduced tensor representative contains six independent
+coordinates, whereas Watson's quartic Hamiltonian contains only five
+spectroscopic constants. The map from tensor space to spectroscopic
+space is therefore rank-deficient and the inverse reconstruction of
+the tensor from a given parameter set is not unique.
+
+This is not a pathology of the method. It is a structural fact: the
+spectroscopic constants determine an affine family of tensor
+representatives rather than a unique tensor. The Moore--Penrose
+pseudoinverse is used here to select one distinguished representative
+within that family. In other words, the pseudoinverse is a
+gauge-fixing prescription for the inverse problem. More specifically,
+it selects the canonical minimum-norm representative of the
+gauge-equivalence class defined by the fitted constants.
+
+Equivalently, Watson constants do not label a point in tensor space,
+but a gauge orbit inside it. The tensor representative used in the
+present work is therefore not ``the'' tensor behind a fitted parameter
+set in an absolute sense, but the gauge-fixed representative selected
+by the Moore--Penrose slice. Linear transport between representations
+is to be understood precisely on this gauge-fixed standard sector.
+
+This point matters both conceptually and numerically. Conceptually, it
+separates the intrinsic tensorial content of centrifugal distortion
+from the particular spectroscopic coordinates used to describe it.
+Numerically, it makes explicit that the reconstruction step may become
+delicate when the spectroscopic parameters are strongly correlated or
+when the transformation matrix is poorly conditioned. This is
+particularly relevant in real spectroscopic fits, where the fitted
+constants are not statistically independent and representation changes
+may amplify parameter correlations.
+
+For the quartic problem, the relevant projection has rank five on a
+six-dimensional reduced tensor space, which is precisely why the
+inverse problem defines an affine gauge family rather than a unique
+tensor. In the sextic problem, the transport is carried out on the
+canonical physical subspace selected by the model, with the
+complementary residual monitored explicitly. The numerical stability
+of the reconstruction is therefore not assumed, but checked through
+condition numbers, residual norms, and related diagnostic quantities.
+
+For this reason, the present framework always couples pseudoinverse
+reconstruction to explicit conditioning diagnostics. The same tensor
+transport that implements the representation change also exposes
+condition numbers, spectral invariants, residual norms, and related
+quantities such as $s_{111}$. The reconstruction should therefore be
+read not as a black-box inversion, but as a controlled numerical gauge
+choice whose stability can be monitored.
+
+Once the tensor representative has been reconstructed, representation
+and reduction changes are carried out by:
+\begin{enumerate}
+\item lifting the Watson constants to the tensor representative;
+\item transporting the tensor under the corresponding axis permutation;
+\item reprojecting the transported tensor onto the target effective-Hamiltonian
+coordinates.
+\end{enumerate}
+
+This lift--transport--reproject structure is the basic mechanism used
+throughout the standard quartic and sextic sectors. The operational
+logic of the framework is summarized in Fig.~\ref{fig:ceditt3_scheme}.
+Standard quartic and sextic constants are lifted to tensor
+representatives by pseudoinverse reconstruction, transported under
+representation changes, and finally reprojected onto the target
+Watson parametrization. When harmonic input is available, the same
+workflow also provides the first post-standard diagnostics.
+
+\input{CeDiTT3_scheme}
+
+The conceptual hierarchy behind this workflow is summarized separately
+in Fig.~\ref{fig:ceditt3_hierarchy}. Harmonic geometry first defines
+the inertia tensor, the first derivative $\mu_1$ generates the minimal
+linear tensor sector shared by standard quartic and standard sextic
+centrifugal distortion, and cubic force constants introduce the first
+genuinely nonlinear layer.
+
+\input{CeDiTT3_hierarchy}
+
+\subsection{Standard quartic sector}
+
+In the standard quartic sector, the relevant rovibrational content is
+generated entirely by the first-level inverse-inertia derivative
+$\mu_1$, or, equivalently, by its Coriolis-coupling description. The
+standard quartic contribution therefore remains fully inside the
+first-level tensorial language.
+
+At the spectroscopic level, the quartic constants are obtained after
+projection of the quartic tensor representative onto Watson's operator
+basis. At the tensor level, however, the standard quartic problem is
+linear: once the representative has been fixed by pseudoinverse
+reconstruction, representation changes are implemented by linear
+transport of the tensor itself. This is the first half of the
+standard linear sector developed in the present work.
+
+\subsection{Standard sextic sector}
+
+The sextic problem is structurally richer, but in its standard form it
+still closes on the same first-level tensorial language. The key
+result of the present analysis is that the standard sextic geometry
+sector does not require second derivatives of the inertia tensor as
+primitive objects. Instead, the standard sextic geometry contributions
+can be written in terms of the same first-level data that govern the
+standard quartic problem, together with Coriolis couplings and the
+explicit anharmonic cubic force constants.
+
+This is physically important. If second inertia derivatives were
+genuinely primitive already at the level of standard sextics, then
+quartics and sextics would not belong to a common linear transport
+sector. By showing that the standard sextic geometry sector can be
+rewritten without primitive $d^2I/dQ^2$, the present framework
+identifies the correct baseline from which genuinely new
+post-standard tensorial objects can later be recognized. This is the
+second half of the standard linear sector.
+
+In this sense, the ``standard sextic sector'' should be understood
+strictly as the sextic content that can still be expressed in terms of
+the same first-level tensorial objects governing the quartic problem.
+The explicit cubic-force contribution is then precisely the first place
+where this minimal linear closure must be enlarged.
+
+\subsection{Unified standard linear sector}
+
+The standard quartic and standard sextic problems therefore admit a
+common tensorial description. They are both governed by the same
+first-level geometric language, and both are transported between
+representations by the same pseudoinverse-lift, tensor-transport, and
+reprojection mechanism.
+
+This observation provides a unified tensor interpretation of the
+standard quartic and sextic sectors and explains why their
+representation dependence can be treated within the same transport
+framework.
+
+This motivates the central notion of the present paper: there is a
+standard linear representation-equivalent sector of centrifugal
+distortion theory. In this sector, fitted Watson constants and
+directly computed rovibrational quantities can be compared on the same
+tensorial footing, without introducing additional primitive objects
+beyond those already present in the standard construction.
+
+The corresponding equivalence should be understood precisely at the
+level of this minimal linear sector. It is this restricted but
+physically important domain, rather than the full higher-order
+effective Hamiltonian, that is shown here to admit a common tensorial
+transport picture.
+
+In practical quantum-chemical calculations the standard perturbative
+sector typically includes only the $H_{12}H_{12}$ contributions. Under
+these conditions the linear transport framework remains valid, and the
+breakdown discussed here should be interpreted mainly as a formal
+limitation of the representation-equivalence structure rather than as a
+practical computational difficulty.
+
+\subsection{First breakdown in the quartic sector: \texorpdfstring{$H_{22}$}{H22}}
+
+The first departure from this standard linear sector occurs in the
+quartic channel $H_{22}$. This channel is structurally simple enough
+to be isolated, yet it already forces the appearance of a genuinely
+new tensorial object.
+
+In the present work, the expression ``first breakdown'' has a precise
+meaning. It denotes the first contribution to the effective
+centrifugal-distortion problem that cannot be represented within the
+minimal first-level linear tensor sector generated by $\mu_1$ and its
+standard geometric descendants. Operationally, it is therefore the
+first term that makes linearly transported Watson parameter sets in
+different representations cease to be strictly equivalent descriptions
+of the same fitted content.
+
+Physically, $H_{22}$ is the first contribution that depends on the
+second response of the inertia tensor to vibrational motion. In the
+notation adopted here, the full second inverse-inertia derivative may
+be written as
+\begin{equation}
+\mu_2 = B(\mu_1) - N,
+\end{equation}
+where $B(\mu_1)$ is the bilinear closure generated algebraically from
+the first-level object $\mu_1$, while $N$ is the intrinsic second-level
+tensor not reducible to the standard first-level sector.
+
+This decomposition is the physical core of the breakdown. The term
+$B(\mu_1)$ does not introduce a new tensorial layer; it is the
+algebraic closure of the already known first-level geometry. By
+contrast, $N$ represents the genuinely new part of the second-order
+inertia response. The quartic channel $H_{22}$ is therefore the first
+place where the standard linear language is no longer sufficient by
+itself.
+
+In this sense, $H_{22}$ is not merely an additional post-standard
+correction. It is the first identifiable tensorial marker of a new
+coupling mechanism: the first point at which the effective quartic
+Hamiltonian depends on an intrinsic second-level geometric object
+rather than only on the closure of the first-level one. This is why
+it is used in the present work as the primary diagnostic of the
+breakdown of the standard sector. The important point is not that
+$H_{22}$ must be the numerically largest post-standard quartic
+contribution in every molecule, but that it is the first contribution
+expected to break the linear representation transport that governs the
+standard quartic and sextic sectors.
+
+This role is specific. Purely vibrational channels such as
+$H_{30}H_{30}$ do not introduce a new rotational tensorial level of
+the same type, and mixed channels such as $H_{12}H_{30}$ still couple
+anharmonicity to the first-level rotational object. For this reason
+$H_{22}$ is the natural first candidate for the breakdown of linear
+representation equivalence, even if other channels may later become
+numerically larger in absolute value.
+
+Whether $H_{22}$ becomes quantitatively important depends on the
+molecule. The results section shows that it is small in systems such
+as formaldehyde, where the standard perturbative picture is already
+rather reliable, and larger in water, where the difference between
+standard VPT-based and higher-level results is more pronounced. The
+role of $H_{22}$ is therefore diagnostic rather than universal: it
+signals the first failure of the standard linear sector, but does not
+claim to exhaust the whole beyond-standard correction.
+
+Beyond this point the tensor framework itself does not cease to apply.
+What fails is the sufficiency of the minimal first-level linear sector.
+Additional tensorial layers must then be introduced, and the simple
+representation-equivalent transport picture of the standard sector no
+longer closes by itself.
+
+\subsection{First sextic analogue: linear response in \texorpdfstring{$\tau(H_{22})$}{tau(H22)}}
+
+The same logic extends naturally to the sextic side. Within the
+standard sextic geometry functional, the quartic tensor enters
+explicitly. Therefore, once the standard quartic contribution is
+replaced by
+\begin{equation}
+\tau = \tau_{\mathrm{std}} + \tau(H_{22}),
+\end{equation}
+the first post-standard sextic contribution is the term linear in
+$\tau(H_{22})$.
+
+Here $\tau(H_{22})$ denotes the quartic tensor representative
+generated by the $H_{22}$ channel. The corresponding linear-response
+term is the natural sextic analogue of the quartic channel $H_{22}$:
+it is the first sextic contribution that probes the breakdown of the
+standard linear sector while still remaining simple enough to be
+treated as a diagnostic rather than as part of a full higher-order
+theory.
+
+This point should be read in strict analogy with the quartic case.
+The quantity is not introduced as a complete post-standard sextic
+correction, but as the first controlled way in which the new quartic
+tensorial level feeds into the sextic problem. In that sense it
+provides the sextic companion of the quartic $H_{22}$ diagnostic.
+
+At the physical level, the reason cubic anharmonicity becomes the first
+source of nonlinearity is that it couples vibrational modes in a way
+that can no longer be reduced to the first-level geometric response of
+the inverse inertia tensor. Once these cubic couplings enter
+explicitly, new tensor combinations appear that do not close within the
+minimal linear sector generated by $\mu_1$ and its standard geometric
+descendants.
+
+\subsection{Relation to earlier tensorial formulations}
+
+The tensorial structure underlying centrifugal distortion is not new
+in itself. It is already implicit in the classical formulations of
+Watson and Mills and in later rotational-tensor treatments of
+effective Hamiltonians.\cite{Watson1968,Watson1977,Mills1972,Kirschner1983}
+What is new here is not the existence of
+tensorial content behind Watson constants, but the use of that content
+as the explicit operational layer for:
+\begin{enumerate}
+\item pseudoinverse reconstruction from spectroscopic parameter sets,
+\item transport between reductions and principal-axis representations,
+\item common treatment of standard quartic and standard sextic sectors,
+\item identification of the first post-standard diagnostics.
+\end{enumerate}
+
+The present work therefore differs from earlier tensorial viewpoints
+less by introducing a new kind of tensor than by making the tensor
+representatives the center of the computational and interpretative
+workflow. In this sense, the novelty lies in the combination of
+tensor reconstruction, gauge fixing, representation transport, and
+controlled identification of the first breakdown terms.
+
+\subsection{Scope of the present work}
+
+The present paper is therefore not a theory of the full VPT4 problem.
+Its scope is deliberately narrower:
+\begin{enumerate}
+\item identify the standard linear quartic/sextic sector;
+\item formulate its transport between representations and reductions;
+\item isolate the first quartic and sextic diagnostics of its breakdown.
+\end{enumerate}
+
+The detailed tensor derivations, the explicit BCH/contact-transformation
+coefficients, the quartic and sextic projection formulas, and the full
+construction of the $H_{22}$ and $\tau(H_{22})$ diagnostics are
+deferred to the appendices.

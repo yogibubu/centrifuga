@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>ceditt_launcher</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.vincenzobarone.ceditt</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleIconFile</key>
+  <string>app_icon</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
+  <key>CFBundleName</key>
+  <string>CeDiTT</string>
+  <key>CFBundleDisplayName</key>
+  <string>CeDiTT</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleGetInfoString</key>
+  <string>CeDiTT - Centrifugal Distortion Tensor Transformation</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>CFBundleVersion</key>
+  <string>100</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>

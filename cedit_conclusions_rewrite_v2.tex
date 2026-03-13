@@ -1,0 +1,121 @@
+\section{Conclusions}
+
+In this work we have developed a tensor-based framework for the
+analysis and transformation of centrifugal distortion parameters in
+high-resolution rotational spectroscopy.  The central idea is to
+regard the reduced quartic and sextic tensorial objects as the primary
+quantities and to interpret the Watson centrifugal distortion constants
+as coordinates obtained by projection onto a particular effective
+Hamiltonian parametrization.
+
+The tensorial viewpoint itself is not new: it is already implicit in
+classical rovibrational perturbation theory and in the effective
+Hamiltonian formalism of Watson and related work.  The novelty of the
+present formulation lies instead in making this structure explicit as
+the basis of a practical framework that connects the direct and inverse
+problems.  On the direct side, tensor quantities can be obtained from
+quantum-mechanical force fields and rovibrational couplings.  On the
+inverse side, the same tensor quantities can be reconstructed from
+spectroscopic Watson constants by pseudoinverse reconstruction.  In
+this sense the present work does not introduce a new phenomenological
+Hamiltonian, but rather a tensorial organization of the existing formal
+structure that is directly usable for analysis and representation
+transforms.
+
+For the quartic case, the natural reduced tensor is the symmetric
+$3\times 3$ matrix $\tau'$, obtained from the pair--pair quartic
+tensor.  This tensor admits a spectral decomposition in terms of three
+eigenvalues and three orientation coordinates, thereby providing a
+clear geometric description of quartic centrifugal distortion prior to
+the final choice of Watson parametrization.  The passage from the
+tensorial description to the five spectroscopic quartic constants is
+then understood as a projection from tensor space to effective
+Hamiltonian coordinates.  Conversely, the inverse reconstruction from
+Watson constants is an affine gauge problem, in which the
+Moore--Penrose pseudoinverse selects one distinguished representative
+within the one-parameter family of equivalent quartic tensors.  For the
+standard $H_{12}H_{12}$ contribution, the Coriolis tensor and the
+reduced tensor $\tau'$ were shown to contain the same spatial
+information in dual form, thereby establishing a direct link between
+Coriolis physics and quartic spectroscopic constants.
+
+For the sextic case, the tensor space is intrinsically richer and does
+not collapse to a single symmetric second-rank tensor.  Nevertheless,
+the present analysis shows that the physical sextic sector used in the
+representation-transform algorithm is not an arbitrary numerical
+reduction.  Operationally it appears as a canonical $5+2$
+decomposition, with five physical coordinates and a two-dimensional
+residual complement.  Structurally, the same sector is canonically
+equivalent to the pair $H_0\oplus H_6^{(\mathrm{even})}$, that is, to
+one isotropic scalar amplitude and one even rank-six harmonic
+component.  Moreover, with respect to the cyclic axis relabelings that
+generate the $I^r$, $II^r$, and $III^r$ representation changes, this
+same physical sextic sector admits a natural representation-adapted
+decomposition of type $1\oplus 1\oplus 1\oplus 2$, consisting of three
+scalar directions and one two-dimensional doublet.  This provides a
+more structured interpretation of sextic representation transforms than
+a purely numerical basis reduction.
+
+These observations lead naturally to a tensor-based algorithm for
+representation transforms.  Starting from Watson centrifugal distortion
+constants obtained either from spectroscopic fits or from
+quantum-chemical calculations, one reconstructs the reduced tensorial
+object, permutes the molecular axes, and finally reprojects the
+transformed tensor onto Watson constants in the new representation.
+For quartic centrifugal distortion this procedure reproduces the
+analytical transformation formulas of Yamada and Winnewisser with
+machine precision.  For sextic centrifugal distortion, where analogous
+representation transforms are not generally available in closed form,
+the same reconstruction strategy provides a practical and numerically
+stable route to internally consistent transformations.
+
+The usefulness of the method was illustrated for dimethylsulfoxide, for
+a series of HBN isomers, and for the sextic constants of formaldehyde
+and thioformaldehyde.  In the DMSO case, the analysis confirms that
+large changes in individual Watson constants under representation
+transforms arise primarily from the parametrization of the effective
+Hamiltonian and from the numerical conditioning of the chosen
+reduction--representation combination.  In the HBN series, the tensor
+framework provides a more robust basis for comparing quartic
+centrifugal distortion across related isomers than the Watson constants
+themselves, because the comparison can be carried out at the level of
+tensor invariants rather than at the level of representation-dependent
+fitted parameters.  For the sextic examples, the decomposition into
+canonical physical coordinates and residual components shows that the
+algorithm provides not only a representation-transform procedure but
+also a diagnostic of how closely a given sextic parameter set follows
+the modeled physical subspace.
+
+An important practical consequence of the present framework is that
+representation transforms can be applied directly to spectroscopic
+parameter sets, without requiring explicit analytical transformation
+matrices tailored to each reduction and axis system.  The same
+approach also provides a natural interface between spectroscopic fits,
+quantum-chemical calculations based on harmonic and cubic force
+fields, and direct rovibrational calculations.  In this sense, the
+tensor reconstruction procedure establishes a common tensorial language
+for centrifugal distortion parameters obtained from heterogeneous
+sources of information.  It also makes it possible to compare the
+conditioning of different representation choices before undertaking a
+final refit, thereby helping to identify numerically favorable
+reduction--representation combinations.
+
+A macOS application implementing the quartic and sextic
+representation-transform algorithms discussed in this work is
+available from the author upon request.  The program allows one to
+compute, transform, and analyse centrifugal distortion parameters
+starting either from spectroscopic Watson constants or directly from
+quantum-chemical force fields, while providing tensor invariants,
+condition numbers, and canonical reduced coordinates for diagnostic and
+interpretative purposes.
+
+The tensor formulation developed here should therefore be viewed not
+simply as an alternative parametrization of Watson's Hamiltonian, but
+as a framework that makes explicit the relation between tensorial
+rovibrational content and spectroscopic effective-Hamiltonian
+coordinates.  This provides both a clearer conceptual picture of
+centrifugal distortion and a practical computational tool for
+performing representation transforms, analysing tensor invariants,
+comparing spectroscopic and quantum-chemical descriptions on the same
+footing, and diagnosing the numerical conditioning of alternative
+spectroscopic parametrizations.

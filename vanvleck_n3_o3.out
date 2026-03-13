@@ -1,0 +1,46 @@
+=== Van Vleck effective Hamiltonian to 4th order ===
+order 1: terms=2, quartic-ground=0
+order 2: terms=267, quartic-ground=81
+order 3: terms=0, quartic-ground=0
+
+=== Watson A-reduction constants (up to 4th order) ===
+DJ = 217381*A**2/230400
+DJK = -45181*A**2/115200
+DK = -76279*A**2/153600
+d1 = 463*A**2/9600
+d2 = 287*A**2/9600
+
+=== Symbol presence in final constants ===
+mu1 contributes: False
+mu2 contributes: False
+phi3 contributes: False
+phi4 contributes: False
+
+=== Example quartic operator coefficients (first 10) ===
+(Jx, Jx, Jx, Jx) : -3467*A**2/3600
+(Jx, Jx, Jx, Jy) : -17*A**2/180
+(Jx, Jx, Jx, Jz) : -2131*A**2/2880
+(Jx, Jx, Jy, Jx) : -269*A**2/1152
+(Jx, Jx, Jy, Jy) : -205*A**2/288
+(Jx, Jx, Jy, Jz) : -1963*A**2/3600
+(Jx, Jx, Jz, Jx) : -83*A**2/576
+(Jx, Jx, Jz, Jy) : -1189*A**2/7200
+(Jx, Jx, Jz, Jz) : -1417*A**2/11520
+(Jx, Jy, Jx, Jx) : -17*A**2/180
+
+=== Family polynomial decomposition (A=mu1, B=mu2, C=phi3, D=phi4) ===
+
+DJ:
+  A^2 B^0 C^0 D^0 : 217381/230400
+
+DJK:
+  A^2 B^0 C^0 D^0 : -45181/115200
+
+DK:
+  A^2 B^0 C^0 D^0 : -76279/153600
+
+d1:
+  A^2 B^0 C^0 D^0 : 463/9600
+
+d2:
+  A^2 B^0 C^0 D^0 : 287/9600

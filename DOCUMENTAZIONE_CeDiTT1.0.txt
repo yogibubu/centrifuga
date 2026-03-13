@@ -1,0 +1,178 @@
+CeDiTT1.0
+Documentazione d'uso
+
+Scopo
+CeDiTT1.0 e una GUI dedicata a:
+- trasformazioni di rappresentazione e riduzione delle costanti quartiche e sestiche di Watson;
+- calcolo armonico delle quartiche standard da geometria + Hessiano;
+- diagnostico quartico `H22`;
+- parser della matrice Gaussian `Vibro-Rot alpha` con filtro dei modi;
+- calcolo interno delle `alpha` da modello armonico + cubiche semi-diagonali per asymmetric tops, symmetric tops e molecole lineari;
+- il ramo `alpha` ha un modulo dedicato (`vibrot_alpha.py`) separato dal benchmarking sestico;
+- diagnostici sestici armonici e gerarchia geometria/cubico;
+- proiezioni symmetry-adapted per asymmetric tops, symmetric tops, spherical tops e molecole lineari;
+- termini `l`-type doubling per il caso lineare;
+- riconoscimento del gruppo puntuale dalla sola geometria.
+
+Pannelli principali
+1. Tab `Quartic`
+- trasformazione tra rappresentazioni `I`, `II`, `III`;
+- scelta della riduzione `A` o `S`;
+- input manuale delle costanti quartiche;
+- caricamento opzionale di dati armonici per quartiche standard e `H22`.
+- parsing della matrice `alpha` da log anharmonico Gaussian con esclusione selettiva di modi.
+- calcolo del ramo `alpha` da `.fchk` oppure `XYZ + Hessian` piu matrice cubica 2-index.
+
+2. Tab `Sextic`
+- trasformazione sestica tra rappresentazioni;
+- scelta della riduzione di input e output;
+- diagnostici armonici sestici;
+- gerarchia `geometry + cubic 2-index + full cubic`.
+
+Input supportati
+1. Costanti spettroscopiche manuali
+- quartiche o sestiche inserite direttamente nei campi della GUI.
+
+2. Geometria XYZ
+- puo essere fornita come path a un file `.xyz`;
+- oppure incollata direttamente nel campo `XYZ`.
+
+Formato XYZ supportato
+- prima riga: numero di atomi;
+- seconda riga: commento libero;
+- righe successive: `atomo x y z [massa_opzionale]`.
+
+Sono accettati:
+- simboli atomici standard: `C`, `O`, `Cl`, ...;
+- isotopologhi: `13C`, `C-13`, `D`, `T`;
+- massa esplicita opzionale come quinto campo.
+
+3. Hessiano cartesiano
+- richiesto solo per i percorsi armonici da `XYZ + Hessian`;
+- deve essere nello stesso frame cartesiano dell'XYZ.
+
+4. File Gaussian `.fchk`
+- usato come bridge per il backend armonico;
+- quando presente non serve fornire separatamente `XYZ + Hessian`.
+
+5. Dati cubici opzionali
+- matrice cubica 2-index;
+- oppure log anharmonico Gaussian per il recupero del resto 3-index.
+
+6. Log anharmonico Gaussian per `alpha`
+- puo essere usato anche solo per leggere la matrice `Vibro-Rot alpha`;
+- la GUI espone le contribuzioni modo per modo e ricalcola la somma dopo esclusione di modi scelti.
+
+7. Ramo `alpha` da modello armonico + cubiche semi-diagonali
+- richiede `.fchk` oppure `XYZ + Hessian`;
+- richiede una matrice cubica 2-index `N x N`;
+- usa la stessa logica di input del ramo sestico a basso costo.
+
+Funzioni disponibili
+Trasformazioni quartiche
+- input: `A, B, C` in MHz + costanti quartiche in kHz;
+- output: le stesse costanti trasformate nelle altre due rappresentazioni;
+- diagnostici: condizionamento, `s111`, `T/B`, invarianti di `Tau'`.
+
+Trasformazioni sestiche
+- input: `A, B, C` in MHz + costanti sestiche;
+- output: costanti trasformate nelle altre due rappresentazioni;
+- diagnostici: sottospazio fisico, chiusura del round-trip, decomposition `5+2`.
+
+Calcolo armonico quartico standard
+- da `.fchk` oppure `XYZ + Hessian`;
+- costruisce le quartiche standard `H12H12`;
+- se il rotor limit e speciale, riporta direttamente le costanti symmetry-adapted invece delle Watson asymmetric-top.
+
+Diagnostico `H22`
+- da `.fchk` oppure `XYZ + Hessian`;
+- fornisce il primo diagnostico quartico beyond-standard;
+- per molecole lineari riporta anche i termini `l`-type associati.
+
+Parser `alpha` e filtro dei modi
+- da log anharmonico Gaussian;
+- legge la matrice `Vibro-Rot alpha` modo per modo;
+- mostra la somma totale e la somma ricalcolata dopo esclusione di modi selezionati;
+- gli indici si inseriscono in forma `1,3-5`;
+- questa funzione e al momento un parser/filtro operativo, non ancora una ricostruzione interna completa della formula perturbativa.
+
+Preparazione del ramo `alpha` da harmonic + cubic 2-index
+- accetta modello armonico da `.fchk` oppure `XYZ + Hessian`;
+- accetta la matrice cubica semi-diagonale `phi_iij`;
+- calcola le `alpha` Gaussian-style da modello armonico + cubiche semi-diagonali;
+- per symmetric tops e molecole lineari applica una stabilizzazione symmetry-adapted dei sottospazi quasi degeneri e degli assi equivalenti;
+- il readout speciale usa un proiettore di simmetria sui sottospazi degeneri e sugli assi equivalenti, invece di replicare i rami storici di Gaussian;
+- espone nel report metadati di degenerazione e una tabella `LsDgNM-like` per i casi quasi degeneri;
+- espone anche una canonizzazione opzionale dei doppietti quasi degeneri basata sui tensori di primo livello `c1`, utile per confronti modo-per-modo.
+- separa contributi Coriolis, inertia e anharmonic;
+- supporta l'esclusione selettiva di modi gia al livello del calcolo;
+- se e disponibile anche un log Gaussian, confronta la somma `A,B,C` con la matrice `alpha` stampata.
+
+Diagnostici sestici
+- risposta lineare in `tau(H22)`;
+- gerarchia sestica geometrica/cubica;
+- per il caso lineare riporta anche i termini `l`-type pertinenti.
+
+Riconoscimento del gruppo puntuale
+Il gruppo puntuale viene assegnato in due modi.
+
+1. Da geometria + Hessiano
+- nei report armonici la GUI mostra:
+  - `point group`
+  - `sigma` rotazionale
+  - `rotor class`
+
+2. Da sola geometria XYZ
+- nei pannelli quartico e sestico di trasformazione c'e un campo `XYZ (optional)`;
+- se viene fornito un path oppure un testo XYZ incollato, la GUI assegna comunque:
+  - `point group`
+  - `sigma`
+  - `rotor class`
+- in questo caso l'Hessiano non e richiesto.
+
+Limiti speciali
+Asymmetric tops
+- usano il normale trasporto di rappresentazione Watson.
+
+Symmetric tops
+- la GUI non usa le formule asymmetric-top singolari;
+- usa invece proiezioni symmetry-adapted dirette.
+
+Spherical tops
+- il riconoscimento di simmetria e supportato;
+- il readout spettroscopico segue la proiezione symmetry-adapted del backend.
+
+Linear molecules
+- la GUI usa la pseudoinversa del tensore d'inerzia nel backend armonico;
+- riporta costanti symmetry-adapted scalari;
+- riporta anche i termini `l`-type doubling disponibili nel backend attuale.
+
+Unità
+- costanti rotazionali `A, B, C`: MHz
+- quartiche: kHz nei campi manuali della GUI
+- sestiche: unita coerenti con i campi gia previsti dalla GUI
+- nei report armonici le unita sono stampate esplicitamente.
+
+Note operative
+- i transform manuali richiedono sempre `A, B, C`;
+- i percorsi armonici ricavano internamente `A, B, C` dal modello;
+- i casi symmetric-top e linear non devono essere trattati con i transform Watson asymmetric-top manuali;
+- in quei casi conviene usare il ramo armonico per la proiezione symmetry-adapted.
+
+Stato attuale
+Gia implementato
+- transform quartici e sestici;
+- quartiche standard armoniche;
+- diagnostico `H22`;
+- parser `alpha` da Gaussian con esclusione selettiva di modi;
+- calcolo del ramo `alpha` da harmonic model + cubic 2-index per asymmetric tops, symmetric tops e molecole lineari;
+- diagnostici sestici armonici;
+- rotor limits speciali;
+- riconoscimento del gruppo puntuale;
+- supporto a `XYZ` incollato.
+
+Non ancora implementato
+- assegnazione delle specie di simmetria dei modi normali;
+- classificazione completa degli irrep dei sottospazi modali degeneri;
+- assegnazione di simmetria dei modi normali a partire da geometria + Hessiano;
+- estensioni higher-order VPT oltre il perimetro attuale della GUI.

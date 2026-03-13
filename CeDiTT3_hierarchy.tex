@@ -1,0 +1,37 @@
+\begin{figure}[t]
+\centering
+\resizebox{0.78\textwidth}{!}{
+\begin{tikzpicture}[
+box/.style={
+rectangle,draw,rounded corners,
+align=center,
+minimum width=5.4cm,
+minimum height=1.15cm
+},
+arrow/.style={->,thick}
+]
+
+\node[box] (harm) {Harmonic geometry\\equilibrium structure + inertia tensor};
+\node[box,below=1.3cm of harm] (muone) {$\mu_1=\partial I^{-1}/\partial Q$\\first geometric rotation--vibration coupling};
+\node[box,below=1.3cm of muone] (linear) {Linear tensor sector\\standard quartic + standard sextic};
+\node[box,below=1.3cm of linear] (cubic) {Cubic force constants\\explicit anharmonic input};
+\node[box,below=1.3cm of cubic] (nonlinear) {First nonlinear layer\\first breakdown of linear transport};
+
+\draw[arrow] (harm.south) -- (muone.north);
+\draw[arrow] (muone.south) -- (linear.north);
+\draw[arrow] (linear.south) -- (cubic.north);
+\draw[arrow] (cubic.south) -- (nonlinear.north);
+
+\end{tikzpicture}
+}
+
+\caption{
+Conceptual hierarchy revealed by the tensor formulation. Harmonic
+geometry defines the inertia tensor, its first derivative $\mu_1$
+generates the minimal linear tensor sector governing standard quartic
+and standard sextic centrifugal distortion constants, and cubic force
+constants introduce the first genuinely nonlinear layer.
+}
+
+\label{fig:ceditt3_hierarchy}
+\end{figure}

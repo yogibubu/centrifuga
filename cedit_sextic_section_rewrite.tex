@@ -1,0 +1,266 @@
+\subsection{Tensor reconstruction and projection of sextic centrifugal distortion constants}
+
+The sextic case can be treated within the same tensor-based framework,
+although the corresponding tensor space is substantially richer than in the
+quartic case.  Let
+\[
+\mathbf D^{(6)} =
+\bigl(
+H_J,H_{JK},H_{KJ},H_K,h_1,h_2,h_3
+\bigr)^T
+\]
+denote the sextic Watson constants in a given reduction and principal-axis
+representation.  If the starting point is a set of spectroscopic constants, the
+corresponding reduced sextic tensor representation
+$\boldsymbol\phi^{(6)}$ is reconstructed through
+\begin{equation}
+\boldsymbol\phi^{(6)}=
+\mathbf R_6^{+}(A,B,C)\,\mathbf D^{(6)},
+\label{eq:sextic_pseudoinverse}
+\end{equation}
+where $\mathbf R_6^{+}$ is the Moore--Penrose pseudoinverse of the sextic
+projection matrix.  As in the quartic case, the pseudoinverse enters only in
+this inverse reconstruction step.
+
+For the practical analysis of representation changes it is convenient to work
+in Watson's $S$ reduction and to decompose the resulting seven-component sextic
+vector as
+\begin{equation}
+\mathbf H_S = \mathbf B_{\mathrm{rep}}\,\boldsymbol\sigma + \mathbf r,
+\label{eq:sextic_5plus2}
+\end{equation}
+where $\mathbf B_{\mathrm{rep}}$ is a representation-dependent $7\times 5$
+matrix, $\boldsymbol\sigma$ is a five-component coordinate vector on the
+canonical sextic subspace, and $\mathbf r$ is the residual in the complementary
+two-dimensional sector.  For internally consistent sextic parameter sets one
+has
+\begin{equation}
+\mathbf r=\mathbf 0
+\end{equation}
+within numerical precision, so that the residual serves as a direct
+diagnostic of the distance from the canonical physical subspace.
+
+The five-dimensional sextic sector used in the present work is not an
+arbitrary numerical reduction.  The even degree-six rotational polynomial space
+admits the harmonic decomposition
+\begin{equation}
+\mathcal P_6^{(\mathrm{even})}
+=
+r^6\mathcal H_0
+\oplus
+r^4\mathcal H_2^{(\mathrm{even})}
+\oplus
+r^2\mathcal H_4^{(\mathrm{even})}
+\oplus
+\mathcal H_6^{(\mathrm{even})},
+\label{eq:sextic_harmonic_decomp}
+\end{equation}
+with dimensions
+\[
+10 = 1 + 2 + 3 + 4.
+\]
+Here $r^2=J_a^2+J_b^2+J_c^2$, $\mathcal H_0$ is the isotropic scalar sector,
+and $\mathcal H_\ell^{(\mathrm{even})}$ denotes the even-parity harmonic sector
+of degree $\ell$.
+
+For every sextic even polynomial $p$, the harmonic decomposition
+\[
+p = h_6 + r^2 h_4 + r^4 h_2 + r^6 h_0
+\]
+is unique, with
+\[
+h_6\in\mathcal H_6^{(\mathrm{even})},\qquad
+h_4\in\mathcal H_4^{(\mathrm{even})},\qquad
+h_2\in\mathcal H_2^{(\mathrm{even})},\qquad
+h_0\in\mathcal H_0.
+\]
+If $\Delta$ denotes the Laplacian in $(J_a,J_b,J_c)$, these components are
+extracted canonically through
+\begin{align}
+h_0 &= \frac{\Delta^3 p}{5040},\\
+h_2 &= \frac{\Delta^2 p}{504}-\frac{r^2\Delta^3 p}{3024},\\
+h_4 &= \frac{\Delta p}{22}-\frac{r^2\Delta^2 p}{308}
++\frac{r^4\Delta^3 p}{6160},\\
+h_6 &= p-\frac{r^2\Delta p}{22}
++\frac{r^4\Delta^2 p}{792}
+-\frac{r^6\Delta^3 p}{33264}.
+\end{align}
+
+The canonical five-dimensional sextic subspace employed in the present
+implementation projects isomorphically onto
+\[
+\mathcal H_6^{(\mathrm{even})}\oplus r^6\mathcal H_0.
+\]
+Consequently, the physical sextic content is equivalently described by
+\begin{equation}
+\boldsymbol\sigma \;\longleftrightarrow\;
+(\sigma_0,\sigma_1,\sigma_2,\sigma_3,\sigma_4),
+\label{eq:sextic_1plus4}
+\end{equation}
+that is, by one isotropic amplitude and four amplitudes spanning the even
+harmonic degree-six sector.  In this sense the canonical sextic subspace admits
+a natural $1+4$ interpretation.  The lower-order sectors
+$r^2\mathcal H_4^{(\mathrm{even})}$ and
+$r^4\mathcal H_2^{(\mathrm{even})}$ do not carry independent physical
+coordinates; rather, they are determined by the graph relation defining the
+canonical sextic subspace.  The operational decomposition
+Eq.~(\ref{eq:sextic_5plus2}) therefore remains the most convenient form for the
+representation transform, whereas Eq.~(\ref{eq:sextic_1plus4}) provides its
+underlying structural interpretation.  Equivalently, the physical sextic
+content may be identified with the pair $(h_0,h_6)$, while the lower harmonic
+pieces $(h_2,h_4)$ are induced from it by the fixed graph relation defining the
+canonical sextic sector.  Here $h_6$ is not merely a four-dimensional block:
+it is precisely the $D_2$-even sector of the irreducible $\ell=6$
+representation of $SO(3)$.  The canonical sextic sector therefore admits a
+more geometric interpretation as one isotropic scalar amplitude plus one even
+rank-six irreducible harmonic component.  Choosing any real tesseral basis
+\[
+\{Y_6^{(0)},Y_6^{(2c)},Y_6^{(4c)},Y_6^{(6c)}\}
+\]
+for this $D_2$-even $\ell=6$ sector, one may write
+\[
+h_6=c_0Y_6^{(0)}+c_2Y_6^{(2c)}+c_4Y_6^{(4c)}+c_6Y_6^{(6c)}.
+\]
+The operational coordinates $\boldsymbol\sigma$ are then linearly equivalent to
+the harmonic amplitude vector
+\[
+(h_0,c_0,c_2,c_4,c_6),
+\]
+so that the present sextic formalism may be interpreted not only as a
+canonical $5+2$ decomposition, but also as a basis-independent
+scalar-plus-rank-six irreducible parametrization of the physical sextic
+content.
+
+For CeDiTT, however, one further refinement is especially natural.  The
+representation changes implemented in the program are generated by cyclic
+relabelings of the principal axes,
+\[
+I^r \rightarrow II^r \rightarrow III^r \rightarrow I^r,
+\]
+that is, by the cyclic group $C_3$.  Under this action the
+four-dimensional space $\mathcal H_6^{(\mathrm{even})}$ is not irreducible:
+it decomposes as
+\[
+\mathcal H_6^{(\mathrm{even})} \cong 1 \oplus 1 \oplus \rho_2,
+\]
+where the first two summands are one-dimensional invariant directions and
+$\rho_2$ is the real two-dimensional irreducible representation of $C_3$.
+Accordingly, the physical sextic sector admits a representation-adapted
+decomposition
+\begin{equation}
+\mathcal H_0 \oplus \mathcal H_6^{(\mathrm{even})}
+\cong
+1 \oplus 1 \oplus 1 \oplus 2.
+\label{eq:sextic_rep_adapted_3plus2}
+\end{equation}
+This provides the natural origin of the effective $3+2$ structure in the
+sextic problem: three scalar coordinates remain invariant under cyclic
+representation changes, whereas the remaining two coordinates form a doublet
+that mixes by a planar rotation in the two-dimensional irrep $\rho_2$.  The
+coordinates $\boldsymbol\sigma$ used in the present implementation provide one
+convenient basis for this canonical representation-adapted structure.
+
+Once the sextic tensor coefficients have been reconstructed, the forward
+projection is most conveniently written in terms of the Cartesian sextic
+coefficients in the principal-axis frame,
+\[
+\Phi_{aaa},\Phi_{aab},\Phi_{aac},\Phi_{abb},\Phi_{abc},\Phi_{acc},
+\Phi_{bbb},\Phi_{bbc},\Phi_{bcc},\Phi_{ccc},
+\]
+which are the coefficients of the sextic rotational polynomial in the
+molecule-fixed principal-axis system.  These coefficients are first transformed
+to cylindrical sextic quantities,
+\begin{align}
+\Phi_{600} &= \frac{5}{16}(\Phi_{aaa}+\Phi_{bbb})
++\frac{1}{8}(\Phi_{aab}+\Phi_{abb}),\\
+\Phi_{420} &= \frac{3}{4}(\Phi_{aac}+\Phi_{bbc})
++\frac{1}{4}\Phi_{abc}-3\Phi_{600},\\
+\Phi_{240} &= \Phi_{acc}+\Phi_{bcc}-2\Phi_{420}-3\Phi_{600},\\
+\Phi_{060} &= \Phi_{ccc}-\Phi_{240}-\Phi_{420}-\Phi_{600},\\
+\Phi_{402} &= \frac{15}{64}(\Phi_{aaa}-\Phi_{bbb})
++\frac{1}{32}(\Phi_{aab}-\Phi_{abb}),\\
+\Phi_{222} &= \frac{1}{2}(\Phi_{aac}-\Phi_{bbc})-2\Phi_{402},\\
+\Phi_{042} &= \frac{1}{2}(\Phi_{acc}-\Phi_{bcc})
+-\Phi_{222}-\Phi_{402},\\
+\Phi_{204} &= \frac{3}{32}(\Phi_{aaa}+\Phi_{bbb})
+-\frac{1}{16}(\Phi_{aab}+\Phi_{abb}),\\
+\Phi_{024} &= \frac{1}{8}(\Phi_{aac}+\Phi_{bbc}-\Phi_{abc})
+-\Phi_{204},\\
+\Phi_{006} &= \frac{1}{64}(\Phi_{aaa}-\Phi_{bbb})
+-\frac{1}{32}(\Phi_{aab}-\Phi_{abb}).
+\end{align}
+
+The quartic cylindrical quantities enter the sextic projection through
+\begin{align}
+B_{200} &= \frac{1}{2}(A+B)-4T_{004},\\
+B_{020} &= C-B_{200}+6T_{004},\\
+B_{002} &= \frac{1}{4}(A-B),
+\end{align}
+reflecting the perturbative structure by which sextic centrifugal distortion
+contains quadratic contributions from the quartic rotational tensor.
+
+For the $A$ reduction, the sextic constants are
+\begin{align}
+\Phi_J &= \Phi_{600}+2\Phi_{204},\\
+\Phi_{JK} &= \Phi_{420}-12\Phi_{204}+2\Phi_{024}
++16\Sigma\Phi_{006}
++8\frac{T_{022}T_{004}}{B_{002}},\\
+\Phi_{KJ} &= \Phi_{240}+\frac{10}{3}\Phi_{420}
+-30\Phi_{204}-\frac{10}{3}\Phi_{JK},\\
+\Phi_K &= \Phi_{060}-\frac{7}{3}\Phi_{420}
++28\Phi_{204}+\frac{7}{3}\Phi_{JK},\\
+\phi_J &= \Phi_{402}+\Phi_{006},\\
+\phi_K &= \Phi_{042}+\frac{4}{3}\Sigma\Phi_{024}
++\left(\frac{32}{3}\Sigma^2+9\right)\Phi_{006}
++4\frac{T_{040}+\frac{1}{3}\Sigma T_{022}
+-2(\Sigma^2-2)T_{004}}{B_{002}}T_{004},\\
+\phi_{JK} &= \Phi_{222}+4\Sigma\Phi_{204}-10\Phi_{006}
++2\frac{T_{220}-2\Sigma T_{202}-4T_{004}}{B_{002}}T_{004},
+\end{align}
+with
+\begin{equation}
+\Sigma=\frac{2A-B-C}{B-C}.
+\end{equation}
+
+For the $S$ reduction one defines
+\begin{align}
+\rho &= \frac{1}{4}T_{022}\Sigma_1,\\
+\mu &= \frac{\Sigma\Phi_{042}-\frac{9}{8}\Phi_{024}
++\bigl(-2\Sigma T_{040}+(\Sigma^2+3)T_{022}-5\Sigma T_{004}\bigr)
+T_{022}/B_{020}}
+{2\Sigma^2+\frac{27}{16}},\\
+\nu &= \frac{3}{16}\mu\Sigma_1+\frac{1}{8}\Phi_{024}\Sigma_1
++\frac{T_{004}T_{022}}{B_{020}},\\
+\lambda &= 5\nu\Sigma_1+\frac{1}{2}\Phi_{222}\Sigma_1
++\frac{-\frac{1}{2}T_{220}\Sigma_1+T_{202}-T_{022}\Sigma_1^2
+-2T_{004}\Sigma_1}{B_{020}}T_{022},
+\end{align}
+with
+\begin{equation}
+\Sigma_1=\frac{B-C}{2A-B-C},
+\end{equation}
+and finally
+\begin{align}
+H_J &= \Phi_{600}-\lambda,\\
+H_{JK} &= \Phi_{420}+6\lambda-3\mu,\\
+H_{KJ} &= \Phi_{240}-5\lambda+10\mu,\\
+H_K &= \Phi_{060}-7\mu,\\
+h_1 &= \Phi_{402}-\nu,\\
+h_2 &= \Phi_{204}+\frac{1}{2}\lambda,\\
+h_3 &= \Phi_{006}+\nu.
+\end{align}
+
+These equations provide the explicit forward projection from sextic tensor
+coefficients to Watson sextic constants.  Thus, exactly as in the quartic case,
+the pseudoinverse is required only when one reconstructs the tensor from
+spectroscopic constants.  Once the sextic tensor coefficients are known, the
+projection to Watson constants is fully explicit.  Conversely, when only Watson
+constants are available, Eq.~(\ref{eq:sextic_5plus2}) provides the operational
+decomposition used in the representation transform, while
+Eq.~(\ref{eq:sextic_1plus4}) identifies the same physical sector with one
+isotropic scalar amplitude and four amplitudes in the even sextic harmonic
+sector.  In the representation-adapted viewpoint of
+Eq.~(\ref{eq:sextic_rep_adapted_3plus2}), the same five-dimensional content is
+resolved into three scalar invariants and one two-dimensional doublet under the
+cyclic relabeling of the principal axes.
+sector.

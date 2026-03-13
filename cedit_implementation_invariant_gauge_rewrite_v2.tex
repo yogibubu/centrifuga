@@ -1,0 +1,99 @@
+\paragraph{Implementation}
+
+The numerical implementation follows the tensor-reconstruction strategy
+introduced above for the quartic case and extends it to sextic
+centrifugal distortion.
+Spectroscopic parameters are first mapped onto the corresponding tensor
+coefficients through Moore--Penrose pseudoinverse reconstruction.
+Representation changes are then performed directly in tensor space by
+permutation of the tensor indices corresponding to the chosen
+relabeling of the principal axes.
+
+The resulting computational workflow consists of three steps:
+
+\begin{enumerate}
+\item reconstruction of the tensor coefficients from the spectroscopic
+constants through pseudoinverse reconstruction,
+\item permutation of the tensor indices according to the desired
+principal-axis transformation,
+\item recomputation of the spectroscopic constants in the new
+representation by explicit forward projection.
+\end{enumerate}
+
+This procedure applies uniformly to both quartic and sextic centrifugal
+distortion constants. Once the tensor-reconstruction machinery has been
+established, representation transforms no longer require
+representation-specific analytical transformation matrices.
+
+For the quartic problem the implementation works directly with the
+reduced symmetric tensor $\tau'$, together with its spectral
+invariants and, when needed, with the practical $3+2$ coordinates of
+the pseudoinverse slice. For the sextic problem the implementation
+uses the canonical decomposition
+\[
+\mathbf H_S=\mathbf B_{\mathrm{rep}}\boldsymbol\sigma+\mathbf r,
+\]
+in which $\boldsymbol\sigma$ spans the physical five-dimensional
+sextic sector and $\mathbf r$ measures the complementary residual.
+The same five-dimensional content may be interpreted structurally as
+one isotropic scalar plus four amplitudes in the even harmonic
+degree-six sector, or, in the representation-adapted viewpoint
+relevant to CeDiTT, as a $1\oplus1\oplus1\oplus2$ decomposition under
+cyclic relabelings of the principal axes.
+
+In addition to performing representation transforms, the program also
+evaluates the parameter $s_{111}$ introduced above. Within the present
+framework $s_{111}$ is retained as a diagnostic quantity associated
+with the chosen Watson parametrization rather than as a fundamental
+tensor coordinate. It therefore remains useful for practical analysis
+and numerical monitoring even though the tensor formulation itself is
+expressed directly in terms of reduced quartic and sextic tensors.
+
+
+\paragraph{Invariant--gauge analysis}
+
+The tensor formulation provides a complementary perspective on
+centrifugal distortion parameters. Watson constants are convenient
+coordinates for spectral analysis, but they do not constitute the
+primary tensorial objects. In the quartic case the natural reduced
+tensor is $\tau'$, while in the sextic case the corresponding physical
+content is represented by the canonical five-dimensional sextic sector
+described above.
+
+From this viewpoint the inverse reconstruction problem naturally takes
+the form of an affine gauge problem: spectroscopic constants determine
+equivalence classes of tensor representatives, and the Moore--Penrose
+pseudoinverse selects a specific representative within each class.
+The associated gauge fixing is therefore a property of the
+reconstruction algorithm rather than a physical constraint on
+centrifugal distortion.
+
+For this reason invariant analysis is most naturally performed at the
+tensor level rather than directly in terms of Watson's constants.
+In the quartic case this means working with the spectral invariants of
+$\tau'$ and with the corresponding tensor representatives on the
+pseudoinverse slice. In the sextic case it means working with the
+canonical physical coordinates $\boldsymbol\sigma$, the residual
+vector $\mathbf r$, and the equivalent harmonic or
+representation-adapted decompositions of the same five-dimensional
+sector.
+
+The tensor representation therefore provides a common framework within
+which rovibrational information obtained from spectroscopic fits,
+direct quantum--chemical calculations, or rovibrational perturbation
+theory can be compared on the same footing. At the same time, the
+reconstructed tensor can always be projected back onto a chosen
+Watson reduction and principal-axis representation whenever a
+spectroscopic parametrization is required.
+
+The overall structure of the tensor-based framework implemented in the
+present program is illustrated in Fig.~\ref{fig:tensor_framework}.
+Different sources of rovibrational information are first mapped onto a
+common tensor representation, which can subsequently be used either for
+invariant analysis or for transformations between principal-axis
+representations.
+
+In this sense the tensor reconstruction step provides the conceptual
+and computational bridge between the direct quantum-mechanical
+evaluation of rovibrational couplings and the inverse spectroscopic
+determination of Watson parameters.

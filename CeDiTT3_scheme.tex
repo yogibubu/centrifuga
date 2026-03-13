@@ -1,0 +1,65 @@
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tikzpicture}[
+box/.style={
+rectangle,draw,rounded corners,
+align=center,
+minimum width=4.3cm,
+minimum height=1.3cm
+},
+arrow/.style={->,thick}
+]
+
+% INPUTS
+\node[box] (fit)
+{Spectroscopic fit\\Watson constants\\$(D,H)$};
+
+\node[box,below=1.6cm of fit] (harm)
+{Harmonic input\\geometry + Hessian\\or `.fchk`};
+
+\node[above=0.6cm of fit] {\large \textbf{Input}};
+
+% LIFT
+\node[box,right=4.9cm of fit] (lift)
+{Lift / reconstruction\\pseudoinverse gauge fixing\\tensor representatives};
+
+\node[above=0.6cm of lift] {\large \textbf{Lift}};
+
+% TRANSPORT
+\node[box,right=4.9cm of lift] (transport)
+{Transport\\axis permutation\\reduction / representation change};
+
+\node[above=0.6cm of transport] {\large \textbf{Transport}};
+
+% OUTPUT
+\node[box,right=4.9cm of transport,yshift=1.35cm] (reproj)
+{Standard output\\reprojected Watson constants\\in chosen parametrization};
+
+\node[box,right=4.9cm of transport,yshift=-1.35cm] (diag)
+{Post-standard diagnostics\\conditioning, $s_{111}$, $H_{22}$,\\linear sextic $\tau(H_{22})$ term};
+
+\node[above=0.6cm of reproj] {\large \textbf{Output}};
+
+% ARROWS
+\draw[arrow] (fit.east) -- (lift.west);
+\draw[arrow] (harm.east) -- (diag.west);
+\draw[arrow] (lift.east) -- (transport.west);
+\draw[arrow] (transport.east) -- (reproj.west);
+\draw[arrow] (transport.east) -- (diag.west);
+
+\end{tikzpicture}
+}
+
+\caption{
+Operational structure of the present framework. Standard quartic and sextic
+centrifugal distortion constants are lifted from Watson parametrizations to
+tensor representatives through pseudoinverse gauge fixing, transported under
+representation changes, and reprojected onto the target Hamiltonian
+parametrization. Optional harmonic input is only needed for post-standard
+diagnostics, namely the quartic $H_{22}$ contribution and its first sextic
+linear analogue.
+}
+
+\label{fig:ceditt3_scheme}
+\end{figure}

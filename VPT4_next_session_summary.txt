@@ -1,0 +1,81 @@
+VPT4 NEXT SESSION SUMMARY
+
+Repo:
+/Users/vincenzobarone/centrifugal
+
+Context split:
+- CeDiTT (manuscript/app on representation transforms) is essentially closed.
+- Next work should focus on the second project: full quartic VPT4.
+
+Current status of the VPT4 code
+- Main workflow:
+  /Users/vincenzobarone/centrifugal/distortion_workflow.py
+- Core harmonic backend:
+  /Users/vincenzobarone/centrifugal/rovib_distortion.py
+- Quartic channel code:
+  /Users/vincenzobarone/centrifugal/quartic_channels.py
+- Gaussian parsing:
+  /Users/vincenzobarone/centrifugal/gaussian_vpt_parser.py
+- Benchmark scripts:
+  /Users/vincenzobarone/centrifugal/compare_gaussian_order2.py
+  /Users/vincenzobarone/centrifugal/compare_gaussian_sextic.py
+
+What is already solid
+- Production input path is geometry + Hessian or input-fchk.
+- The backend from geometry/Hessian is coherent:
+  frequencies, modes, dI, d2I, d(I^-1), d2(I^-1), Coriolis.
+- Quartic order-2 benchmark is closed against Gaussian/QCent.
+- Sextic benchmark is closed against Gaussian.
+- Cubic Gaussian data are handled correctly:
+  reorder by frequency, signs treated correctly.
+- Coriolis zeta values are now correct after proper projection of rotations.
+
+Important conceptual separation
+- Do not mix CeDiTT theory with VPT4 theory.
+- CeDiTT is about H12H12, representation transforms, quartic/sextic transform theory.
+- VPT4 is about the full channel-resolved quartic problem:
+  H12H12, H22, H12H30, H30H30.
+
+What should be done next
+- Focus on VPT4, not on CeDiTT.
+- The next natural target is H22.
+
+Why H22
+- It is the next channel after the standard H12H12 piece.
+- It is simpler than H30H30.
+- It is likely the cleanest place to understand how to replace explicit
+  d2I/dQ2 formulas with a more natural tensorial object.
+
+Main open theoretical question
+- Can the pieces currently written in terms of dI/dQ and d2I/dQ2 be
+  reformulated in terms of tensorial objects built from normal modes?
+- For VPT4 this should be interpreted as:
+  not necessarily "only Coriolis", but rather "tensorial objects built
+  from the mode geometry, of which Coriolis is the first natural level".
+
+Suggested next-step plan
+1. Isolate the H22 channel in the current code.
+2. Write explicitly the current H22 formula in the cleanest symbolic form.
+3. Identify the minimal tensorial object that carries the same information
+   as the present d2I/dQ2 contribution.
+4. Check whether the resulting object lives naturally in pair-pair space,
+   Sym^2(R^3), or in a richer tensor space.
+5. Only after H22 is clarified, revisit H12H30 and H30H30.
+
+Things that should NOT be reopened unless needed
+- CeDiTT app theory
+- quartic/sextic representation transforms
+- sextic harmonic decomposition for CeDiTT
+- naming/branding CeDiTT
+
+Useful files to inspect first
+- /Users/vincenzobarone/centrifugal/quartic_channels.py
+- /Users/vincenzobarone/centrifugal/rovib_distortion.py
+- /Users/vincenzobarone/centrifugal/distortion_workflow.py
+- /Users/vincenzobarone/centrifugal/QUARTIC_SPATIAL_GAUGE_REPORT.md
+- /Users/vincenzobarone/centrifugal/QUARTIC_3PLUS2_DERIVATION_NOTE.md
+
+Short reminder of the strategic decision
+- CeDiTT is frozen enough.
+- The next session should start directly from:
+  "Let us work on H22 and see what tensorial object replaces d2I/dQ2."

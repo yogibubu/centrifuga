@@ -1,0 +1,100 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 1 /Kids [3 0 R] >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+5 0 obj
+<< /Length 3058 >>
+stream
+BT
+/F1 9 Tf
+50 780 Td
+(\\documentclass[11pt]{article}) Tj
+0 -11 Td (\\usepackage[T1]{fontenc}) Tj
+0 -11 Td (\\usepackage[utf8]{inputenc}) Tj
+0 -11 Td (\\usepackage{lmodern}) Tj
+0 -11 Td (\\usepackage{amsmath,amssymb,booktabs}) Tj
+0 -11 Td (\\usepackage[a4paper,margin=1in]{geometry}) Tj
+0 -11 Td () Tj
+0 -11 Td (\\title{Unified Quartic--Sextic Axis-Representation Transform Program}) Tj
+0 -11 Td (\\author{}) Tj
+0 -11 Td (\\date{}) Tj
+0 -11 Td () Tj
+0 -11 Td (\\begin{document}) Tj
+0 -11 Td (\\maketitle) Tj
+0 -11 Td () Tj
+0 -11 Td (\\section*{Scope}) Tj
+0 -11 Td (A single Python GUI program was implemented to replace the previous quartic-only Yamada app. The new program i) Tj
+0 -11 Td (\\begin{itemize}) Tj
+0 -11 Td (\\item quartic Yamada transform in A reduction,) Tj
+0 -11 Td (\\item quartic Yamada-like transform in S reduction,) Tj
+0 -11 Td (\\item quartic tensor algorithm \(Watson $\\rightarrow \\tau \\rightarrow$ permutation $\\rightarrow$ Watson\),) Tj
+0 -11 Td (\\item sextic tensor algorithm \(Watson $\\rightarrow \\phi \\rightarrow$ permutation $\\rightarrow$ Watson\).) Tj
+0 -11 Td (\\end{itemize}) Tj
+0 -11 Td () Tj
+0 -11 Td (Representations are $I,II,III$. Reduction is preserved \(input reduction equals output reduction\).) Tj
+0 -11 Td () Tj
+0 -11 Td (\\section*{Implemented Quartic Models}) Tj
+0 -11 Td (For quartic constants) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (\\mathbf D_A=\(A_J,A_{JK},A_K,d_J,d_K\)^\\mathsf T,) Tj
+0 -11 Td (\\qquad) Tj
+0 -11 Td (\\mathbf D_S=\(D_J,D_{JK},D_K,d_1,d_2\)^\\mathsf T,) Tj
+0 -11 Td (\\]) Tj
+0 -11 Td (the reference transform is) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (\\mathbf D_{R'}=Q_{R'}^{-1}Q_R\\,\\mathbf D_R,) Tj
+0 -11 Td (\\]) Tj
+0 -11 Td (where $Q_R=Q_A\(R\)$ for A reduction and $Q_R=Q_S\(R\)$ for S reduction.) Tj
+0 -11 Td () Tj
+0 -11 Td (For S reduction, the explicit implemented matrices are derived from S-Hamiltonian coefficient matching and use) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (T_1=\\frac12\\left[\\mathrm{coeff}\(J_a^2J_b^2\)+\\mathrm{coeff}\(J_a^2J_c^2\)+\\mathrm{coeff}\(J_b^2J_c^2\)\\right].) Tj
+0 -11 Td (\\]) Tj
+0 -11 Td () Tj
+0 -11 Td (The quartic tensor algorithm is implemented as) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (\\mathbf D \\xrightarrow{\\,M_4^+\\,} \\tau \\xrightarrow{\\,P\\,} \\tau' \\xrightarrow{\\,M_4'\\,} \\mathbf D',) Tj
+0 -11 Td (\\]) Tj
+0 -11 Td (with pseudoinverse $M_4^+$ and representation permutation matrix $P$.) Tj
+0 -11 Td () Tj
+0 -11 Td (\\section*{Implemented Sextic Tensor Model}) Tj
+0 -11 Td (Sextic Watson vector \(A notation\):) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (\\mathbf H=\(H_J,H_{JK},H_{KJ},H_K,h_1,h_2,h_3\)^\\mathsf T.) Tj
+0 -11 Td (\\]) Tj
+0 -11 Td (Sextic tensor vector:) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (\\phi=\(\\phi_{aaaaaa},\\phi_{bbbbbb},\\phi_{cccccc},\\phi_{aaaabb},\\phi_{aaaacc},\\phi_{bbbbaa},\\phi_{bbbbcc},\\phi_{) Tj
+0 -11 Td (\\]) Tj
+0 -11 Td (Mapping and transform:) Tj
+0 -11 Td (\\[) Tj
+0 -11 Td (\\mathbf H=M_6\\phi,) Tj
+0 -11 Td (\\qquad) Tj
+0 -11 Td (\\phi=M_6^+\\mathbf H,) Tj
+0 -11 Td (\\qquad) Tj
+0 -11 Td (\\mathbf H' = M_6' P_6 \\phi.) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000309 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+3419
+%%EOF

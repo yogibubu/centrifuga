@@ -1,0 +1,783 @@
+Comments on Quartic Centrifugal Distortion Constants 
+for Asymmetric Top Molecules1 
+Koichi Yamada and Manfred Winnewisser 
+Physikalisch-Chemisches  Institut der Justus-Liebig-Universität  Gießen 
+(Z. Naturforsch.  31a, 131-138 [1976]; received November 14, 1975) 
+Explicit relations between the spectroscopic constants, A, B, C, Aj , Ajk, Ak, <5 J, and , 
+obtained by the application  of the various reduction  procedures  of the effective rotational Hamil-
+tonian are given in matrix formulation.  Watson's reduction procedures  for the three different  axis 
+representations Ir, IIr, and III1" have been considered  as well as the reduction making  /?5 = 0, in-
+stead of fi6 = 0. 
+The ambiguity in the determination  of the r's arising from the use of planarity  conditions is 
+discussed in relation to the r defect. 
+I. Introduction 
+Since the treatment of centrifugal distortion in 
+the rotational spectra of molecules was considered 
+rigorously by Watson1-3, many molecules have 
+been analyzed using Watson's reduced Hamiltonian. 
+The centrifugal distortion constants thus obtained 
+give information about the molecular force field and 
+in some cases about the vibration-rotation inter-
+actions. The purpose of the present paper is to 
+clarify several problems which arise in using re-
+ported centrifugal distortion constants. 
+To compare rotational and centrifugal distortion 
+constants obtained for different molecules we have 
+to use constants which are defined uniquely. Wat-
+son's determinable parameters are appropriate for 
+the purpose, because they do not depend on any 
+unitary transformation of the effective rotational 
+Hamiltonian. On the other hand the spectroscopic 
+constants, A, B, C, Aj, AJK, AK, dj, dK, are 
+dependent on a unitary transformation and espe-
+cially on the choice of the axis system. Although 
+these constants are directly related to the form of 
+the molecular spectra and are commonly reported, 
+they can not be used for comparison with  those ob-
+tained by some different reduction of the rotational 
+Hamiltonian. Thus explicit relations between the 
+spectroscopic constants for the various reduction 
+procedures are desired. 
+In Sect. II of this paper, the relations among the 
+spectroscopic constants in Watson's reduced Hamil-
+Reprint requests to Dr. Koichi Yamada,  Physikalisch-
+Chemisches Institut der Justus Liebig-Universität,  Hein-
+rich-Buff-Ring  58, D-6300 Giessen. 
+1 This research was supported by funds from the Deutsche 
+Forschungsgemeinschaft. tonian, 
+rH = UX+Y)P+ CZ-±(X+Y)}J* 
+-AJJ*-Ajk]Z]Z-AkJ*  (1) 
++ (/*2-V) {Hx-h -öjp-öKl*} 
++ {l(X-Y)-djP-dK]*} (/>-/>)+..., 
+for the axis representations Ir, IIr, and IIIr, are 
+discussed. The operators for the total angular mo-
+mentum and its components are given in the above 
+Hamiltonian by J, Jx, Jy, and ]z, respectively. The 
+constants X, Y, and Z are Watson's reduced rota-
+tional constants. 
+The Hamiltonian expressed by Eq. (1) is ob-
+tained by operating on Kivelson and Wilson's 4 rota-
+tional Hamiltonian, 
+J{ = XJJ + Y// + Z J2 + I 2 r'^ßß Ja2 Jß2 , (2) 
+a,ß 
+with the unitary transformation U, which is given by 
+U = exp [i sin(Jx Jy h +JZ Jy Jx) ] , (3) 
+where 
+-4 RJ(X-Y) . (4) 
+We thus obtain 
+7{ = V-Xj\ij. (5) 
+The constants X, Y, Z, in Eqs. (2) and (4) are the 
+unreduced effective rotational constants. They are 
+equivalent to Kivelson and Wilson's ß, y, a, respec-
+tively. The constant R6 in Eq. (4) is one of Nielsen's 
+centrifugal distortion constants 5. 
+In order to reduce the number of parameters 
+from nine (three rotational constants and six quar-
+tic centrifugal distortion constants) to eight which 
+is the number of determinable parameters up to 
+quartic terms, we can use any unitary transforma-
+
+132 K. Yamada and M. Winnewisser  • Centrifugal  Distortion Constants 
+tion which makes one linear combination of those 
+nine parameters vanish. By the unitary transforma-
+tion given by Eqs. (3) and (4),  we can eliminate 
+the terms with /?6 from the Hamiltonian and the 
+AK = ± 4 matrix elements of the Hamiltonian van-
+ish using the basis of symmetric-top wavefunctions. 
+Another useful unitary transformation reducing 
+the Hamiltonian is that in which the terms with R5, 
+another one of Nielsen's constants, are eliminated, 
+proposed by Winnewisser6 and van Eijck7. This 
+reduction procedure can be important in some 
+special cases. In Sect. Ill of this paper the relation 
+between the spectroscopic constants obtained by the 
+Rq = 0 reduction and by the R5 = 0 reduction is 
+discussed. 
+In the last Sect. (IV) the use of the planarity 
+conditions for the centrifugal distortion constants 
+is discussed. As pointed out by several authors8-11, 
+in a planar molecule, the non-vanishing, centrifugal 
+distortion constants, raabb , rbbcc , tccaa ? T-abab ? Can 
+not be determined uniquely from the five determin-
+able centrifugal distortion constants and the planarity 
+relations. They depend on the way of selecting 
+the planarity relations. The differences between 
+those obtained by the different selections are linearly 
+dependent on the r defect, which gives an indication 
+of the limit of validity of the planarity relations. 
+The following notation is used in this paper: 
+71aa=f'a«aa/4 = H4 t^/4 ((X = X, y, Z OT a, b, C) , 
+— 4 = (t jxyy + 7 yyzz + T zzxx) /41 •> 
+To = f 2/4 = T yyzz + y t- zzxx + Z X  xxyy) ? 
+Taß = hir<Mßß/4 (a,ß = x,y,z or a,b,c) , 
+Tab = fc4 rababf 4 • 
+The remaining notation is the same as that used by 
+Watson1-3. 
+II. Dependence on the Axis Representation 
+By the unitary transformation of the effective ro-
+tational Hamiltonian which reduces the RG constant 
+to zero, we get five reduced quartic centrifugal dis-
+tortion constants, Aj , AJK , AK , dj , <5^ . Watson's 
+determinable parameters are related to those  spec-
+troscopic constants by 
+T = QD (6) where T is a column vector of the determinable 
+centrifugal distortion constants and D is a column 
+vector of the spectroscopic, or reduced, constants: 
+(7) 
+The transformation matrix in Eq. (6) is given by 
+Eqs. (24), (31) of Ref.3: Txx ~ Aj ' 
+Tyy AJK 
+Tzz and D = AK 
+T! SJ 
+L T2 _ <5 K . 
+Q = -l 
+-l 
+-l 
+-3 
+(.X+Y+Z) 0 
+0 
+-1 
+-1 
+~(X+Y)12 -2 
+2 
+0 
+0 
+X-Y 0 
+0 
+0 
+0 
+X-Y 
+(8) 
+where X, Y, and Z are the unreduced eifective rota-
+tional constants. 
+The vector T depends on the axis representation 
+and is not convenient to use. We define the vector 
+Taa 
+Tbb 
+Tec 
+Tt 
+r, (9) 
+The vector Tq is invariant under any cyclic permu-
+tation of the molecule-fixed axis representation, and 
+invariant under any unitary transformation of the 
+type of Equation (3). The matrix and the vector 
+corresponding to Q and D, however, depend on the 
+choice of the axis representation. For the Ir, IIr, 
+and III1" axis representations 12, Eq. (6) is rewritten 
+as follows: 
+T0 = Qj Dj, (i = 1,11, and III) (10) 
+where the subscripts represent the axis system. The 
+right hand coordinate systems only are considered 
+in the present work. Thus the superscript r is omit-
+ted in indicating the axis representation in the fol-
+lowing equations. Comparing Eqs. (6) and (10) 
+the matrix Q for the Ir axis representation is ob-
+tained from Eq. (8) as 
+-l -1 -1 0 0 
+-l 0 0 -2 0 
+Qi = -l 0 0 2 0 
+-3 -1 0 0 0 
+— (B + C) /2 0 B-C B-C 
+(11) 
+
+133 K. Yamada and M. Winnewisser • Centrifugal  Distortion Constants 
+Ir IIr IIIr 
+X B C A 
+Y C A B 
+Z A B C Table I. Choice of axis 
+representation. the IIIr representation (see Appendix for others) is 
+The identification of A, B, C with X, Y, Z is given 
+in Table I. The other two matricies, Qn and Qui ? 
+are obtained by cyclic permutation of the first three 
+rows and of A, B, and C in the last row of the 
+matrix Qi (see Appendix). 
+The inverse transformation of Eq. (6) is 
+D = CT1T, (12) 
+where Q-1, the inverse matrix of Q, is given by 
+Eqs. (51), (52) of Ref.1: 
+Q-1 = -1 -1 
+X-Z 
+2 (X-Y) Y-Z 
+2 (X-Y) -—— 0 -0 
+-1 
+1 
+0 
+X+Y 
+2 (X-Y) X-Y 
+The inverse transformation of Eq. (10) is written as 
+Di = Qi~1T0, (i = I, II, and III). (14) 
+The matrix 'Qj-1, the inverse matrix of Qj, can be 
+obtained from Q-1 in Eq. (13) by the identification 
+of A, B, C with X, Y, Z and by the appropriate 
+permutations of the columns for a given axis repre-
+sentation : for example, in the Ir axis representation, 
+Ol o 
+o 
+-l 
+0 
+0 -1 
+-I 
+B-A C-A 0 
+-1 
+1 
+0 
+B + C 
+2 (B-C) 2 (B — C) 2 (B-C) B-C 
+(15) 
+The inverse matricies of Qn and Qui ? that is Qu-1 
+and Qui-1, are obtained by cyclic permutation of 
+the first three columns and of A, B, and C in the 
+last row of the matrix Qi-1 (see Appendix). 
+The relations between the reduced centrifugal 
+distortion constants defined for the different axis 
+representations are thus given as 
+Dj = Qj~1QiDi, (i, j = 1,11, and III). (16) 
+For example, the product matrix which transforms 
+the constants in the Ir representation into those in Q ni Qi = 
+o — A-C 
+2 (A—B) 1 0 
+-3 0 
+0 0 
+0 
+B-C 
+A -B 0 . (17) 
+The reduced rotational constants A, B, and C are 
+also dependent on the axis representation. These can 
+be obtained from the expression of the determinable 
+rotational constants 21, 33, and (£, using the trans-
+formation  relations of the centrifugal distortion con-
+stants described above. The Eqs. (54) in Ref.1 are 
+expressed in  vector form as 
+S • 
+$ + CD, (18) 
+3 . 
+where 
+C = -2-1 0 2 2 
+-2 -1 0 -2 -2 
+-20000 
+(13) This  equation is rewritten as 
+' Ai' " 21" 
+Bi = 23 
+.Cj. . e. + Cj Dj (19) 
+(20) 
+' A — Aj' 
+Bi — Bj where i = I, II, and III, which indicates the axis 
+representation. The axis dependent matrix Cj is ob-
+tained by the appropriate cyclic permutation of 
+rows in the  matrix C. Thus the differences between 
+the reduced rotational constants in two different 
+axis representations are given by 
+Cj Dj - Cj DJ = (Cj Qj-1 Qj - Cj) DJ . 
+(21) 
+Carpenter13 reported the centrifugal distortion 
+constants of  F2CO and S02 obtained by fitting the 
+data separately to each of the three axis representa-
+tions. In Table II these reported constants are com-
+pared with those obtained by the transformations 
+derived here. 
+III. Use of the R5 = 0 Reduction 
+If we use the  unitary transformation, Eq. (3), 
+with sm = 2 Rj (2 Z — X— T), we can reduce the 
+constant R5 to zero. Watson's choice, that is the 
+
+134 K. Yamada and M. Winnewisser • Centrifugal Distortion Constants 
+Table II. Centrifugal distortion constants in the various axis representations in MHz. 
+ir iir iiir 
+Obs. a Obs. a Converted Obs. a Converted t) 
+so2 AJ 6.5875 (263) xl0~3 1.2418(6) 1.2412 1.2445(7) 1.2446 
+AJK -1.1724(36)  xlO-1 -3.8248(18) -3.8211 -3.8326(23) -3.8313 
+AK 2.5899(10) 2.5934(13) 2.5899 2.5918(17) 2.5899 
+ÖJ 1.7008(38)  xlO-3 — 6.1898(27)  x 10-1 -6.1902 x 10- l 6.1703 (34) x 10-1 6.1731 x 10-1 
+Ö K 2.5259 (292) x 10"2 1.2559(6) 1.2564 -1.3324(8) -1.3332 
+f2co AJ 6.1587 (1155)x 10-3 8.6508 (1137) x 10 -3 8.6520 x 10-3 1.3875 (162) x 10-2 1.3904 x 10~2 
+AJK -3.0051 (2673) x 10~3 -1.0475(297) xlO -2 -1.0485 x 10" 2 -2.6140 (254) x 10~2 -2.6242 x 10-2 
+AK 1.3244(213)  x 10 2 1.3233(214)  xlO -2 1.3244 x 10-2 1.3207 (263)x lO"2 1.3244 x 10~2 
+8J 2.6261(380)  xlO"3 -3.8728(389)  x 10 -3 -3.8728 x 10- 3 1.2589 (380)x 10~3 1.2467 x 10-3 
+8K 4.2959 (1002) x 10~3 -4.1805(990)  x 10" -3 -4.1847 x 10-3 -2.3471 (390) x 10"1 -2.3247 x 10-1 
+a Reported in Reference 13. 15 Converted from the observed constants in the Ir axis representation. 
+R6 = 0 reduction, has the advantage that the reduced 
+Hamiltonian has no matrix elements for AK = ±4. 
+Though the Hamiltonian obtained by the R5 = 0 
+reduction loses this convenience for computation, 
+the difficulty which appears with Watson's choice 
+for very near symmetric-top molecules, for which 
+the denominator in Eq. (4) is very small, can be 
+avoided without changing the axis representation. 
+For the case R6 = 0, the reduced rotational and 
+centrifugal distortion constants are expressed in 
+Eqs. (49), (50), (53) of Ref. 
+X = X-8(1 +O)R6, Y=Y-8{1-O)R6, 
+Z = Z + 16  R6, Dj = DJ-2R6 = AJ, (22) 
+DJK = DJK+12R6 = AJK, Dk = DK-10R6 = Ak, 
+dj = dj, R5 = R5 + 2 o R6 = — dK/2 , Ä6 = 0, 
+where 
+o= (2 Z-X-Y)/{X-Y). 
+On the other hand in the present choice, R5 = 0, 
+they are 7 
+i' = Z-4(6-l)Ä5, 
+y' = F-4(6 + l)fl5, 
+~Z' = Z + 8 b R5, 
+D'j = Dj — bR5 = Äj, 
+D'JK = DjK + 6bR5 = A'jK, (23) 
+D'K = DK-obR5 = A'K, 
+d'j = dj= <>'j, 
+Ä'5- 0, R', = R6-bR5/2=-dfK/2, 
+where 
+b = (Y-X)/(2Z-X-Y) = - I/o. The primes are used to distinguish between the con-
+stants for Rg = 0 and for R- = 0. Comparing Eqs. 
+(22) and (23) we obtain the following differences: 
+X-X' = -2(6- l)dK =4(1 +o)d'K, 
+Y-Y'= -2(b + l)dK=4(l-o)d'K, 
+Z — Z' = 4b dK = — 8 d'K, (24) 
+and 
+AJ-ÄJ = -bdKf2 = Ö'K, 
+Ajk ~ 4'jk = 3bdK= - 6 b'K , 
+AK-A'K=-5böK/2 = 5d'K, (25) 
+dj-ö'j = 0, 
+^ - *'K = (1 + b/2) DK = - (1 - 2 O) D'K. 
+It is interesting to note that the right hand sides of 
+the individual equations of Eqs. (24) and (25) are 
+all parallel with each other. They give only one 
+equation, 
+öK = 2oö'K. (26) 
+Now the transformation from the primed con-
+stants to Watson's constants may be expressed fol-
+lowing Eq. (25) as 
+D = PD', 
+where 
+D' A'J 
+A'JK 
+A'K 
+S'J 
+d'K (27) 
+(28) 
+and 1 0 0 0 1 
+0 1 0 0 -6 
+0 0 1 0 5 
+0 0 0 1 0 
+0 0 0 0 2 o (29) 
+
+135 K. Yamada and M. Winnewisser  • Centrifugal Distortion  Constants 
+The inverse transformation of this is 
+D=P 
+where where 
+1 0 0 0 6/2 
+0 10 0 -36 
+0 0 1 0 5 6/2 
+0 0  0 1 0 
+0 0 0 0 -6/2 (30) 
+(31) 
+From Eqs. (6) and (27) the transformation from 
+the primed constants to Watson's determinable con-
+stants is obtained: 
+T = Q'D', 
+where 
+Q' = Q P (32) 
+(33) 
+-1 0 0 — 2 -1 
+-1 0 0 2 -1 
+-1 -1 -1 0 0 
+-3 -1 0 0 3 
+-(X + Y+Z) — (X+Y)/2 0 X-Y 3 Z 
+The inverse transformation of this is 
+D' = Q'_1T, 
+where (34) C' = -2-10 2 0 
+-2 -1 0-2 0 
+-2 0 0 0 6 (37) 
+IV. Use of the Planarity Conditions 
+There are seven centrifugal distortion constants 
+for a planar molecule: 
+rp rp rp rp rp rp l  rp% 1 aa i * bb •> * cc •> * ab i -1 be 5 ca ana 1 ab . 
+However, only five constants can be determined 
+from the analysis of a molecular spectrum: 
+Taa > Tbb •> Tcc j and • 
+The constants Tx and T2 are linear combinations 
+of the last four constants of the former set: 
+T1 = Tab + Tbc + Tca + 2T*b,  (38) 
+T2 = ATbc + BTca + CTab + 2CT*b. (39) 
+In order to obtain the seven constants we have to 
+use the planarity conditions: 
+Tab = A* B2 ( - T JA4 - TJB* + TJC4) /2 , (40) 
+Tbc = ß2 C- (- Taa/A* + Tbb/B4 + Tcc/C*) /2, (41) 
+Tca = C2 A2 [TajA* - Tbb/B4 + TJC4) /2 . (42) 
+Q'-l = p-lQ-l = (3 — 6) (3 + 6) 
+8 8 
+3(1-6) 3(1 + 6) 
+4 4 
+(3-56) _(3+5 6) 
+8 8 
+i i 
+(1 + 6) (1-6) 0 
+0 -
+-1 
+0 
+0 -(*+y) 
+4(2 Z-X-Y) 
+(4 Z+X+Y) 2(2 Z- -X-
+3 Y) 
+2(2 Z-X-Y) 
+(8 Z+X+Y) (2 Z- -X-
+5 Y) 
+4(2 Z-X-Y) 
+0 2 (2 Z -X-
+0 -Y) 
+(X+Y) 1 
+4(2 Z-X-Y) 2 (2 Z -X- -Y) (35) 
+The dependence of the primed constants on the 
+choice of the axis representation can be found in the 
+same way as described in Section I. 
+For completeness, the direct relations between 
+Watson's determinable rotational constants and the 
+reduced primed constants are found by substituting 
+Eq. (27) and Eq. (24) into Eq. (18): 
+X' ' "l + a" "se" 
+Y' + 4 d'K l-o = 
+. Z'. -2 . . 3. 
+This equation is rewritten in a form similar to Eq. 
+(18) as 
+" X' ~ 
+Y' = a- + C D' 
+. Z' . .3. The above three equations are valid only when all 
+the constants have the values corresponding to the 
+equilibrium configuration of the molecule. It has 
+been assumed, however, by many investigators that 
+these equations hold also for the ground vibrational 
+state constants within the range of experimental un-
+certainties given for the centrifugal distortion con-
+stants. Following this assumption  we define here the 
+constants in Eqs. (38) — (42) as follows: The con-
+stants A, B, C, Taa, Tbb, Tcc, T1 and T2 are Wat-
+son's determinable parameters in the ground vibra-
+tional state, which are known constants. 
+Now we have five equations, Eqs. (38) — (42), 
+relating four unknowns. This results in an ambiguity 
+in the determination of the unknowns: from which 
+four relations are the constants determined in a 
+
+148 K. Yamada and M. Winnewisser  • Centrifugal  Distortion  Constants 136 
+given case, and is there a preferred set of four rela-
+tions which should be used? This problem was 
+pointed out by Kirchhoff 8 and by Cook et al. 9'10. 
+However, no detailed consideration has been made 
+of this problem. 
+To clarify the relation between the above three 
+planarity conditions and Watson's planarity condi-
+tion, 
+ATCC = TCC-{T2-CT1)I(A + B) =0, (43) 
+Eqs. (40) — (42) are rewritten as 
+Tea ~ Taa (C/A)2 + Tab(C/B)2, (44) 
+Tcc = T ca {CjA)2 + Tbc{ClB)2, (45) 
+Tbc = Tab {C/A)2 + Tbb(C/B)2. (46) 
+Watson's condition, Eq. (43), may be shown to be 
+equivalent to Equation (45). From Eqs. (38), (39), 
+(43) and using the approximate relation 
+1/C = 1/A + 1/B (47) 
+we obtain 
+± cc ATcc = Tbc (C/B)2 + Tca{C/A)2. (48) 
+Putting ATCC = 0 in Eq. (48), Eq. (45) is obtained. 
+As will be shown below, the difference between Eq. 
+(48) with non-zero ATCC and Eq. (45) represents 
+the magnitude of the ambiguity in determining the 
+constants. The quantity ATCC is called the r defect in 
+this paper. 
+The following five choices of linearily independent 
+equations may be used. 
+Case 1. Tab, Tbc, and Tca are determined by Eqs. 
+(40) -(42), and T ab is then determined 
+from Equation (38). 
+Case 2. Tab, Tbc, and  Tca are determined by Eqs. 
+(40)-(42), and T*b is then determined 
+from Equation (39). 
+Case 3. Tab and Tbc are  determined by Eqs. (40), 
+(41), Tca is determined by Eq. (48), and 
+Tab is then obtained from Eq. (38) or 
+Equation (39). 
+Case 4. Tab and Tca are determined by Eqs. (40), 
+(42), Tbc is determined by Eq. (48), and 
+Tab is then obtained from Eq. (38) or 
+Equation (39). 
+Case 5. Tab, Tbc, and Tca are determined by Eqs. 
+(44), (46), (48), and Tab is then obtained 
+from Eq. (38) or Equation (39). 
+The use of Eq. (48) allows us to express the dif-
+ferences between the five resulting sets of Taß s in 
+terms of ATCC. For simplicity we define the following constants 
+as standard: Observed Taa, Tbb, Tcc, and Ti, and 
+T2° which is T2 calculated from the relation ATCC = 0. 
+That is T2°= [A + B)Tcc + CT1. (49) 
+To distinguish this standard from the observed T2, 
+we use here the notation T2° for the standard. Since 
+one of the planarity relations has been used to fix 
+the value T2°, we have to use the other two planarity 
+relations to  obtain the unknown constants. There-
+fore we can determine Tab°, Tbc°, Tca°, and T%b , 
+where the superscript means standard, uniquely in 
+the approximation of Equation (47). 
+The four unknown Vs obtained in Case 1 have 
+to coincide with those standard results, because all 
+of the three planarity relations are used and T2 is 
+not used in the calculation. 
+In Case 2, Tab, Tbc, and Tca are the same as the 
+standard values: 
+ÖTab = ÖTbc = dTca = 0 
+dTaß = Taß - TJ , (a,ß = a, b, c). 
+The difference from the standard is expressed in 
+this way hereafter. Since T2 observed is different 
+from T2° by - {A + B) ATCC, the constant T*b, 
+which is obtained from T2 in this case, is different 
+from T*b° by 
+öT*b = T*b - Tab0 = -[(A+B)/(2C)] ATCC. (50) 
+In Case 3, we obtain: 
+dTab - 6Tbc = 0 . 
+dTca=-(A/C)2ATcc, (51) 
+and ST*b=(A/C)2ATcc/2. 
+Since Eq. (48) contains a linear combination of 
+Eqs. (38) and (39), the same T*b is obtained both 
+from Eq. (38) and Eq. (39) in the approximation 
+of Equation (47). This situation holds for the next 
+two cases also. 
+In Case 4, we obtain 
+6Tab = öTca = 0 , 
+öTbc= - {B/C)2ATcc, (52) 
+and ÖT*b=(B/C)2ATcc/2. 
+In Case 5, since the set of Eqs. (44), (46), (48) 
+is equivalent to the set of Eqs. (40), (41),  (42) if 
+Tcc is replaced by Tcc — ATCC , we arrive at 
+ÖTab=-(AB/C2)2ATccl2, 
+ÖTbc=-(B/C)2ATcc/2, (53) 
+ÖTca=-(A/C)2ATcc/2, 
+and dT*b= (A2B2 + B2C2 + C2A2)ATccj{4Ci) . 
+
+137 K. Yamada and M. Winnewisser • Centrifugal Distortion  Constants 
+Tabab H4 Case 1 Case 2 Case 3 Case 4 
+ch2chnc 
+Reported  a 
+This work b 
+h20 
+Reported  c 
+This work b 
+sso 
+Reported  J 
+This work b -0.06795 
+-0.06795 
+-124.4 
+-124.0 
+-0.0307 
+-0.0306 -0.06719 
+-0.06717 
+-85.1 
+-90.6 
+-0.0303 
+-0.0305 -0.07507 
+-0.07541 
+-194.1 
+-190.1 
+-0.0324 
+-0.0321 -0.06803 
+-0.06803 
+-141.9 Case 5 
+-0.07597 
+-0.07628 
+-246.9 Table III. The ambiguity 
+originating from the 
+planarity relations used to 
+determine the constant 
+tabab ft4 = 4 T*t, 
+in MHz. 
+-0.0307 -0.0323 
+a Ref. u. b Obtained from the observed constant in case 1. c Ref.10. d Ref. 9. 
+Using the relations derived here, the differences 
+between the constants obtained for the different 
+methods of calculation listed above are reproduced 
+successfully for several molecules as listed in Table 
+III. The slight discrepancies which are found be-
+tween the previously reported and the present values 
+have two origins. First, the öTaß values depend on 
+the definition of the rotational constants used in the 
+calculations; for example, A, B, C, instead of 21, 23, 
+(5. Second, the öTaß values depend on whether the 
+approximate relation Eq. (47) is used or not, indeed 
+we can change the 6Tal5 expressions given above into 
+various forms by the use of Equation  (47). 
+Another method has frequently been used for 
+planar molecules to determine four independent r's, 
+which is different from any one of  the above five 
+cases: the observed rotational frequencies are fitted 
+to the unreduced Hamiltonian with the constraint 
+of three planarity relations. Similarly it is also pos-
+sible to fit the frequencies to a modified Watson's 
+Hamiltonian for which one of the independent con-
+stants has been eliminated by applying the con-
+straint ATCC = 0. It should be noted, however, that 
+these methods, applying the planarity relations prior 
+to the fitting procedure, produce a certain model 
+error, the magnitude of which can not be estimated 
+by the statistical treatment of the data. It is indeed 
+a further disadvantage of these methods that we lose 
+information about ATCC. 
+The T defect ATcc, represents not only the vibra-
+tional dependence of the centrifugal distortion con-
+stants but also that of  the rotational constants, since 
+the ground state rotational constants are used in the 
+definition of ATCC and in the planarity relations in 
+this discussion. It indicates the limitation of the 
+validity of the planarity condition Equation (45). 
+However, we can not estimate the errors in the other two planarity relations. Therefore, the ambi-
+guity discussed here is only a part of the total ambi-
+guity. It can be concluded that we should be careful 
+to specify the planarity conditions used in any de-
+termination of the r constants, and that the r defect 
+gives some information, though incomplete infor-
+mation,  about the errors of the constants obtained 
+by using the planarity relations. 
+Acknowledgement 
+The authors would like to express their thanks to 
+Dr. B. P. Winnewisser for reading and commenting 
+on the manuscript and to Dr. W. H. Hocking for his 
+helpful discussions about the meaning  of the r de-
+fect. 
+Appendix 
+The matricies Qj, which appear in Eq. (10), are 
+as follows: 
+-1 -1 -1 0 0 
+-1 0 0 -2 0 
+Qi = -1 0 0 2 0 
+-3 -1 0 0 0 
+(A+B + C) — (B+C) j2 0 B-C B-C 
+(al) 
+0 0 2 0 " 
+-1-10 0 
+0 0-2 0 , 
+-1 OOO' 
+(C + A)/2 0 C-A C — A_ 
+(a 2) 
+and 
+0-2 0 " 
+0 2 0 
+10 0 
+0 0 0 
+0 A-B A — B_ 
+(a 3) Qn = -1 
+-1 
+-1 
+-3 
+L -(A+B+C) 
+Qm = -1 
+-1 
+-1 -3 0 
+0 
+-1 
+-1 
+-(A + B + C) -(A+B)/2 
+
+138 
+The inverse matricies Q,- 1 
+(14) are as  follows: 
+Qrx = K. Yamada and M. Winnewisser  • Centrifugal  Distortion Constants 
+which appear in Eq. and 
+Qir-1 = 
+and 
+Qin_1  = 0 -1/2 -1/2 0 0 ~ 
+0 3/2 3/2 -1 0 
+-1 -1 -1 1 0 
+0 -1/4 1/4 0 0 
+A-B 
+° " 2 (B-C) A-C B + C 1 A-B 
+° " 2 (B-C) 2 (B-C) 2(B-C) B -C 
+(a 
+~ -1/2 0 -1/2 0 0 
+3/2 0 3/2 -1 0 
+-1 -1 -1 1 0 
+1/4 0 -1/4 0 0 
+A-B 
+2 (A-C) B-C A + C 1 A-B 
+2 (A-C) 2 (A-C) 2 (A-C) A -c 
+(a5) 
+-1/2 
+3/2 
+-1 
+-1/4 
+A-C -1/2 
+3/2 
+-1 
+1/4 
+B-C 
+2 (A-B) 2(A-B) 0 
+0 
+-1 
+0 
+0 0 
+-1 
+1 
+0 
+A + B 
+2 (A-B) A-B 
+>6) 
+The products of the matricies, Q; 1 Q, which ap-
+pear in Eq. (16), are as follows: 
+Qn-1 Qi = 1/2 
+-1/2 
+0 
+-1/4 
+0 1/2 
+-3/2 
+1 
+-1/4 
+A-B 
+2 (A-C) -1 
+3 
+0 
+-1/2 
+0 — 0 " 
+0 
+0 
+0 
+B-C 
+A-C (a 7) Q III Qi = 1 1/2 1/2 1 
+0 -1/2 -3/2 -3 
+0 0 1 0 
+0 1/4 1/4 -1/2 
+0 A-C 
+0 0 0 0 0 
+2 (A-B) 0 o 
+0 
+0 
+0 
+B-C 
+A — B (a 8) 
+The other four product matricies can be obtained by 
+changing the last row of the matrix in Eq. (a 7) and 
+Equation (a 8). 
+For Qui-1 Qn , the last row of the matrix in 
+Eq. (a 7) should be replaced by 
+[0,0,-(B-C)/{2(A-B)}, (a 9) 
+0 ,-(A-C)/(A-B)]. 
+For Qi-1 Qui , the last row of the matrix in Eq. 
+(a 7) should be replaced  by 
+[0, 0, (A - C) / {2 (B-C)}, 0, (A-B)/(B-C)]. 
+(a 10) 
+For Qr-1 Qn, the last row of the matrix in Eq. 
+(a 8) should be replaced by 
+[0,0,(A-B)/{2(B-C)},  (all) 
+0, - (A-C)/(B-C)]. 
+For Qn_1 Qui, the last row of the matrix in Eq. 
+(a 8) should be replaced by 
+[0, 0, — (B — C)/{2(A — C)} , (a 12) 
+0, -(A-B)/(A-C)]. 
+1 J. K. G. Watson, J. Chem. Phys. 46, 1935 [1967]. 
+2 J. K. G. Watson, J. Chem. Phys. 48, 181 [1968]. 
+3 J. K. G. Watson, J. Chem. Phys. 48, 4517 [1968]. 
+4 D. Kivelson and E. B.  Wilson, Jr., J. Chem. Phys. 20, 
+1575 [1952]. 
+5 H. H. Nielsen, Rev. Mod. Phys. 23, 90 [1951], 
+6 G. Winnewisser, J. Chem. Phys. 56, 2944 [1972]. 
+7 B. P. van Eijck, J. Mol. Spectrosc. 53, 246 [1974]. 
+8 W. H. Kirchhof!,  J. Mol. Spectrosc. 41, 333 [1972]. 9 R. L. Cook, G. Winnewisser, and D. C. Lindsey, J. Mol. 
+Spectrosc. 46, 276 [1973]. 
+10 R. L. Cook, F. C. de Lucia, and P. Helminger, J. Mol. 
+Spectrosc. 53, 62 [1974]. 
+11 K. Yamada and M. Winnewisser, Z. Naturforsch.  30 a, 672 
+[1975]. 
+12 G. W. King, R. M. Hainer, and P. C. Cross, J. Chem. 
+Phys. 11, 27 [1943], 
+13 J. H. Carpenter, J. Mol. Spectrosc. 46, 348 [1973]. 

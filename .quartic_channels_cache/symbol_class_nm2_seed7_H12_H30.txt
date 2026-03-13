@@ -1,0 +1,6 @@
+tau_xxxx = 467891*A*B*C*hbar/78382080
+tau_yyyy = 82937*A*B*C*hbar/7962624
+tau_zzzz = 1887793*A*B*C*hbar/1393459200
+tau_xxyy = 5412151*A*B*C*hbar/293932800
+tau_xxzz = 265976791*A*B*C*hbar/15676416000
+tau_yyzz = 653507587*A*B*C*hbar/15676416000
