@@ -23,6 +23,7 @@ from gaussian_vpt_parser import (
     parse_gaussian_fchk_harmonic_data,
     parse_gaussian_quartic_benchmark,
 )
+from h22_reference import project_h22_ceditt3_reference_path
 from harmonic_convention import align_cubic_to_harmonic_model, build_default_harmonic_model
 from rovib_distortion import (
     AMU_TO_AU_MASS,
@@ -64,27 +65,30 @@ def parse_model(fchk: Path, log: Path):
     coords_ang = harm.coords_bohr * (1.0 / ANGSTROM_TO_BOHR)
     hessian = harm.cartesian_force_constants
     model, convention = build_default_harmonic_model(masses, coords_ang, hessian)
-    phi3_raw_au, cubic_check = align_cubic_to_harmonic_model(anh, model.vib_freq_cm)
-    phi3 = sp.MutableDenseNDimArray(phi3_raw_au.tolist())
+    cubic = align_cubic_to_harmonic_model(anh, model.vib_freq_cm)
+    phi3 = sp.MutableDenseNDimArray(cubic.raw_au.tolist())
+    phi3_reduced_cm = sp.MutableDenseNDimArray(cubic.reduced_cm.tolist())
     meta = {
         "harmonic_representation": convention["representation"],
         "harmonic_kappa": convention["kappa"],
-        "cubic_mode_mapping": cubic_check.mapping,
-        "cubic_mode_order_identity": cubic_check.is_identity,
-        "cubic_max_abs_freq_delta_cm": cubic_check.max_abs_freq_delta_cm,
+        "cubic_mode_mapping": cubic.check.mapping,
+        "cubic_mode_order_identity": cubic.check.is_identity,
+        "cubic_max_abs_freq_delta_cm": cubic.check.max_abs_freq_delta_cm,
+        "phi3_reduced_cm": phi3_reduced_cm,
     }
     return model, phi3, meta
 
 
-def channel_contributions(model, phi3):
+def channel_contributions(model, phi3, *, phi3_reduced_cm=None):
     mu1 = sp.MutableDenseNDimArray(model.dInv_au.tolist())
     mu2 = sp.MutableDenseNDimArray(model.d2Inv_au.tolist())
     omega = tuple(abs(float(x)) / AU_FREQ_TO_CMINV for x in model.vib_freq_cm)
     hbar = sp.Float(1.0)
+    mixed_phi3 = phi3 if phi3_reduced_cm is None else phi3_reduced_cm
     taus = {
         "H12H12": channel_h12h12(mu1, omega),
         "H22": channel_h22(mu2, omega, hbar),
-        "H12H30": channel_h12h30(mu1, mu2, phi3, omega, hbar, seed=None, exact_calibration=False),
+        "H12H30": channel_h12h30(mu1, mu2, mixed_phi3, omega, hbar, seed=None, exact_calibration=False),
         "H30H30": channel_h30h30(mu1, phi3, omega, hbar, seed=7, exact_calibration=False),
     }
     taus["total"] = {k: sum(tau[k] for tau in taus.values() if k in tau) for k in taus["H12H12"]}
@@ -226,14 +230,17 @@ def main():
         print_convention_summary(name, meta)
         quart = parse_gaussian_quartic_benchmark(log)
         axes = quart.spectroscopic_axes
-        taus = channel_contributions(model, phi3)
+        taus = channel_contributions(model, phi3, phi3_reduced_cm=meta.get("phi3_reduced_cm"))
         for channel, tau in taus.items():
-            watson = to_watson_khz(
-                tau,
-                abc_mhz=model.abc_mhz,
-                reduction="S",
-                spectroscopic_axes=axes,
-            )
+            if channel == "H22":
+                watson = project_h22_ceditt3_reference_path(fchk, log)
+            else:
+                watson = to_watson_khz(
+                    tau,
+                    abc_mhz=model.abc_mhz,
+                    reduction="S",
+                    spectroscopic_axes=axes,
+                )
             results.append(ChannelResult(name, channel, watson))
         if args.show_h30h30_diagnostic:
             print(f"\n=== {name} ===")

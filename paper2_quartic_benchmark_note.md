@@ -1,4 +1,11 @@
-# Paper 2 quartic benchmark note (updated H12H30 scaffold model)
+# Paper 2 quartic benchmark note
+
+This note contains two different kinds of reference values:
+
+- `H22`: validated benchmark-level channel numbers used for code verification.
+- `H12H30`, `H30H30`: working-reference channel numbers used for reconstruction
+  and diagnostics while those implementations are still under active
+  development.
 
 All quartic constants below are S-reduced and reported in kHz. The benchmark-consistent axis override is inferred from the Gaussian quartic benchmark itself.
 
