@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
-"""Minimal quartic channel builder for reconstruction."""
+"""Minimal quartic channel builder for reconstruction.
+
+The H12H30 and H30H30 routines in this file are intentionally minimal
+placeholder reconstructions. They are useful for symbolic scaffolding and
+software integration, but they do not yet reproduce the benchmark-faithful
+Paper 2 cubic-cubic / mixed-channel formulas.
+"""
 
 from __future__ import annotations
 
 from collections import defaultdict
 from typing import Dict, Iterable
+import warnings
 
 import sympy as sp
 import numpy as np
 
 MON_KEYS = ("xxxx", "yyyy", "zzzz", "xxyy", "xxzz", "yyzz")
+_PLACEHOLDER_WARNED: set[str] = set()
 
 
 def _zero_tau() -> Dict[str, sp.Expr]:
@@ -21,6 +29,18 @@ def _complete_tau(partial: Dict[str, sp.Expr]) -> Dict[str, sp.Expr]:
     for key, val in partial.items():
         base[key] = sp.simplify(val)
     return base
+
+
+def _warn_placeholder(channel: str) -> None:
+    if channel in _PLACEHOLDER_WARNED:
+        return
+    warnings.warn(
+        f"{channel} currently uses a minimal placeholder formula in quartic_channels.py; "
+        "it is not yet the benchmark-faithful Paper 2 implementation.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    _PLACEHOLDER_WARNED.add(channel)
 
 
 def channel_h12h12(mu1: sp.MutableDenseNDimArray, omega: Iterable[float]) -> Dict[str, sp.Expr]:
@@ -45,18 +65,85 @@ def channel_h22(mu2: sp.MutableDenseNDimArray, omega: Iterable[float], hbar: sp.
     coef = sp.Rational(1, 32) * hbar
     for k in range(n_modes):
         for l in range(n_modes):
-            w = coef / (omega[k] * omega[l])
-            tau["tau_xxxx"] += mu2[0, 0, k, l] ** 2 * w
-            tau["tau_yyyy"] += mu2[1, 1, k, l] ** 2 * w
-            tau["tau_zzzz"] += mu2[2, 2, k, l] ** 2 * w
+            symmetry = sp.Integer(2) if k == l else sp.Integer(1)
+            w = coef * symmetry / (omega[k] * omega[l])
+            xx = mu2[0, 0, k, l]
+            yy = mu2[1, 1, k, l]
+            zz = mu2[2, 2, k, l]
+            xy = mu2[0, 1, k, l]
+            yx = mu2[1, 0, k, l]
+            xz = mu2[0, 2, k, l]
+            zx = mu2[2, 0, k, l]
+            yz = mu2[1, 2, k, l]
+            zy = mu2[2, 1, k, l]
+
+            tau["tau_xxxx"] += xx**2 * w
+            tau["tau_yyyy"] += yy**2 * w
+            tau["tau_zzzz"] += zz**2 * w
+            tau["tau_xxyy"] += (xx * yy + xy * xy + xy * yx + yx * yx) * w
+            tau["tau_xxzz"] += (xx * zz + xz * xz + xz * zx + zx * zx) * w
+            tau["tau_yyzz"] += (yy * zz + yz * yz + yz * zy + zy * zy) * w
     return _complete_tau(tau)
 
 
+def bilinear_modepair_from_mu1(
+    mu1: sp.MutableDenseNDimArray,
+    inertia0: sp.MutableDenseNDimArray,
+) -> sp.MutableDenseNDimArray:
+    """Build the bilinear mode-pair closure B(mu1) = mu1 I mu1 + mu1 I mu1."""
+    mu1_np = np.asarray(mu1.tolist(), dtype=float)
+    inertia0_np = np.asarray(inertia0.tolist(), dtype=float)
+    n_modes = mu1_np.shape[2]
+    bilinear = np.zeros((3, 3, n_modes, n_modes), dtype=float)
+    for k in range(n_modes):
+        for l in range(n_modes):
+            bilinear[:, :, k, l] = (
+                mu1_np[:, :, k] @ inertia0_np @ mu1_np[:, :, l]
+                + mu1_np[:, :, l] @ inertia0_np @ mu1_np[:, :, k]
+            )
+    flat = [sp.Float(float(x)) for x in bilinear.reshape(-1)]
+    return sp.MutableDenseNDimArray(flat, bilinear.shape)
+
+
+def channel_h22_decomposed(
+    bilinear: sp.MutableDenseNDimArray,
+    intrinsic: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Expr,
+) -> dict[str, Dict[str, sp.Expr]]:
+    """Return H22[B,B], H22[B,N], H22[N,N], and the assembled total."""
+    total = sp.MutableDenseNDimArray(
+        [sp.simplify(bilinear[idx] - intrinsic[idx]) for idx in np.ndindex(bilinear.shape)],
+        bilinear.shape,
+    )
+
+    bb = channel_h22(bilinear, omega, hbar)
+    bn_tensor = sp.MutableDenseNDimArray(
+        [sp.simplify((bilinear[idx] + intrinsic[idx]) / 2) for idx in np.ndindex(bilinear.shape)],
+        bilinear.shape,
+    )
+    # Use polarization on the quadratic form to isolate the mixed interference:
+    #   Q(B-N) = Q(B) - 2 cross(B,N) + Q(N)
+    total_tau = channel_h22(total, omega, hbar)
+    nn = channel_h22(intrinsic, omega, hbar)
+    cross = {
+        key: sp.simplify((bb[key] + nn[key] - total_tau[key]) / 2)
+        for key in bb
+    }
+    return {
+        "total": total_tau,
+        "bilinear": bb,
+        "intrinsic": nn,
+        "cross": cross,
+    }
+
+
 def channel_h12h30(mu1, mu2, phi3: sp.MutableDenseNDimArray, omega: Iterable[float], hbar: sp.Symbol, seed=None, exact_calibration=False):
+    _warn_placeholder("H12H30")
     tau = defaultdict(lambda: sp.Integer(0))
-    w = sp.Rational(1, 4) * hbar
     n_modes = mu1.shape[2]
     for k in range(n_modes):
+        w = sp.Rational(1, 4) * hbar
         tau["tau_xxxx"] += phi3[k, k, k] * mu1[0, 0, k] * w / (omega[k] + 1)
         tau["tau_yyyy"] += phi3[k, k, k] * mu1[1, 1, k] * w / (omega[k] + 1)
         tau["tau_zzzz"] += phi3[k, k, k] * mu1[2, 2, k] * w / (omega[k] + 1)
@@ -64,6 +151,7 @@ def channel_h12h30(mu1, mu2, phi3: sp.MutableDenseNDimArray, omega: Iterable[flo
 
 
 def channel_h30h30(mu1, phi3: sp.MutableDenseNDimArray, omega: Iterable[float], hbar: sp.Symbol, seed: int, exact_calibration=False):
+    _warn_placeholder("H30H30")
     tau = defaultdict(lambda: sp.Integer(0))
     n_modes = mu1.shape[2]
     for i in range(n_modes):
@@ -100,27 +188,5 @@ def channel_h22_from_mu1_intrinsic(
     hbar: sp.Expr,
 ) -> dict[str, Dict[str, sp.Expr]]:
     """Return a simple decomposition of H22 into bilinear and intrinsic pieces."""
-    def to_numpy(arr: sp.MutableDenseNDimArray) -> np.ndarray:
-        return np.asarray([float(sp.N(x)) for x in arr]).reshape(arr.shape)
-
-    mu1_np = to_numpy(mu1)
-    intrinsic_np = to_numpy(intrinsic)
-    inertia0_np = to_numpy(inertia0)
-    n_modes = mu1_np.shape[2]
-    bilinear = np.zeros_like(intrinsic_np)
-    for k in range(n_modes):
-        for l in range(n_modes):
-            bilinear[:, :, k, l] = (
-                mu1_np[:, :, k] @ inertia0_np @ mu1_np[:, :, l]
-                + mu1_np[:, :, l] @ inertia0_np @ mu1_np[:, :, k]
-            )
-
-    def to_sympy(arr: np.ndarray) -> sp.MutableDenseNDimArray:
-        return sp.MutableDenseNDimArray([sp.Float(float(x)) for x in arr.flatten()], arr.shape)
-
-    total = bilinear - intrinsic_np
-    return {
-        "total": channel_h22(to_sympy(total), omega, hbar),
-        "bilinear": channel_h22(to_sympy(bilinear), omega, hbar),
-        "intrinsic": channel_h22(to_sympy(intrinsic_np), omega, hbar),
-    }
+    bilinear = bilinear_modepair_from_mu1(mu1, inertia0)
+    return channel_h22_decomposed(bilinear, intrinsic, omega, hbar)
