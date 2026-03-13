@@ -90,3 +90,37 @@ def tau_to_watson_a(tau: Dict[str, sp.Expr]) -> Dict[str, sp.Expr]:
         "d1": sp.simplify(sp.Rational(1, 8) * (c[(2, 0, 2)] - c[(0, 2, 2)])),
         "d2": sp.simplify(sp.Rational(1, 16) * (c[(4, 0, 0)] - c[(0, 4, 0)])),
     }
+
+
+def channel_h22_from_mu1_intrinsic(
+    mu1: sp.MutableDenseNDimArray,
+    intrinsic: sp.MutableDenseNDimArray,
+    inertia0: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Expr,
+) -> dict[str, Dict[str, sp.Expr]]:
+    """Return a simple decomposition of H22 into bilinear and intrinsic pieces."""
+    def to_numpy(arr: sp.MutableDenseNDimArray) -> np.ndarray:
+        return np.asarray([float(sp.N(x)) for x in arr]).reshape(arr.shape)
+
+    mu1_np = to_numpy(mu1)
+    intrinsic_np = to_numpy(intrinsic)
+    inertia0_np = to_numpy(inertia0)
+    n_modes = mu1_np.shape[2]
+    bilinear = np.zeros_like(intrinsic_np)
+    for k in range(n_modes):
+        for l in range(n_modes):
+            bilinear[:, :, k, l] = (
+                mu1_np[:, :, k] @ inertia0_np @ mu1_np[:, :, l]
+                + mu1_np[:, :, l] @ inertia0_np @ mu1_np[:, :, k]
+            )
+
+    def to_sympy(arr: np.ndarray) -> sp.MutableDenseNDimArray:
+        return sp.MutableDenseNDimArray([sp.Float(float(x)) for x in arr.flatten()], arr.shape)
+
+    total = bilinear - intrinsic_np
+    return {
+        "total": channel_h22(to_sympy(total), omega, hbar),
+        "bilinear": channel_h22(to_sympy(bilinear), omega, hbar),
+        "intrinsic": channel_h22(to_sympy(intrinsic_np), omega, hbar),
+    }

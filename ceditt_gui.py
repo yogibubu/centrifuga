@@ -58,14 +58,17 @@ from symmetry_metadata import (
     symbols_from_atomic_numbers,
 )
 from quartic_channels import (
-    BOHR_TO_ANG,
-    CMINV_TO_MHZ,
     channel_h22,
     channel_h22_from_mu1_intrinsic,
+)
+from derive_watson_quartic_vanvleck import (
     gaussian_asymmetric_a_from_t,
     gaussian_symmetric_from_t,
     gaussian_t_from_tauprime,
 )
+from rovib_distortion import ANGSTROM_TO_BOHR, CMINV_TO_MHZ
+
+BOHR_TO_ANG = 1.0 / ANGSTROM_TO_BOHR
 
 
 REPRESENTATIONS = ("I", "II", "III")
