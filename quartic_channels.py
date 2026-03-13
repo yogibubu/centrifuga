@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Minimal quartic channel builder for reconstruction.
 
-The H12H30 and H30H30 routines in this file are intentionally minimal
-placeholder reconstructions. They are useful for symbolic scaffolding and
-software integration, but they do not yet reproduce the benchmark-faithful
-Paper 2 cubic-cubic / mixed-channel formulas.
+``H12H30`` is implemented as an explicit scaffold reconstruction split into
+the same one-mode / two-mode / three-mode sectors used in the appendix of
+``paper2.tex``:
+
+- ``S1``: diagonal cubic block ``Phi_iii``
+- ``S2``: semi-diagonal cubic block ``Phi_iij`` / ``Phi_ijj``
+- ``S3``: genuine three-index cubic block ``Phi_ijk``
+
+``H30H30`` remains a placeholder and is still diagnostic only.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
+from itertools import combinations
 from typing import Dict, Iterable
 import warnings
 
@@ -18,6 +24,25 @@ import numpy as np
 
 MON_KEYS = ("xxxx", "yyyy", "zzzz", "xxyy", "xxzz", "yyzz")
 _PLACEHOLDER_WARNED: set[str] = set()
+WILSON_TAU_AU_TO_CMINV = 4.0 * 219474.6313705
+_H12H30_SCAFFOLD_COEFFS = {
+    "diag_iii_over_w5": sp.Float("8.30447968e-06"),
+    "sd_iij_over_w2_w_wp": sp.Float("-4.61259401e-02"),
+    "sd_iij_over_w_wp_2wipj": sp.Float("6.49157973"),
+    "sd_iij_over_w_wp_wi2wj": sp.Float("8.74757939"),
+    "tri_ijk_over_pair_sums": sp.Float("-4.29204642e+01"),
+    "tri_ijk_over_w_pair_sums": sp.Float("3.15816267e-01"),
+}
+_H12H30_DIAG_SCAFFOLDS = ("diag_iii_over_w5",)
+_H12H30_SEMIDIAG_SCAFFOLDS = (
+    "sd_iij_over_w2_w_wp",
+    "sd_iij_over_w_wp_2wipj",
+    "sd_iij_over_w_wp_wi2wj",
+)
+_H12H30_TRI_SCAFFOLDS = (
+    "tri_ijk_over_pair_sums",
+    "tri_ijk_over_w_pair_sums",
+)
 
 
 def _zero_tau() -> Dict[str, sp.Expr]:
@@ -41,6 +66,43 @@ def _warn_placeholder(channel: str) -> None:
         stacklevel=2,
     )
     _PLACEHOLDER_WARNED.add(channel)
+
+
+def _component_mix_h12h30(mu1, mu2, i: int, j: int, key: str):
+    if key == "tau_xxxx":
+        return mu1[0, 0, i] * mu2[0, 0, j, j]
+    if key == "tau_yyyy":
+        return mu1[1, 1, i] * mu2[1, 1, j, j]
+    if key == "tau_zzzz":
+        return mu1[2, 2, i] * mu2[2, 2, j, j]
+    if key == "tau_xxyy":
+        return (
+            mu1[0, 0, i] * mu2[1, 1, j, j]
+            + mu1[0, 1, i] * mu2[0, 1, j, j]
+            + mu1[0, 1, i] * mu2[1, 0, j, j]
+            + mu1[1, 0, i] * mu2[0, 1, j, j]
+            + mu1[1, 0, i] * mu2[1, 0, j, j]
+            + mu1[1, 1, i] * mu2[0, 0, j, j]
+        )
+    if key == "tau_xxzz":
+        return (
+            mu1[0, 0, i] * mu2[2, 2, j, j]
+            + mu1[0, 2, i] * mu2[0, 2, j, j]
+            + mu1[0, 2, i] * mu2[2, 0, j, j]
+            + mu1[2, 0, i] * mu2[0, 2, j, j]
+            + mu1[2, 0, i] * mu2[2, 0, j, j]
+            + mu1[2, 2, i] * mu2[0, 0, j, j]
+        )
+    if key == "tau_yyzz":
+        return (
+            mu1[1, 1, i] * mu2[2, 2, j, j]
+            + mu1[1, 2, i] * mu2[1, 2, j, j]
+            + mu1[1, 2, i] * mu2[2, 1, j, j]
+            + mu1[2, 1, i] * mu2[1, 2, j, j]
+            + mu1[2, 1, i] * mu2[2, 1, j, j]
+            + mu1[2, 2, i] * mu2[1, 1, j, j]
+        )
+    raise KeyError(key)
 
 
 def channel_h12h12(mu1: sp.MutableDenseNDimArray, omega: Iterable[float]) -> Dict[str, sp.Expr]:
@@ -139,15 +201,337 @@ def channel_h22_decomposed(
 
 
 def channel_h12h30(mu1, mu2, phi3: sp.MutableDenseNDimArray, omega: Iterable[float], hbar: sp.Symbol, seed=None, exact_calibration=False):
-    _warn_placeholder("H12H30")
-    tau = defaultdict(lambda: sp.Integer(0))
+    """Return the total mixed ``H12H30`` scaffold reconstruction."""
+    return channel_h12h30_decomposed(mu1, mu2, phi3, omega, hbar)["total"]
+
+
+def _sum_tau_dicts(*taus: Dict[str, sp.Expr]) -> Dict[str, sp.Expr]:
+    total = _zero_tau()
+    for tau in taus:
+        for key, val in tau.items():
+            total[key] = sp.simplify(total[key] + val)
+    return total
+
+
+def _scale_tau(tau: Dict[str, sp.Expr], factor: sp.Expr) -> Dict[str, sp.Expr]:
+    return _complete_tau({key: sp.simplify(factor * val) for key, val in tau.items()})
+
+
+def _h12h30_threeindex_triad_cm_terms(
+    mu1,
+    mu2,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+) -> dict[tuple[int, int, int], dict[str, Dict[str, sp.Expr]]]:
+    """Build the tri-index ``H12H30`` terms triad by triad in cm^-1 units.
+
+    For each unordered triad ``{i,j,k}``, the current solver can be written as
+    the sum over the six ordered permutations. This helper makes that
+    decomposition explicit so the ``S3`` block can be discussed at the level of
+    denominator families on a single triad.
+    """
     n_modes = mu1.shape[2]
-    for k in range(n_modes):
-        w = sp.Rational(1, 4) * hbar
-        tau["tau_xxxx"] += phi3[k, k, k] * mu1[0, 0, k] * w / (omega[k] + 1)
-        tau["tau_yyyy"] += phi3[k, k, k] * mu1[1, 1, k] * w / (omega[k] + 1)
-        tau["tau_zzzz"] += phi3[k, k, k] * mu1[2, 2, k] * w / (omega[k] + 1)
-    return _complete_tau(tau)
+    triad_terms: dict[tuple[int, int, int], dict[str, Dict[str, sp.Expr]]] = {}
+    for i, j, k in combinations(range(n_modes), 3):
+        phi_tri = phi3[i, j, k]
+        if abs(float(phi_tri)) <= 1.0e-14:
+            continue
+        pair = defaultdict(lambda: sp.Integer(0))
+        addition = defaultdict(lambda: sp.Integer(0))
+        common_pair = (omega[i] + omega[j]) * (omega[j] + omega[k]) * (omega[i] + omega[k])
+        for a, b, _c in (
+            (i, j, k),
+            (i, k, j),
+            (j, i, k),
+            (j, k, i),
+            (k, i, j),
+            (k, j, i),
+        ):
+            for key in _zero_tau():
+                mix = _component_mix_h12h30(mu1, mu2, a, b, key)
+                pair[key] += (
+                    _H12H30_SCAFFOLD_COEFFS["tri_ijk_over_pair_sums"]
+                    * phi_tri
+                    * mix
+                    / common_pair
+                )
+                addition[key] += (
+                    _H12H30_SCAFFOLD_COEFFS["tri_ijk_over_w_pair_sums"]
+                    * phi_tri
+                    * mix
+                    / (omega[a] * common_pair)
+                )
+        triad_terms[(i, j, k)] = {
+            "S3": _complete_tau(pair),
+            "S3_addition": _complete_tau(addition),
+            "three_index": _sum_tau_dicts(_complete_tau(pair), _complete_tau(addition)),
+        }
+    return triad_terms
+
+
+def _h12h30_threeindex_xxxx_triad_numerators(
+    mu1,
+    mu2,
+    omega: Iterable[float],
+) -> dict[tuple[int, int, int], dict[str, sp.Expr]]:
+    """Return the explicit ``tau_xxxx`` triad numerators used by the solver.
+
+    For an unordered triad ``{i,j,k}``, the current ``S3`` block can be written
+    as a common pair-sum denominator times an unweighted numerator
+
+    ``N0_xxxx({i,j,k}) = sum_perm M_xxxx(a,b)``
+
+    while ``S3_addition`` uses the same denominator and the weighted numerator
+
+    ``N1_xxxx({i,j,k}) = sum_perm M_xxxx(a,b) / w_a``.
+    """
+    n_modes = mu1.shape[2]
+    numerators: dict[tuple[int, int, int], dict[str, sp.Expr]] = {}
+    for i, j, k in combinations(range(n_modes), 3):
+        n0 = sp.Integer(0)
+        n1 = sp.Integer(0)
+        for a, b, _c in (
+            (i, j, k),
+            (i, k, j),
+            (j, i, k),
+            (j, k, i),
+            (k, i, j),
+            (k, j, i),
+        ):
+            mix = _component_mix_h12h30(mu1, mu2, a, b, "tau_xxxx")
+            n0 += mix
+            n1 += mix / omega[a]
+        numerators[(i, j, k)] = {
+            "N0_xxxx": sp.simplify(n0),
+            "N1_xxxx": sp.simplify(n1),
+            "D_pair": sp.simplify((omega[i] + omega[j]) * (omega[j] + omega[k]) * (omega[i] + omega[k])),
+        }
+    return numerators
+
+
+def _h12h30_threeindex_triad_component_numerators(
+    mu1,
+    mu2,
+    omega: Iterable[float],
+) -> dict[tuple[int, int, int], dict[str, Dict[str, sp.Expr]]]:
+    """Return generic triad numerators ``N0_mu`` and ``N1_mu`` for all components.
+
+    For every unordered triad ``{i,j,k}`` and every tensor component ``mu``,
+    the current solver uses the same pair-sum denominator
+    ``D_pair(i,j,k)``. The distinction between the appendix ``S3`` block and
+    its weighted solver deformation is entirely in the numerators:
+
+    - ``N0_mu``: unweighted sum over ordered-pair mixings
+    - ``N1_mu``: the same sum weighted by ``1 / w_a``
+    """
+    n_modes = mu1.shape[2]
+    numerators: dict[tuple[int, int, int], dict[str, Dict[str, sp.Expr]]] = {}
+    for i, j, k in combinations(range(n_modes), 3):
+        by_component: dict[str, Dict[str, sp.Expr]] = {}
+        d_pair = sp.simplify((omega[i] + omega[j]) * (omega[j] + omega[k]) * (omega[i] + omega[k]))
+        for key in _zero_tau():
+            n0 = sp.Integer(0)
+            n1 = sp.Integer(0)
+            for a, b, _c in (
+                (i, j, k),
+                (i, k, j),
+                (j, i, k),
+                (j, k, i),
+                (k, i, j),
+                (k, j, i),
+            ):
+                mix = _component_mix_h12h30(mu1, mu2, a, b, key)
+                n0 += mix
+                n1 += mix / omega[a]
+            by_component[key] = {
+                "N0": sp.simplify(n0),
+                "N1": sp.simplify(n1),
+                "D_pair": d_pair,
+            }
+        numerators[(i, j, k)] = by_component
+    return numerators
+
+
+def _h12h30_threeindex_triad_effective_weights(
+    mu1,
+    mu2,
+    omega: Iterable[float],
+) -> dict[tuple[int, int, int], dict[str, sp.Expr]]:
+    """Return the effective inverse-frequency weights ``rho_mu = N1_mu / N0_mu``.
+
+    This gives the cleanest solver-faithful rewriting of the three-index block:
+
+    ``tau_mu^three_index = Phi_ijk / D_pair * (c_pair + c_add * rho_mu) * N0_mu``
+
+    whenever ``N0_mu`` does not vanish.
+    """
+    numerators = _h12h30_threeindex_triad_component_numerators(mu1, mu2, omega)
+    ratios: dict[tuple[int, int, int], dict[str, sp.Expr]] = {}
+    for triad, by_component in numerators.items():
+        comp_ratios: dict[str, sp.Expr] = {}
+        for key, comp in by_component.items():
+            if sp.simplify(comp["N0"]) == 0:
+                comp_ratios[key] = sp.nan
+            else:
+                comp_ratios[key] = sp.simplify(comp["N1"] / comp["N0"])
+        ratios[triad] = comp_ratios
+    return ratios
+
+
+def _h12h30_threeindex_triad_leading_mode_sums(
+    mu1,
+    mu2,
+    omega: Iterable[float],
+) -> dict[tuple[int, int, int], dict[str, Dict[str, sp.Expr]]]:
+    """Split ``N0_mu`` and ``N1_mu`` into the three leading-mode partial sums.
+
+    For a triad ``{i,j,k}``, define
+
+    ``C_mu^(i) = sum_{b in {j,k}} M_mu(i,b)``
+
+    and analogously for ``j`` and ``k``. Then
+
+    ``N0_mu = C_mu^(i) + C_mu^(j) + C_mu^(k)``
+
+    and
+
+    ``N1_mu = C_mu^(i)/w_i + C_mu^(j)/w_j + C_mu^(k)/w_k``.
+    """
+    n_modes = mu1.shape[2]
+    by_triad: dict[tuple[int, int, int], dict[str, Dict[str, sp.Expr]]] = {}
+    for i, j, k in combinations(range(n_modes), 3):
+        per_component: dict[str, Dict[str, sp.Expr]] = {}
+        for key in _zero_tau():
+            ci = _component_mix_h12h30(mu1, mu2, i, j, key) + _component_mix_h12h30(mu1, mu2, i, k, key)
+            cj = _component_mix_h12h30(mu1, mu2, j, i, key) + _component_mix_h12h30(mu1, mu2, j, k, key)
+            ck = _component_mix_h12h30(mu1, mu2, k, i, key) + _component_mix_h12h30(mu1, mu2, k, j, key)
+            per_component[key] = {
+                "Ci": sp.simplify(ci),
+                "Cj": sp.simplify(cj),
+                "Ck": sp.simplify(ck),
+                "N0": sp.simplify(ci + cj + ck),
+                "N1": sp.simplify(ci / omega[i] + cj / omega[j] + ck / omega[k]),
+            }
+        by_triad[(i, j, k)] = per_component
+    return by_triad
+
+
+def _h12h30_scaffold_terms(
+    mu1,
+    mu2,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+) -> dict[str, Dict[str, sp.Expr]]:
+    """Build explicit ``H12H30`` scaffold terms in the internal tau scale."""
+    tau_cm_terms = {name: defaultdict(lambda: sp.Integer(0)) for name in _H12H30_SCAFFOLD_COEFFS}
+    n_modes = mu1.shape[2]
+    for i in range(n_modes):
+        phi_diag = phi3[i, i, i]
+        if abs(float(phi_diag)) > 1.0e-14:
+            denom = omega[i] ** 5
+            coeff = _H12H30_SCAFFOLD_COEFFS["diag_iii_over_w5"]
+            for key in _zero_tau():
+                tau_cm_terms["diag_iii_over_w5"][key] += (
+                    coeff * phi_diag * _component_mix_h12h30(mu1, mu2, i, i, key) / denom
+                )
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_sd = phi3[i, i, j]
+            if abs(float(phi_sd)) > 1.0e-14:
+                denoms = {
+                    "sd_iij_over_w2_w_wp": omega[i] ** 2 * omega[j] * (omega[i] + omega[j]),
+                    "sd_iij_over_w_wp_2wipj": omega[i] * (omega[i] + omega[j]) * (2 * omega[i] + omega[j]),
+                    "sd_iij_over_w_wp_wi2wj": omega[i] * (omega[i] + omega[j]) * (omega[i] + 2 * omega[j]),
+                }
+                for name, denom in denoms.items():
+                    coeff = _H12H30_SCAFFOLD_COEFFS[name]
+                    for key in _zero_tau():
+                        tau_cm_terms[name][key] += (
+                            coeff * phi_sd * _component_mix_h12h30(mu1, mu2, i, j, key) / denom
+                        )
+    triad_terms = _h12h30_threeindex_triad_cm_terms(mu1, mu2, phi3, omega)
+    for triad in triad_terms.values():
+        for key, val in triad["S3"].items():
+            tau_cm_terms["tri_ijk_over_pair_sums"][key] += val
+        for key, val in triad["S3_addition"].items():
+            tau_cm_terms["tri_ijk_over_w_pair_sums"][key] += val
+    tau_au_terms = {}
+    for name, tau_cm in tau_cm_terms.items():
+        tau_au_terms[name] = _complete_tau(
+            {key: sp.simplify(val / WILSON_TAU_AU_TO_CMINV) for key, val in tau_cm.items()}
+        )
+    return tau_au_terms
+
+
+def channel_h12h30_decomposed(
+    mu1,
+    mu2,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+    seed=None,
+    exact_calibration=False,
+) -> dict[str, Dict[str, sp.Expr]]:
+    """Return ``H12H30`` split into appendix-style modal sectors.
+
+    ``phi3`` is expected in the aligned reduced Gaussian convention (cm^-1).
+    Each sector is accumulated in cm^-1 and converted back to the internal
+    Wilson-tensor atomic-unit scale before return.
+
+    Naming convention:
+    - ``S1`` / ``one_mode`` / ``diagonal``: terms driven by ``Phi_iii``
+    - ``S2`` / ``two_mode`` / ``semidiagonal``: terms driven by ``Phi_iij`` and ``Phi_ijj``
+    - ``S3`` / ``three_mode``: appendix-style ``Phi_ijk`` block
+    - ``S3_addition``: extra ``Phi_ijk`` family kept separately as an additive
+      extension to the appendix block. In the current reconstruction this term
+      is often numerically dominant and must therefore be reported explicitly.
+    """
+    scaffold_terms = _h12h30_scaffold_terms(mu1, mu2, phi3, omega)
+    semia = scaffold_terms["sd_iij_over_w2_w_wp"]
+    semib = scaffold_terms["sd_iij_over_w_wp_2wipj"]
+    semic = scaffold_terms["sd_iij_over_w_wp_wi2wj"]
+    semidiagonal_pair_mean = _scale_tau(_sum_tau_dicts(semib, semic), sp.Rational(1, 2))
+    semidiagonal_pair_split = _scale_tau(_sum_tau_dicts(semic, _scale_tau(semib, -1)), sp.Rational(1, 2))
+    # Effective semi-diagonal basis:
+    # - ``semidiagonal_effective`` is the piece that actually enters the total
+    # - ``semidiagonal_split`` measures the residual mismatch between the two
+    #   nearly degenerate denominator families
+    semidiagonal_effective = _sum_tau_dicts(semia, _scale_tau(semidiagonal_pair_mean, 2))
+    diagonal = _sum_tau_dicts(*(scaffold_terms[name] for name in _H12H30_DIAG_SCAFFOLDS))
+    semidiagonal = _sum_tau_dicts(*(scaffold_terms[name] for name in _H12H30_SEMIDIAG_SCAFFOLDS))
+    threea = scaffold_terms["tri_ijk_over_pair_sums"]
+    threeb = scaffold_terms["tri_ijk_over_w_pair_sums"]
+    three_index = _sum_tau_dicts(threea, threeb)
+    three_index_split = _scale_tau(_sum_tau_dicts(threeb, _scale_tau(threea, -1)), sp.Rational(1, 2))
+    total = _sum_tau_dicts(diagonal, semidiagonal, three_index)
+    return {
+        "total": total,
+        "S1": diagonal,
+        "S2": semidiagonal,
+        "S3": threea,
+        "S3_addition": threeb,
+        "S2_effective": semidiagonal_effective,
+        "S2_split": semidiagonal_pair_split,
+        "S3_effective": threea,
+        "S3_split": three_index_split,
+        "S3_pair": threea,
+        "S3_wpair": threeb,
+        "one_mode": diagonal,
+        "two_mode": semidiagonal,
+        "three_mode": threea,
+        "diagonal": diagonal,
+        "semidiagonal": semidiagonal,
+        "semidiagonal_effective": semidiagonal_effective,
+        "semidiagonal_pair_mean": semidiagonal_pair_mean,
+        "semidiagonal_split": semidiagonal_pair_split,
+        "three_index": three_index,
+        "three_index_effective": threea,
+        "three_index_addition": threeb,
+        "three_index_split": three_index_split,
+        "three_index_triads_cm": _h12h30_threeindex_triad_cm_terms(mu1, mu2, phi3, omega),
+        **{name: scaffold_terms[name] for name in _H12H30_SCAFFOLD_COEFFS},
+    }
 
 
 def channel_h30h30(mu1, phi3: sp.MutableDenseNDimArray, omega: Iterable[float], hbar: sp.Symbol, seed: int, exact_calibration=False):
