@@ -4,6 +4,38 @@ This repository contains the current production and benchmark workflow for
 quartic and sextic centrifugal distortion constants derived from geometry,
 Cartesian Hessians, and optional Gaussian/GDV anharmonic data.
 
+## Manuscript Safety
+
+`paper2.tex` in this repository is the canonical copy that should be tracked in
+git. Do not use the Desktop copy as the only source of truth.
+
+Safe workflow:
+
+1. edit `paper2.tex` in the repo
+2. run `scripts/sync_paper2.sh push` when you want a Desktop copy
+3. if you edited the Desktop copy, run `scripts/sync_paper2.sh pull` before any
+   other changes
+4. run `scripts/sync_paper2.sh snapshot` before major rewrites
+
+The script creates timestamped backups under `manuscript_backups/` and
+`Desktop_sync_backups/` so an accidental overwrite does not silently destroy the
+latest text.
+
+## Source File Safety
+
+The same protection now extends to tracked source files, especially `.py`.
+
+- `scripts/snapshot_tracked_sources.sh changed`
+  - saves timestamped backups of changed tracked source files
+- `scripts/snapshot_tracked_sources.sh staged`
+  - saves timestamped backups of staged source files
+- `scripts/snapshot_tracked_sources.sh all`
+  - saves timestamped backups of all tracked source files
+- `scripts/install_git_safety_hooks.sh`
+  - installs a `pre-commit` hook that snapshots staged source files automatically
+
+Snapshots are written under `source_snapshots/`, which is ignored by git.
+
 ## Scope
 
 This repository currently contains material for two distinct but related lines

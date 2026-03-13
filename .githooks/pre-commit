@@ -1,0 +1,6 @@
+#!/bin/zsh
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+"$repo_root/scripts/snapshot_tracked_sources.sh" staged >/dev/null
+
