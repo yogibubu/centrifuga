@@ -43,6 +43,30 @@ _H12H30_TRI_SCAFFOLDS = (
     "tri_ijk_over_pair_sums",
     "tri_ijk_over_w_pair_sums",
 )
+_H30H30_DIAG1_COEFFS = {
+    "tau_xxxx": -sp.Rational(1, 1200),
+    "tau_yyyy": -sp.Rational(1, 270000),
+    "tau_zzzz": -sp.Rational(1, 675),
+    "tau_xxyy": -sp.Rational(1, 9000),
+    "tau_xxzz": -sp.Rational(1, 450),
+    "tau_yyzz": -sp.Rational(1, 6750),
+}
+_H30H30_DIAG1_III_IIJ0_COEFFS = {
+    "tau_xxxx": -sp.Rational(227363455692979534858168034909, 23579243009146786119363330048000),
+    "tau_yyyy": -sp.Rational(132870342778744056191079919357, 93525313195102983407881113600000),
+    "tau_zzzz": -sp.Rational(7203214178712084856197679706731, 716806658907683003860306964250624),
+    "tau_xxyy": -sp.Rational(256014843720190531580320168166841827914919, 26701199580989181413308113962708577571307520),
+    "tau_xxzz": -sp.Rational(357058524421360253321553700426262738557, 9572750699396951077533114519142080184320),
+    "tau_yyzz": sp.Rational(7588749350269126232385665625360171839875777, 1932107153261526387648242105503991137173504000),
+}
+_H30H30_DIAG0_III_IIJ1_COEFFS = {
+    "tau_xxxx": sp.Rational(712454982922014923900500951, 535891886571517866349166592000),
+    "tau_yyyy": -sp.Rational(45508853414388670487647554779, 561151879170617900447286681600000),
+    "tau_zzzz": -sp.Rational(16613915503968890164344558437161, 63000585255558076511159791779840000),
+    "tau_xxyy": sp.Rational(94984702792100712326341262521802248841, 333764994762364767666351424533857219641344),
+    "tau_xxzz": sp.Rational(4756903441008869353372586963090568356939, 1570170433468584900492369109002279702233088),
+    "tau_yyzz": -sp.Rational(147893492940862692381337950801113843314157, 217362054741921718610427236869199002932019200),
+}
 
 
 def _zero_tau() -> Dict[str, sp.Expr]:
@@ -464,6 +488,146 @@ def _h12h30_scaffold_terms(
     return tau_au_terms
 
 
+def _h30h30_diag1_iii_iii(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Leading diagonal cubic-cubic scaffold ``D^(0)_{iii,iii}``.
+
+    This is the first non-placeholder restoration step for ``H30H30``. It
+    matches the exact one-mode symbolic scaling ``Phi_iii^2 / omega_i^7`` and
+    uses the componentwise one-mode coefficients recovered from the BCH engine.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        phi_sq = phi3[i, i, i] ** 2
+        denom = omega[i] ** 7
+        tau["tau_xxxx"] += _H30H30_DIAG1_COEFFS["tau_xxxx"] * hbar * phi_sq * mu1[0, 0, i] ** 2 / denom
+        tau["tau_yyyy"] += _H30H30_DIAG1_COEFFS["tau_yyyy"] * hbar * phi_sq * mu1[1, 1, i] ** 2 / denom
+        tau["tau_zzzz"] += _H30H30_DIAG1_COEFFS["tau_zzzz"] * hbar * phi_sq * mu1[2, 2, i] ** 2 / denom
+        tau["tau_xxyy"] += _H30H30_DIAG1_COEFFS["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
+        tau["tau_xxzz"] += _H30H30_DIAG1_COEFFS["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
+        tau["tau_yyzz"] += _H30H30_DIAG1_COEFFS["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
+    return _complete_tau(tau)
+
+
+def _h30h30_placeholder_residual(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+) -> Dict[str, sp.Expr]:
+    """Current placeholder residual kept explicit for diagnostics."""
+    omega = list(omega)
+    tau = defaultdict(lambda: sp.Integer(0))
+    n_modes = mu1.shape[2]
+    for i in range(n_modes):
+        for j in range(n_modes):
+            tau["tau_xxxx"] += phi3[i, j, j] * mu1[0, 0, i] * mu1[0, 0, j] / (omega[i] + omega[j] + 1)
+            tau["tau_yyyy"] += phi3[i, j, j] * mu1[1, 1, i] * mu1[1, 1, j] / (omega[i] + omega[j] + 1)
+            tau["tau_zzzz"] += phi3[i, j, j] * mu1[2, 2, i] * mu1[2, 2, j] / (omega[i] + omega[j] + 1)
+    return _complete_tau(tau)
+
+
+def _h30h30_diag1_iii_iij_0(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """First semi-diagonal scaffold guess for ``D^(0;1)_{iii,iij}``.
+
+    This is a scaffold-first reconstruction step motivated by the H2O
+    diagnostics and by the leading appendix coefficient for
+    ``D^(0;1)_{iii,iij}``. It keeps the expected high-order frequency scaling
+    explicit while remaining separate from the diagonal baseline.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_mix = phi3[i, i, i] * phi3[i, i, j]
+            denom = omega[i] ** 5 * omega[j] ** 2
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_DIAG1_III_IIJ0_COEFFS["tau_xxxx"] * hbar * phi_mix * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_DIAG1_III_IIJ0_COEFFS["tau_yyyy"] * hbar * phi_mix * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_DIAG1_III_IIJ0_COEFFS["tau_zzzz"] * hbar * phi_mix * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_DIAG1_III_IIJ0_COEFFS["tau_xxyy"] * hbar * phi_mix * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_DIAG1_III_IIJ0_COEFFS["tau_xxzz"] * hbar * phi_mix * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_DIAG1_III_IIJ0_COEFFS["tau_yyzz"] * hbar * phi_mix * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
+def _h30h30_diag0_iii_iij_1_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Candidate pair-sum scaffold for ``D^(0;1)_{iii,iij}``.
+
+    This is not yet promoted into the channel total. It is kept separate so the
+    first ``iii,iij`` family beyond ``diag_1_iii_iij_0`` can be inspected
+    numerically without contaminating the partially restored channel.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_mix = phi3[i, i, i] * phi3[i, i, j]
+            denom = omega[i] ** 4 * omega[j] * (omega[i] + omega[j]) ** 2
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_DIAG0_III_IIJ1_COEFFS["tau_xxxx"] * hbar * phi_mix * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_DIAG0_III_IIJ1_COEFFS["tau_yyyy"] * hbar * phi_mix * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_DIAG0_III_IIJ1_COEFFS["tau_zzzz"] * hbar * phi_mix * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_DIAG0_III_IIJ1_COEFFS["tau_xxyy"] * hbar * phi_mix * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_DIAG0_III_IIJ1_COEFFS["tau_xxzz"] * hbar * phi_mix * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_DIAG0_III_IIJ1_COEFFS["tau_yyzz"] * hbar * phi_mix * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
+def channel_h30h30_decomposed(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> dict[str, Dict[str, sp.Expr]]:
+    """Return the current ``H30H30`` split into leading scaffold and residual.
+
+    ``D0_iii_iii`` is the first scaffold-first restoration step. The residual
+    remains diagnostic-only and corresponds to the old placeholder kernel.
+    """
+    _warn_placeholder("H30H30")
+    leading = _h30h30_diag1_iii_iii(mu1, phi3, omega, hbar)
+    semidiag = _h30h30_diag1_iii_iij_0(mu1, phi3, omega, hbar)
+    candidate = _h30h30_diag0_iii_iij_1_candidate(mu1, phi3, omega, hbar)
+    residual = _h30h30_placeholder_residual(mu1, phi3, omega)
+    total = _sum_tau_dicts(leading, semidiag, residual)
+    return {
+        "total": total,
+        "D0_iii_iii": leading,
+        "diag_1_iii_iii": leading,
+        "D0_iii_iij_0": semidiag,
+        "diag_1_iii_iij_0": semidiag,
+        "D0_iii_iij_1_candidate": candidate,
+        "diag_0_iii_iij_1_candidate": candidate,
+        "placeholder_residual": residual,
+    }
+
+
 def channel_h12h30_decomposed(
     mu1,
     mu2,
@@ -535,15 +699,7 @@ def channel_h12h30_decomposed(
 
 
 def channel_h30h30(mu1, phi3: sp.MutableDenseNDimArray, omega: Iterable[float], hbar: sp.Symbol, seed: int, exact_calibration=False):
-    _warn_placeholder("H30H30")
-    tau = defaultdict(lambda: sp.Integer(0))
-    n_modes = mu1.shape[2]
-    for i in range(n_modes):
-        for j in range(n_modes):
-            tau["tau_xxxx"] += phi3[i, j, j] * mu1[0, 0, i] * mu1[0, 0, j] / (omega[i] + omega[j] + 1)
-            tau["tau_yyyy"] += phi3[i, j, j] * mu1[1, 1, i] * mu1[1, 1, j] / (omega[i] + omega[j] + 1)
-            tau["tau_zzzz"] += phi3[i, j, j] * mu1[2, 2, i] * mu1[2, 2, j] / (omega[i] + omega[j] + 1)
-    return _complete_tau(tau)
+    return channel_h30h30_decomposed(mu1, phi3, omega, hbar)["total"]
 
 
 def tau_to_watson_a(tau: Dict[str, sp.Expr]) -> Dict[str, sp.Expr]:
