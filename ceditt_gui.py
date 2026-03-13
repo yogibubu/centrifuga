@@ -667,6 +667,23 @@ def _read_xyz_input(xyz_input: str):
     return molecule_from_xyz_text(raw)
 
 
+def _symmetry_meta_from_xyz_path(path: str) -> dict[str, object] | None:
+    path = path.strip()
+    if not path:
+        return None
+    try:
+        return _point_group_from_xyz_file(path)
+    except Exception:
+        return None
+
+
+def _symmetry_meta_from_xyz_text(xyz_text: str) -> dict[str, object] | None:
+    try:
+        return _point_group_from_xyz_file(xyz_text)
+    except Exception:
+        return None
+
+
 def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None, *, title: str) -> None:
     if not ltype:
         return
@@ -941,6 +958,7 @@ class App(tk.Tk):
         self.s_o1_labels: list[ttk.Label] = []
         self.s_o2_labels: list[ttk.Label] = []
         self.last_quartic_result: dict[str, object] | None = None
+        self.symmetry_status_var = tk.StringVar(value="Symmetry not assigned.")
 
         self._build_ui()
 
@@ -978,6 +996,14 @@ class App(tk.Tk):
         notebook = ttk.Notebook(root)
         notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
+        symm_frame = ttk.Frame(root)
+        symm_frame.pack(fill=tk.X)
+        ttk.Label(symm_frame, textvariable=self.symmetry_status_var).pack(anchor="w")
+
+        status_frame = ttk.Frame(root)
+        status_frame.pack(fill=tk.X)
+        ttk.Label(status_frame, textvariable=self.symmetry_status_var).pack(anchor="w")
+
         q_tab = ttk.Frame(notebook, padding=10)
         s_tab = ttk.Frame(notebook, padding=10)
         notebook.add(q_tab, text="Quartic")
@@ -1002,6 +1028,7 @@ class App(tk.Tk):
         ttk.Label(ctrl, text="XYZ (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(ctrl, width=48, textvariable=self._sv("q_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
         ttk.Button(ctrl, text="Browse", command=self._browse_q_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
+        self.vars["q_symm_xyz"].trace_add("write", lambda *_: self._set_symmetry_status_from_entry("q_symm_xyz"))
 
         grid = ttk.Frame(parent)
         grid.pack(fill=tk.X, pady=(12, 0))
@@ -1119,6 +1146,7 @@ class App(tk.Tk):
         ttk.Label(ctrl, text="XYZ (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(ctrl, width=48, textvariable=self._sv("s_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
         ttk.Button(ctrl, text="Browse", command=self._browse_s_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
+        self.vars["s_symm_xyz"].trace_add("write", lambda *_: self._set_symmetry_status_from_entry("s_symm_xyz"))
 
         h22s_frame = ttk.LabelFrame(parent, text="Optional sextic analysis from harmonic input", padding=8)
         h22s_frame.pack(fill=tk.X, pady=(10, 0))
@@ -1219,6 +1247,7 @@ class App(tk.Tk):
         pth = filedialog.askopenfilename(title="Select XYZ geometry for point-group assignment", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
         if pth:
             self.vars["q_symm_xyz"].set(pth)
+            self._set_symmetry_status_from_entry("q_symm_xyz")
 
     def _browse_h22_xyz(self) -> None:
         pth = filedialog.askopenfilename(title="Select XYZ geometry for H22 diagnostic", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
@@ -1282,11 +1311,30 @@ class App(tk.Tk):
         pth = filedialog.askopenfilename(title="Select XYZ geometry for point-group assignment", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
         if pth:
             self.vars["s_symm_xyz"].set(pth)
+            self._set_symmetry_status_from_entry("s_symm_xyz")
 
     def _browse_s_h22_xyz(self) -> None:
         pth = filedialog.askopenfilename(title="Select XYZ geometry for sextic H22 diagnostic", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
         if pth:
             self.vars["s_h22_xyz"].set(pth)
+
+    def _set_symmetry_status_from_entry(self, entry_key: str) -> dict[str, object] | None:
+        path = self.vars[entry_key].get().strip()
+        if not path:
+            self.symmetry_status_var.set("Symmetry not assigned.")
+            return None
+        meta = _symmetry_meta_from_xyz_path(path)
+        self._set_symmetry_status(meta)
+        return meta
+
+    def _set_symmetry_status(self, meta: dict[str, object] | None) -> None:
+        if not meta:
+            self.symmetry_status_var.set("Symmetry not assigned.")
+            return
+        point_group = meta.get("point_group", "unknown")
+        rotor = meta.get("rotor_type_for_symmetry", "unknown")
+        sigma = meta.get("rotational_symmetry_number", "?")
+        self.symmetry_status_var.set(f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}")
 
     def _browse_s_h22_hessian(self) -> None:
         pth = filedialog.askopenfilename(title="Select Cartesian Hessian for sextic H22 diagnostic", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
@@ -1491,9 +1539,8 @@ class App(tk.Tk):
             self.q_report.insert(tk.END, f"Input: rep={rep_in}, reduction={red}, method={m_used}\n")
             self.q_report.insert(tk.END, f"Output #1: rep={rep_outs[0]}, reduction={red}\n")
             self.q_report.insert(tk.END, f"Output #2: rep={rep_outs[1]}, reduction={red}\n")
-            xyz_symm = self.vars["q_symm_xyz"].get().strip()
-            if xyz_symm:
-                meta = _point_group_from_xyz_file(xyz_symm)
+            meta = self._set_symmetry_status_from_entry("q_symm_xyz")
+            if meta:
                 self.q_report.insert(
                     tk.END,
                     "symmetry from XYZ: "
@@ -2148,9 +2195,8 @@ class App(tk.Tk):
             self.s_report.insert(tk.END, f"Input: rep={rep_in}, reduction={red_in}\n")
             self.s_report.insert(tk.END, f"Output #1: rep={rep_outs[0]}, reduction={red_out}\n")
             self.s_report.insert(tk.END, f"Output #2: rep={rep_outs[1]}, reduction={red_out}\n")
-            xyz_symm = self.vars["s_symm_xyz"].get().strip()
-            if xyz_symm:
-                meta = _point_group_from_xyz_file(xyz_symm)
+            meta = self._set_symmetry_status_from_entry("s_symm_xyz")
+            if meta:
                 self.s_report.insert(
                     tk.END,
                     "symmetry from XYZ: "
