@@ -128,7 +128,19 @@ Il gruppo puntuale viene assegnato in due modi.
   - `point group`
   - `sigma`
   - `rotor class`
+  - costanti rotazionali `A, B, C` da geometria
 - in questo caso l'Hessiano non e richiesto.
+
+Armonizzazione tra XYZ, rappresentazione e riduzione
+- se usi costanti centrifughe manuali e fornisci anche un `XYZ`, la GUI usa l'`XYZ` come riferimento per l'ordine spettroscopico `A,B,C`;
+- le costanti manuali restano interpretate nella `representation` e nella `reduction` selezionate nella GUI;
+- questo evita di usare un ordine `A,B,C` incoerente con la geometria caricata;
+- nei report la GUI dichiara esplicitamente che l'ordine `A,B,C` e stato armonizzato con l'`XYZ`.
+
+Armonizzazione nei percorsi armonici
+- se usi `.fchk` oppure `XYZ + Hessian`, il backend armonico costruisce il proprio modello interno nella rappresentazione selezionata;
+- se e disponibile anche un `XYZ`, la GUI confronta `ABC_model` con `ABC_xyz` e riporta il disallineamento `max|ΔABC|`;
+- il modello armonico non viene forzato a seguire l'orientazione dell'`XYZ`, ma il reporting spettroscopico resta ancorato all'ordine esterno `A,B,C` fornito dalla geometria.
 
 Limiti speciali
 Asymmetric tops
@@ -155,9 +167,11 @@ Unità
 
 Note operative
 - i transform manuali richiedono sempre `A, B, C`;
+- se e presente un `XYZ`, i campi `A, B, C` vengono riempiti automaticamente dai valori ricavati dalla geometria e usati come riferimento del transform manuale;
 - i percorsi armonici ricavano internamente `A, B, C` dal modello;
 - i casi symmetric-top e linear non devono essere trattati con i transform Watson asymmetric-top manuali;
 - in quei casi conviene usare il ramo armonico per la proiezione symmetry-adapted.
+- i report quartici e sestici sono scrollabili, e anche l'intera tab e scrollabile quando il contenuto supera l'altezza della finestra.
 
 Stato attuale
 Gia implementato

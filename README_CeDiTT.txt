@@ -26,3 +26,7 @@ Note
 - La build e standalone e non richiede Python installato sul Mac di destinazione.
 - La app non e notarizzata; un avviso di sicurezza al primo avvio e normale.
 - Per la documentazione d’uso della GUI vedi `DOCUMENTAZIONE_CeDiTT1.0.txt`.
+- Le tab della GUI sono scrollabili verticalmente e anche i report finali hanno lo scroll.
+- Se fornisci un file `XYZ`, la app ricava automaticamente gruppo puntuale, `sigma` rotazionale e costanti `A, B, C` da geometria.
+- Nei transform manuali quartici/sestici, se e presente un `XYZ`, l’ordine spettroscopico `A,B,C` usato dalla GUI viene armonizzato con quello ottenuto dal file `XYZ`.
+- Nei percorsi armonici da `.fchk` oppure `XYZ + Hessian` la GUI mantiene il modello interno del backend, ma confronta e armonizza il reporting rispetto all’ordine `A,B,C` ricavato dall’`XYZ` quando disponibile.

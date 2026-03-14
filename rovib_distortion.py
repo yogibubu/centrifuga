@@ -160,6 +160,7 @@ ATOMIC_MASSES = {
     "TS": 294.0,
     "OG": 294.0,
 }
+ATOMIC_NUMBER_TO_SYMBOL = {i: sym for i, sym in enumerate(ATOMIC_MASSES.keys(), start=1)}
 
 # Selected exact isotopic masses (u). If an isotope is not listed, the mass
 # number is used as fallback (e.g., Xe-136 -> 136.0 u).
@@ -349,6 +350,13 @@ def _parse_atom_token(token: str) -> tuple[str, float]:
         return "H", ISOTOPE_MASSES[("H", 2)]
     if up == "T":
         return "H", ISOTOPE_MASSES[("H", 3)]
+
+    if tok.isdigit():
+        z = int(tok)
+        if z in ATOMIC_NUMBER_TO_SYMBOL:
+            sym = ATOMIC_NUMBER_TO_SYMBOL[z]
+            return sym, ATOMIC_MASSES[sym.upper()]
+        raise ValueError(f"Unknown atomic number '{tok}'.")
 
     m = re.fullmatch(r"(\d+)([A-Za-z]{1,2})", tok)
     if m:

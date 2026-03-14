@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from pathlib import Path
 import math
+import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 import numpy as np
 import sympy as sp
@@ -687,6 +688,15 @@ def _symmetry_meta_from_xyz_text(xyz_text: str) -> dict[str, object] | None:
         return None
 
 
+def _abc_from_xyz_meta(meta: dict[str, object] | None) -> tuple[float, float, float] | None:
+    if not meta:
+        return None
+    abc = meta.get("abc_mhz_from_xyz")
+    if not abc:
+        return None
+    return tuple(float(x) for x in abc)
+
+
 def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None, *, title: str) -> None:
     if not ltype:
         return
@@ -951,6 +961,7 @@ class App(tk.Tk):
         self.geometry("1080x760")
         self._window_icon: tk.PhotoImage | None = None
         self._set_window_icon()
+        self._build_menu()
 
         self.vars: dict[str, tk.StringVar] = {}
 
@@ -974,6 +985,46 @@ class App(tk.Tk):
             self.iconphoto(True, self._window_icon)
         except tk.TclError:
             self._window_icon = None
+
+    def _build_menu(self) -> None:
+        """Set up a minimal menubar.
+
+        On the current macOS Python/Tk build, attaching a Tk menubar can abort
+        the process inside AppKit before the window becomes usable. The rest of
+        the GUI works normally without it, so keep the menu only on platforms
+        where Tk's native integration is stable.
+        """
+        if sys.platform == "darwin":
+            return
+
+        menubar = tk.Menu(self)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Export CSV", command=self._export_quartic_csv)
+        file_menu.add_command(label="Export LaTeX", command=self._export_quartic_latex)
+        file_menu.add_separator()
+        file_menu.add_command(label="Quit CeDiTT", command=self.destroy)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(
+            label="About CeDiTT",
+            command=lambda: messagebox.showinfo(
+                "About CeDiTT1.0",
+                "CeDiTT1.0 transports Watson quartic/sextic constants via tensor lifting and diagnostics."
+                " GUI functions mirror the tensor-based workflow documented in the CeDiTT app guide.",
+            ),
+        )
+        help_menu.add_command(
+            label="Open guide",
+            command=lambda: messagebox.showinfo(
+                "Guide location",
+                "See README_CeDiTT.txt or GUI_APP_GUIDE.md in the project folder for usage instructions.",
+            ),
+        )
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.config(menu=menubar)
 
     def _sv(self, k: str, default: str = "") -> tk.StringVar:
         v = tk.StringVar(value=default)
@@ -1007,13 +1058,43 @@ class App(tk.Tk):
         status_frame.pack(fill=tk.X)
         ttk.Label(status_frame, textvariable=self.symmetry_status_var).pack(anchor="w")
 
-        q_tab = ttk.Frame(notebook, padding=10)
-        s_tab = ttk.Frame(notebook, padding=10)
-        notebook.add(q_tab, text="Quartic")
-        notebook.add(s_tab, text="Sextic")
+        q_tab = self._make_scrollable_tab(notebook)
+        s_tab = self._make_scrollable_tab(notebook)
+        notebook.add(q_tab["container"], text="Quartic")
+        notebook.add(s_tab["container"], text="Sextic")
 
-        self._build_quartic_tab(q_tab)
-        self._build_sextic_tab(s_tab)
+        self._build_quartic_tab(q_tab["content"])
+        self._build_sextic_tab(s_tab["content"])
+
+    def _make_scrollable_tab(self, notebook: ttk.Notebook) -> dict[str, tk.Widget]:
+        container = ttk.Frame(notebook)
+        canvas = tk.Canvas(container, highlightthickness=0)
+        vscroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        content = ttk.Frame(canvas, padding=10)
+
+        canvas.configure(yscrollcommand=vscroll.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vscroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+
+        def _sync_scrollregion(_event=None) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _sync_width(event) -> None:
+            canvas.itemconfigure(window_id, width=event.width)
+
+        content.bind("<Configure>", _sync_scrollregion)
+        canvas.bind("<Configure>", _sync_width)
+
+        def _on_mousewheel(event) -> None:
+            if event.delta:
+                canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        for widget in (canvas, content):
+            widget.bind("<MouseWheel>", _on_mousewheel, add="+")
+
+        return {"container": container, "canvas": canvas, "content": content}
 
     def _build_quartic_tab(self, parent: ttk.Frame) -> None:
         ctrl = ttk.Frame(parent)
@@ -1129,7 +1210,7 @@ class App(tk.Tk):
         ttk.Button(qbtn, text="Export CSV", command=self._export_quartic_csv).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(qbtn, text="Export LaTeX", command=self._export_quartic_latex).pack(side=tk.LEFT, padx=(8, 0))
 
-        self.q_report = tk.Text(parent, height=11, wrap="word")
+        self.q_report = scrolledtext.ScrolledText(parent, height=11, wrap="word")
         self.q_report.pack(fill=tk.BOTH, expand=True)
 
         self.vars["q_red"].trace_add("write", self._refresh_quartic_labels)
@@ -1213,7 +1294,7 @@ class App(tk.Tk):
         ttk.Button(sbtn, text="Compute harmonic/cubic sextic hierarchy", command=self._run_sextic_hierarchy).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(sbtn, text="Compute sextic H22 diagnostic", command=self._run_sextic_h22_from_fchk).pack(side=tk.LEFT, padx=(8, 0))
 
-        self.s_report = tk.Text(parent, height=10, wrap="word")
+        self.s_report = scrolledtext.ScrolledText(parent, height=10, wrap="word")
         self.s_report.pack(fill=tk.BOTH, expand=True)
         self.vars["s_red_in"].trace_add("write", self._refresh_sextic_labels)
         self.vars["s_red_out"].trace_add("write", self._refresh_sextic_labels)
@@ -1328,6 +1409,8 @@ class App(tk.Tk):
             return None
         meta = _symmetry_meta_from_xyz_path(path)
         self._set_symmetry_status(meta)
+        if meta and entry_key in {"q_symm_xyz", "s_symm_xyz"}:
+            self._apply_xyz_abc_reference(meta)
         return meta
 
     def _set_symmetry_status(self, meta: dict[str, object] | None) -> None:
@@ -1337,6 +1420,14 @@ class App(tk.Tk):
         point_group = meta.get("point_group", "unknown")
         rotor = meta.get("rotor_type_for_symmetry", "unknown")
         sigma = meta.get("rotational_symmetry_number", "?")
+        abc = meta.get("abc_mhz_from_xyz")
+        if abc:
+            a_mhz, b_mhz, c_mhz = [float(x) for x in abc]
+            self.symmetry_status_var.set(
+                f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}; "
+                f"A={a_mhz:.3f} MHz, B={b_mhz:.3f} MHz, C={c_mhz:.3f} MHz"
+            )
+            return
         self.symmetry_status_var.set(f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}")
 
     def _browse_s_h22_hessian(self) -> None:
@@ -1361,7 +1452,54 @@ class App(tk.Tk):
             self.vars["s_cubic_2idx"].set(pth)
 
     def _read_abc(self) -> tuple[float, float, float]:
+        meta = _symmetry_meta_from_xyz_path(self.vars["q_symm_xyz"].get().strip())
+        abc_xyz = _abc_from_xyz_meta(meta)
+        if abc_xyz is not None:
+            self._apply_xyz_abc_reference(meta)
+            return abc_xyz
         return _as_float(self.vars["A"].get()), _as_float(self.vars["B"].get()), _as_float(self.vars["C"].get())
+
+    def _apply_xyz_abc_reference(self, meta: dict[str, object] | None) -> tuple[float, float, float] | None:
+        abc_xyz = _abc_from_xyz_meta(meta)
+        if abc_xyz is None:
+            return None
+        self.vars["A"].set(f"{abc_xyz[0]:.10g}")
+        self.vars["B"].set(f"{abc_xyz[1]:.10g}")
+        self.vars["C"].set(f"{abc_xyz[2]:.10g}")
+        return abc_xyz
+
+    def _preferred_xyz_path(self, *keys: str) -> str:
+        for key in keys:
+            val = self.vars.get(key)
+            if val is None:
+                continue
+            raw = val.get().strip()
+            if raw:
+                return raw
+        return ""
+
+    def _harmonize_model_abc_with_xyz(
+        self,
+        model_abc: tuple[float, float, float] | list[float] | np.ndarray,
+        *xyz_keys: str,
+    ) -> dict[str, object] | None:
+        xyz_path = self._preferred_xyz_path(*xyz_keys)
+        if not xyz_path:
+            return None
+        meta = _symmetry_meta_from_xyz_path(xyz_path)
+        abc_xyz = _abc_from_xyz_meta(meta)
+        if abc_xyz is None:
+            return None
+        abc_model = tuple(float(x) for x in model_abc)
+        delta = tuple(abs(a - b) for a, b in zip(abc_model, abc_xyz))
+        return {
+            "xyz_path": xyz_path,
+            "xyz_meta": meta,
+            "abc_xyz": abc_xyz,
+            "abc_model": abc_model,
+            "delta_abc_mhz": delta,
+            "max_delta_abc_mhz": max(delta),
+        }
 
     def _validate_units_quartic(self, A: float, B: float, C: float, D: np.ndarray) -> None:
         if min(abs(A), abs(B), abs(C)) < 1e-9:
@@ -1544,6 +1682,7 @@ class App(tk.Tk):
             self.q_report.insert(tk.END, f"Output #2: rep={rep_outs[1]}, reduction={red}\n")
             meta = self._set_symmetry_status_from_entry("q_symm_xyz")
             if meta:
+                abc_xyz = _abc_from_xyz_meta(meta)
                 self.q_report.insert(
                     tk.END,
                     "symmetry from XYZ: "
@@ -1551,6 +1690,13 @@ class App(tk.Tk):
                     f"sigma={meta['rotational_symmetry_number']}, "
                     f"rotor class={meta['rotor_type_for_symmetry']}\n",
                 )
+                if abc_xyz is not None:
+                    self.q_report.insert(
+                        tk.END,
+                        "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
+                        f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
+                        f"input constants interpreted as rep={rep_in}, reduction={red}.\n",
+                    )
             self.q_report.insert(
                 tk.END,
                 "Quartic transform uses the corrected pseudoinverse tensor route "
@@ -1756,6 +1902,17 @@ class App(tk.Tk):
                 tk.END,
                 f"model ABC (MHz)=({abc[0]:.6f}, {abc[1]:.6f}, {abc[2]:.6f}), rep={res['representation']}, reduction={res['reduction']}\n",
             )
+            harmonized = self._harmonize_model_abc_with_xyz(abc, "q_h22_xyz", "q_symm_xyz")
+            if harmonized is not None:
+                xyz_abc = harmonized["abc_xyz"]
+                self.q_report.insert(
+                    tk.END,
+                    "XYZ harmonization: "
+                    f"xyz={harmonized['xyz_path']}; "
+                    f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
+                    f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
+                    "The harmonic model keeps its own internal tensor orientation; XYZ is used as the spectroscopic A,B,C order reference.\n",
+                )
             _append_point_group_report(self.q_report, model)
             self.q_report.insert(
                 tk.END,
@@ -1945,6 +2102,17 @@ class App(tk.Tk):
                 f"model ABC (MHz)=({model.abc_mhz[0]:.6f}, {model.abc_mhz[1]:.6f}, {model.abc_mhz[2]:.6f}), "
                 f"representation={rep}\n",
             )
+            harmonized = self._harmonize_model_abc_with_xyz(model.abc_mhz, "q_alpha_xyz", "q_symm_xyz")
+            if harmonized is not None:
+                xyz_abc = harmonized["abc_xyz"]
+                self.q_report.insert(
+                    tk.END,
+                    "XYZ harmonization: "
+                    f"xyz={harmonized['xyz_path']}; "
+                    f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
+                    f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
+                    "The cubic input is aligned to the harmonic model; XYZ is used to keep the spectroscopic A,B,C ordering explicit.\n",
+                )
             rotor_limit = alpha.get("rotor_limit")
             if rotor_limit is not None:
                 self.q_report.insert(tk.END, f"rotor limit={rotor_limit['kind']}\n")
@@ -2101,6 +2269,17 @@ class App(tk.Tk):
                 tk.END,
                 f"model ABC (MHz)=({abc[0]:.6f}, {abc[1]:.6f}, {abc[2]:.6f}), rep={rep}, reduction={red}\n",
             )
+            harmonized = self._harmonize_model_abc_with_xyz(abc, "q_h22_xyz", "q_symm_xyz")
+            if harmonized is not None:
+                xyz_abc = harmonized["abc_xyz"]
+                self.q_report.insert(
+                    tk.END,
+                    "XYZ harmonization: "
+                    f"xyz={harmonized['xyz_path']}; "
+                    f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
+                    f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
+                    "Loaded quartics are reported on the harmonic-model representation, with XYZ used as the external A,B,C order reference.\n",
+                )
             _append_point_group_report(self.q_report, model)
             self.q_report.insert(tk.END, f"rotor limit={q2['rotor_limit']['kind']}\n")
             self.q_report.insert(
@@ -2200,6 +2379,7 @@ class App(tk.Tk):
             self.s_report.insert(tk.END, f"Output #2: rep={rep_outs[1]}, reduction={red_out}\n")
             meta = self._set_symmetry_status_from_entry("s_symm_xyz")
             if meta:
+                abc_xyz = _abc_from_xyz_meta(meta)
                 self.s_report.insert(
                     tk.END,
                     "symmetry from XYZ: "
@@ -2207,6 +2387,13 @@ class App(tk.Tk):
                     f"sigma={meta['rotational_symmetry_number']}, "
                     f"rotor class={meta['rotor_type_for_symmetry']}\n",
                 )
+                if abc_xyz is not None:
+                    self.s_report.insert(
+                        tk.END,
+                        "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
+                        f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
+                        f"input constants interpreted as rep={rep_in}, reduction={red_in}.\n",
+                    )
             self.s_report.insert(
                 tk.END,
                 "Sextic transform uses the validated 5D invariant-subspace route with explicit A<->S conversion.\n"
@@ -2282,6 +2469,17 @@ class App(tk.Tk):
                 tk.END,
                 f"model ABC (MHz)=({float(model.abc_mhz[0]):.6f}, {float(model.abc_mhz[1]):.6f}, {float(model.abc_mhz[2]):.6f}), rep={rep}\n",
             )
+            harmonized = self._harmonize_model_abc_with_xyz(model.abc_mhz, "s_h22_xyz", "s_symm_xyz")
+            if harmonized is not None:
+                xyz_abc = harmonized["abc_xyz"]
+                self.s_report.insert(
+                    tk.END,
+                    "XYZ harmonization: "
+                    f"xyz={harmonized['xyz_path']}; "
+                    f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
+                    f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
+                    "The harmonic sextic model keeps its internal orientation; XYZ is used as the external A,B,C order reference.\n",
+                )
             _append_point_group_report(self.s_report, model)
             self.vars["A"].set(f"{float(model.abc_mhz[0]):.10g}")
             self.vars["B"].set(f"{float(model.abc_mhz[1]):.10g}")
@@ -2378,6 +2576,17 @@ class App(tk.Tk):
                 tk.END,
                 f"model ABC (MHz)=({float(model.abc_mhz[0]):.6f}, {float(model.abc_mhz[1]):.6f}, {float(model.abc_mhz[2]):.6f}), rep={rep}\n",
             )
+            harmonized = self._harmonize_model_abc_with_xyz(model.abc_mhz, "s_h22_xyz", "s_symm_xyz")
+            if harmonized is not None:
+                xyz_abc = harmonized["abc_xyz"]
+                self.s_report.insert(
+                    tk.END,
+                    "XYZ harmonization: "
+                    f"xyz={harmonized['xyz_path']}; "
+                    f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
+                    f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
+                    "The harmonic/cubic sextic hierarchy keeps the model orientation and uses XYZ as the external A,B,C order reference.\n",
+                )
             _append_point_group_report(self.s_report, model)
             self.vars["A"].set(f"{float(model.abc_mhz[0]):.10g}")
             self.vars["B"].set(f"{float(model.abc_mhz[1]):.10g}")
