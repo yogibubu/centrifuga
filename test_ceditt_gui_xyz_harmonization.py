@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ceditt_gui import App, _point_group_from_xyz_file
+from ceditt_gui import App, _abc_delta_info, _harmonization_status, _point_group_from_xyz_file
 
 
 ROOT = Path(__file__).resolve().parent
@@ -26,6 +26,7 @@ def _dummy_app() -> App:
         "C": DummyVar(),
         "q_symm_xyz": DummyVar(),
         "q_h22_xyz": DummyVar(),
+        "s_symm_xyz": DummyVar(),
     }
     return app
 
@@ -61,3 +62,31 @@ def test_harmonize_model_abc_with_xyz_returns_delta() -> None:
     assert info is not None
     assert info["xyz_path"] == str(H2S_XYZ)
     assert info["max_delta_abc_mhz"] > 0.0
+
+
+def test_harmonization_status_thresholds() -> None:
+    assert _harmonization_status(0.5) == "OK"
+    assert _harmonization_status(10.0) == "CHECK"
+    assert _harmonization_status(80.0) == "WARNING"
+
+
+def test_abc_delta_info_reports_status() -> None:
+    info = _abc_delta_info((1.0, 2.0, 3.0), (1.2, 2.0, 3.0))
+    assert info["status"] == "OK"
+    info = _abc_delta_info((1.0, 2.0, 3.0), (20.0, 2.0, 3.0))
+    assert info["status"] == "CHECK"
+    info = _abc_delta_info((1.0, 2.0, 3.0), (100.0, 2.0, 3.0))
+    assert info["status"] == "WARNING"
+
+
+def test_read_abc_can_use_sextic_xyz_reference() -> None:
+    meta = _point_group_from_xyz_file(str(H2S_XYZ))
+    abc = tuple(float(x) for x in meta["abc_mhz_from_xyz"])
+
+    app = _dummy_app()
+    app.vars["A"].set("9")
+    app.vars["B"].set("8")
+    app.vars["C"].set("7")
+    app.vars["s_symm_xyz"].set(str(H2S_XYZ))
+    read_abc = app._read_abc("s_symm_xyz")
+    assert read_abc == abc

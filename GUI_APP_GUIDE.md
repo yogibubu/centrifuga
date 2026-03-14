@@ -57,7 +57,7 @@ So the backend remains source-independent, while the spectroscopic reporting sta
 Available tasks:
 - manual quartic representation transform
 - load standard harmonic quartics from geometry + Hessian or `.fchk`
-- `H22` diagnostic
+- validated quartic `H22`
 - Gaussian `alpha` parser with mode exclusion
 - internal `alpha` route from harmonic model + semi-diagonal cubic data
 
@@ -68,7 +68,7 @@ Units:
 ## Sextic Tab
 Available tasks:
 - manual sextic transform
-- sextic `H22` diagnostic
+- sextic `H22`-linear diagnostic candidate
 - harmonic/cubic sextic hierarchy
 
 Units:

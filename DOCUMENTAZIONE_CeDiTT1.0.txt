@@ -87,6 +87,7 @@ Calcolo armonico quartico standard
 Diagnostico `H22`
 - da `.fchk` oppure `XYZ + Hessian`;
 - fornisce il primo diagnostico quartico beyond-standard;
+- questo ramo quartico `H22` e quello validato del workflow CeDiTT3;
 - per molecole lineari riporta anche i termini `l`-type associati.
 
 Parser `alpha` e filtro dei modi
@@ -111,6 +112,7 @@ Preparazione del ramo `alpha` da harmonic + cubic 2-index
 Diagnostici sestici
 - risposta lineare in `tau(H22)`;
 - gerarchia sestica geometrica/cubica;
+- il ramo sestico lineare in `tau(H22)` va inteso come diagnostico operativo, non ancora come benchmark quantitativo assoluto allo stesso livello del quartico `H22`;
 - per il caso lineare riporta anche i termini `l`-type pertinenti.
 
 Riconoscimento del gruppo puntuale

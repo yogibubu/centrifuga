@@ -697,6 +697,31 @@ def _abc_from_xyz_meta(meta: dict[str, object] | None) -> tuple[float, float, fl
     return tuple(float(x) for x in abc)
 
 
+def _harmonization_status(max_delta_abc_mhz: float) -> str:
+    if max_delta_abc_mhz < 1.0:
+        return "OK"
+    if max_delta_abc_mhz <= 50.0:
+        return "CHECK"
+    return "WARNING"
+
+
+def _abc_delta_info(
+    abc_source: tuple[float, float, float] | list[float] | np.ndarray,
+    abc_target: tuple[float, float, float] | list[float] | np.ndarray,
+) -> dict[str, object]:
+    src = tuple(float(x) for x in abc_source)
+    dst = tuple(float(x) for x in abc_target)
+    delta = tuple(abs(a - b) for a, b in zip(src, dst))
+    max_delta = max(delta)
+    return {
+        "source": src,
+        "target": dst,
+        "delta_abc_mhz": delta,
+        "max_delta_abc_mhz": max_delta,
+        "status": _harmonization_status(max_delta),
+    }
+
+
 def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None, *, title: str) -> None:
     if not ltype:
         return
@@ -1109,10 +1134,15 @@ class App(tk.Tk):
 
         ttk.Label(ctrl, text="Method").grid(row=0, column=4, sticky="w")
         ttk.Label(ctrl, text="Tensor / pseudoinverse").grid(row=0, column=5, padx=4, sticky="w")
-        ttk.Label(ctrl, text="XYZ (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(ctrl, width=48, textvariable=self._sv("q_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
         ttk.Button(ctrl, text="Browse", command=self._browse_q_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
+        ttk.Button(ctrl, text="Use XYZ A,B,C", command=lambda: self._use_xyz_abc_reference("q_symm_xyz")).grid(row=1, column=6, padx=(4, 0), pady=(6, 0))
         self.vars["q_symm_xyz"].trace_add("write", lambda *_: self._set_symmetry_status_from_entry("q_symm_xyz"))
+        ttk.Label(
+            ctrl,
+            text="Manual quartic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
+        ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         grid = ttk.Frame(parent)
         grid.pack(fill=tk.X, pady=(12, 0))
@@ -1141,12 +1171,12 @@ class App(tk.Tk):
             self.q_o2_labels.append(lbl)
             ttk.Entry(grid, width=16, textvariable=self._sv(f"q_out2_{name}", ""), state="readonly").grid(row=8, column=i, padx=4, pady=2)
 
-        h22_frame = ttk.LabelFrame(parent, text="Optional H22 diagnostic from harmonic input (.fchk)", padding=8)
+        h22_frame = ttk.LabelFrame(parent, text="Validated quartic H22 from harmonic input", padding=8)
         h22_frame.pack(fill=tk.X, pady=(10, 0))
         ttk.Label(h22_frame, text="Formatted checkpoint").grid(row=0, column=0, sticky="w")
         ttk.Entry(h22_frame, width=60, textvariable=self._sv("q_h22_fchk", "")).grid(row=0, column=1, padx=4, sticky="we")
         ttk.Button(h22_frame, text="Browse", command=self._browse_h22_fchk).grid(row=0, column=2, padx=(4, 0))
-        ttk.Label(h22_frame, text="XYZ").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(h22_frame, text="XYZ for harmonic model").grid(row=1, column=0, sticky="w", pady=(4, 0))
         ttk.Entry(h22_frame, width=60, textvariable=self._sv("q_h22_xyz", "")).grid(row=1, column=1, padx=4, sticky="we", pady=(4, 0))
         ttk.Button(h22_frame, text="Browse", command=self._browse_h22_xyz).grid(row=1, column=2, padx=(4, 0), pady=(4, 0))
         ttk.Label(h22_frame, text="Hessian").grid(row=2, column=0, sticky="w", pady=(4, 0))
@@ -1155,7 +1185,7 @@ class App(tk.Tk):
         ttk.Label(
             h22_frame,
             text=(
-                "Standard transforms use only centrifugal constants; these extra inputs are only for H22 diagnostics. "
+                "Standard transforms use only centrifugal constants; these extra inputs are only for the validated quartic H22 path. "
                 "XYZ can be given either as a file path or pasted directly into the field. "
                 "When used with a Hessian, XYZ and Hessian must refer to the same Cartesian orientation."
             ),
@@ -1180,7 +1210,7 @@ class App(tk.Tk):
         ttk.Label(alpha_frame, text="Alpha from harmonic model (.fchk)").grid(row=3, column=0, sticky="w", pady=(8, 0))
         ttk.Entry(alpha_frame, width=60, textvariable=self._sv("q_alpha_fchk", "")).grid(row=3, column=1, padx=4, sticky="we", pady=(8, 0))
         ttk.Button(alpha_frame, text="Browse", command=self._browse_q_alpha_fchk).grid(row=3, column=2, padx=(4, 0), pady=(8, 0))
-        ttk.Label(alpha_frame, text="Alpha XYZ").grid(row=4, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(alpha_frame, text="Alpha XYZ for harmonic model").grid(row=4, column=0, sticky="w", pady=(4, 0))
         ttk.Entry(alpha_frame, width=60, textvariable=self._sv("q_alpha_xyz", "")).grid(row=4, column=1, padx=4, sticky="we", pady=(4, 0))
         ttk.Button(alpha_frame, text="Browse", command=self._browse_q_alpha_xyz).grid(row=4, column=2, padx=(4, 0), pady=(4, 0))
         ttk.Label(alpha_frame, text="Alpha Hessian").grid(row=5, column=0, sticky="w", pady=(4, 0))
@@ -1203,7 +1233,7 @@ class App(tk.Tk):
         qbtn.pack(anchor="w", pady=(12, 6))
         ttk.Button(qbtn, text="Compute quartic transforms", command=self._run_quartic).pack(side=tk.LEFT)
         ttk.Button(qbtn, text="Load quartics from harmonic input", command=self._load_quartics_from_harmonic_input).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(qbtn, text="Compute H22 from .fchk", command=self._run_h22_from_fchk).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(qbtn, text="Compute validated H22", command=self._run_h22_from_fchk).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(qbtn, text="Parse alpha / apply mode filter", command=self._run_alpha_parser).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(qbtn, text="Compute alpha from harmonic+cubic", command=self._prepare_alpha_inputs).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(qbtn, text="Legacy check", command=self._run_quartic_legacy_check).pack(side=tk.LEFT, padx=(8, 0))
@@ -1227,17 +1257,22 @@ class App(tk.Tk):
         ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_in", "A")).grid(row=0, column=3, padx=4)
         ttk.Label(ctrl, text="Output reduction").grid(row=0, column=4, sticky="w")
         ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_out", "A")).grid(row=0, column=5, padx=4)
-        ttk.Label(ctrl, text="XYZ (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(ctrl, width=48, textvariable=self._sv("s_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
         ttk.Button(ctrl, text="Browse", command=self._browse_s_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
+        ttk.Button(ctrl, text="Use XYZ A,B,C", command=lambda: self._use_xyz_abc_reference("s_symm_xyz")).grid(row=1, column=6, padx=(4, 0), pady=(6, 0))
         self.vars["s_symm_xyz"].trace_add("write", lambda *_: self._set_symmetry_status_from_entry("s_symm_xyz"))
+        ttk.Label(
+            ctrl,
+            text="Manual sextic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
+        ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         h22s_frame = ttk.LabelFrame(parent, text="Optional sextic analysis from harmonic input", padding=8)
         h22s_frame.pack(fill=tk.X, pady=(10, 0))
         ttk.Label(h22s_frame, text="Formatted checkpoint").grid(row=0, column=0, sticky="w")
         ttk.Entry(h22s_frame, width=60, textvariable=self._sv("s_h22_fchk", "")).grid(row=0, column=1, padx=4, sticky="we")
         ttk.Button(h22s_frame, text="Browse", command=self._browse_s_h22_fchk).grid(row=0, column=2, padx=(4, 0))
-        ttk.Label(h22s_frame, text="XYZ").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(h22s_frame, text="XYZ for harmonic model").grid(row=1, column=0, sticky="w", pady=(4, 0))
         ttk.Entry(h22s_frame, width=60, textvariable=self._sv("s_h22_xyz", "")).grid(row=1, column=1, padx=4, sticky="we", pady=(4, 0))
         ttk.Button(h22s_frame, text="Browse", command=self._browse_s_h22_xyz).grid(row=1, column=2, padx=(4, 0), pady=(4, 0))
         ttk.Label(h22s_frame, text="Hessian").grid(row=2, column=0, sticky="w", pady=(4, 0))
@@ -1292,7 +1327,7 @@ class App(tk.Tk):
         sbtn.pack(anchor="w", pady=(12, 6))
         ttk.Button(sbtn, text="Compute sextic transforms", command=self._run_sextic).pack(side=tk.LEFT)
         ttk.Button(sbtn, text="Compute harmonic/cubic sextic hierarchy", command=self._run_sextic_hierarchy).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(sbtn, text="Compute sextic H22 diagnostic", command=self._run_sextic_h22_from_fchk).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(sbtn, text="Compute sextic H22-linear diagnostic", command=self._run_sextic_h22_from_fchk).pack(side=tk.LEFT, padx=(8, 0))
 
         self.s_report = scrolledtext.ScrolledText(parent, height=10, wrap="word")
         self.s_report.pack(fill=tk.BOTH, expand=True)
@@ -1321,7 +1356,7 @@ class App(tk.Tk):
 
     def _browse_h22_fchk(self) -> None:
         pth = filedialog.askopenfilename(
-            title="Select formatted checkpoint for H22 diagnostic",
+            title="Select formatted checkpoint for validated H22 quartic path",
             filetypes=[("Gaussian fchk", "*.fchk"), ("All files", "*.*")],
         )
         if pth:
@@ -1334,12 +1369,12 @@ class App(tk.Tk):
             self._set_symmetry_status_from_entry("q_symm_xyz")
 
     def _browse_h22_xyz(self) -> None:
-        pth = filedialog.askopenfilename(title="Select XYZ geometry for H22 diagnostic", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
+        pth = filedialog.askopenfilename(title="Select XYZ geometry for validated H22 quartic path", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
         if pth:
             self.vars["q_h22_xyz"].set(pth)
 
     def _browse_h22_hessian(self) -> None:
-        pth = filedialog.askopenfilename(title="Select Cartesian Hessian for H22 diagnostic", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
+        pth = filedialog.askopenfilename(title="Select Cartesian Hessian for validated H22 quartic path", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
         if pth:
             self.vars["q_h22_hessian"].set(pth)
 
@@ -1385,7 +1420,7 @@ class App(tk.Tk):
 
     def _browse_s_h22_fchk(self) -> None:
         pth = filedialog.askopenfilename(
-            title="Select formatted checkpoint for sextic H22 diagnostic",
+            title="Select formatted checkpoint for sextic H22-linear diagnostic",
             filetypes=[("Gaussian fchk", "*.fchk"), ("All files", "*.*")],
         )
         if pth:
@@ -1398,7 +1433,7 @@ class App(tk.Tk):
             self._set_symmetry_status_from_entry("s_symm_xyz")
 
     def _browse_s_h22_xyz(self) -> None:
-        pth = filedialog.askopenfilename(title="Select XYZ geometry for sextic H22 diagnostic", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
+        pth = filedialog.askopenfilename(title="Select XYZ geometry for sextic H22-linear diagnostic", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
         if pth:
             self.vars["s_h22_xyz"].set(pth)
 
@@ -1431,7 +1466,7 @@ class App(tk.Tk):
         self.symmetry_status_var.set(f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}")
 
     def _browse_s_h22_hessian(self) -> None:
-        pth = filedialog.askopenfilename(title="Select Cartesian Hessian for sextic H22 diagnostic", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
+        pth = filedialog.askopenfilename(title="Select Cartesian Hessian for sextic H22-linear diagnostic", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
         if pth:
             self.vars["s_h22_hessian"].set(pth)
 
@@ -1451,8 +1486,8 @@ class App(tk.Tk):
         if pth:
             self.vars["s_cubic_2idx"].set(pth)
 
-    def _read_abc(self) -> tuple[float, float, float]:
-        meta = _symmetry_meta_from_xyz_path(self.vars["q_symm_xyz"].get().strip())
+    def _read_abc(self, xyz_key: str = "q_symm_xyz") -> tuple[float, float, float]:
+        meta = _symmetry_meta_from_xyz_path(self.vars[xyz_key].get().strip())
         abc_xyz = _abc_from_xyz_meta(meta)
         if abc_xyz is not None:
             self._apply_xyz_abc_reference(meta)
@@ -1466,6 +1501,12 @@ class App(tk.Tk):
         self.vars["A"].set(f"{abc_xyz[0]:.10g}")
         self.vars["B"].set(f"{abc_xyz[1]:.10g}")
         self.vars["C"].set(f"{abc_xyz[2]:.10g}")
+        return abc_xyz
+
+    def _use_xyz_abc_reference(self, xyz_key: str) -> tuple[float, float, float] | None:
+        meta = _symmetry_meta_from_xyz_path(self.vars[xyz_key].get().strip())
+        abc_xyz = self._apply_xyz_abc_reference(meta)
+        self._set_symmetry_status(meta)
         return abc_xyz
 
     def _preferred_xyz_path(self, *keys: str) -> str:
@@ -1499,6 +1540,7 @@ class App(tk.Tk):
             "abc_model": abc_model,
             "delta_abc_mhz": delta,
             "max_delta_abc_mhz": max(delta),
+            "status": _harmonization_status(max(delta)),
         }
 
     def _validate_units_quartic(self, A: float, B: float, C: float, D: np.ndarray) -> None:
@@ -1638,7 +1680,7 @@ class App(tk.Tk):
 
     def _run_quartic(self) -> None:
         try:
-            A, B, C = self._read_abc()
+            A, B, C = self._read_abc("q_symm_xyz")
             rotor_limit = classify_rotor_limit(np.array([A, B, C], dtype=float))
             if rotor_limit["is_special_limit"]:
                 raise ValueError(
@@ -1795,7 +1837,7 @@ class App(tk.Tk):
 
     def _run_quartic_legacy_check(self) -> None:
         try:
-            A, B, C = self._read_abc()
+            A, B, C = self._read_abc("q_symm_xyz")
             rotor_limit = classify_rotor_limit(np.array([A, B, C], dtype=float))
             if rotor_limit["is_special_limit"]:
                 raise ValueError("Legacy asymmetric-top quartic transforms are not defined for symmetric-top or linear limits.")
@@ -1892,7 +1934,7 @@ class App(tk.Tk):
                 }
             names = ("DJ", "DJK", "DK", "dJ", "dK") if red == "A" else ("DJ", "DJK", "DK", "d1", "d2")
 
-            self.q_report.insert(tk.END, "\nH22 diagnostic from harmonic input\n")
+            self.q_report.insert(tk.END, "\nValidated quartic H22 from harmonic input\n")
             self.q_report.insert(tk.END, f"source={from_path}\n")
             abc = res["abc_mhz"]
             self.vars["A"].set(f"{abc[0]:.10g}")
@@ -1907,7 +1949,7 @@ class App(tk.Tk):
                 xyz_abc = harmonized["abc_xyz"]
                 self.q_report.insert(
                     tk.END,
-                    "XYZ harmonization: "
+                    f"XYZ harmonization [{harmonized['status']}]: "
                     f"xyz={harmonized['xyz_path']}; "
                     f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
                     f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
@@ -1963,7 +2005,7 @@ class App(tk.Tk):
                     )
             self.q_report.insert(
                 tk.END,
-                "Interpretation: this is the first quartic post-standard diagnostic from the harmonic backend.\n",
+                "Interpretation: this is the validated quartic H22 path used in the CeDiTT3 benchmark workflow.\n",
             )
         except Exception as exc:
             messagebox.showerror("H22 diagnostic error", str(exc))
@@ -2107,7 +2149,7 @@ class App(tk.Tk):
                 xyz_abc = harmonized["abc_xyz"]
                 self.q_report.insert(
                     tk.END,
-                    "XYZ harmonization: "
+                    f"XYZ harmonization [{harmonized['status']}]: "
                     f"xyz={harmonized['xyz_path']}; "
                     f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
                     f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
@@ -2274,7 +2316,7 @@ class App(tk.Tk):
                 xyz_abc = harmonized["abc_xyz"]
                 self.q_report.insert(
                     tk.END,
-                    "XYZ harmonization: "
+                    f"XYZ harmonization [{harmonized['status']}]: "
                     f"xyz={harmonized['xyz_path']}; "
                     f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
                     f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
@@ -2334,7 +2376,14 @@ class App(tk.Tk):
 
     def _run_sextic(self) -> None:
         try:
-            A, B, C = self._read_abc()
+            manual_abc = (
+                _as_float(self.vars["A"].get()),
+                _as_float(self.vars["B"].get()),
+                _as_float(self.vars["C"].get()),
+            )
+            xyz_meta = _symmetry_meta_from_xyz_path(self.vars["s_symm_xyz"].get().strip())
+            xyz_abc = _abc_from_xyz_meta(xyz_meta)
+            A, B, C = self._read_abc("s_symm_xyz")
             rotor_limit = classify_rotor_limit(np.array([A, B, C], dtype=float))
             if rotor_limit["is_special_limit"]:
                 raise ValueError(
@@ -2388,12 +2437,29 @@ class App(tk.Tk):
                     f"rotor class={meta['rotor_type_for_symmetry']}\n",
                 )
                 if abc_xyz is not None:
+                    delta_info = _abc_delta_info(manual_abc, abc_xyz)
                     self.s_report.insert(
                         tk.END,
                         "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
                         f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
                         f"input constants interpreted as rep={rep_in}, reduction={red_in}.\n",
                     )
+                    self.s_report.insert(
+                        tk.END,
+                        f"Manual A,B,C vs XYZ [{delta_info['status']}]: "
+                        f"manual=({manual_abc[0]:.6f}, {manual_abc[1]:.6f}, {manual_abc[2]:.6f}) MHz; "
+                        f"XYZ=({abc_xyz[0]:.6f}, {abc_xyz[1]:.6f}, {abc_xyz[2]:.6f}) MHz; "
+                        f"max|ΔABC|={delta_info['max_delta_abc_mhz']:.6f} MHz.\n",
+                    )
+            elif xyz_abc is not None:
+                delta_info = _abc_delta_info(manual_abc, xyz_abc)
+                self.s_report.insert(
+                    tk.END,
+                    f"Manual A,B,C vs XYZ [{delta_info['status']}]: "
+                    f"manual=({manual_abc[0]:.6f}, {manual_abc[1]:.6f}, {manual_abc[2]:.6f}) MHz; "
+                    f"XYZ=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
+                    f"max|ΔABC|={delta_info['max_delta_abc_mhz']:.6f} MHz.\n",
+                )
             self.s_report.insert(
                 tk.END,
                 "Sextic transform uses the validated 5D invariant-subspace route with explicit A<->S conversion.\n"
@@ -2463,7 +2529,7 @@ class App(tk.Tk):
             comps = ("aaa", "aab", "aac", "abb", "abc", "acc", "bbb", "bbc", "bcc", "ccc")
             max_key = max(comps, key=lambda k: abs(cand[k]["linear_hz"]))
             rotor_limit = classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
-            self.s_report.insert(tk.END, "\nSextic H22-linear diagnostic from harmonic input\n")
+            self.s_report.insert(tk.END, "\nSextic H22-linear diagnostic candidate from harmonic input\n")
             self.s_report.insert(tk.END, f"source={source}\n")
             self.s_report.insert(
                 tk.END,
@@ -2474,7 +2540,7 @@ class App(tk.Tk):
                 xyz_abc = harmonized["abc_xyz"]
                 self.s_report.insert(
                     tk.END,
-                    "XYZ harmonization: "
+                    f"XYZ harmonization [{harmonized['status']}]: "
                     f"xyz={harmonized['xyz_path']}; "
                     f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
                     f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
@@ -2528,7 +2594,7 @@ class App(tk.Tk):
                     )
             self.s_report.insert(
                 tk.END,
-                "Interpretation: this is the first sextic post-standard diagnostic induced linearly by tau(H22).\n",
+                "Interpretation: this is the first sextic post-standard diagnostic candidate induced linearly by tau(H22); it is operational but not benchmark-grade in the same sense as quartic H22.\n",
             )
         except Exception as exc:
             messagebox.showerror("Sextic H22 diagnostic error", str(exc))
@@ -2581,7 +2647,7 @@ class App(tk.Tk):
                 xyz_abc = harmonized["abc_xyz"]
                 self.s_report.insert(
                     tk.END,
-                    "XYZ harmonization: "
+                    f"XYZ harmonization [{harmonized['status']}]: "
                     f"xyz={harmonized['xyz_path']}; "
                     f"ABC_xyz=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
                     f"max|ΔABC|={harmonized['max_delta_abc_mhz']:.6f} MHz. "
