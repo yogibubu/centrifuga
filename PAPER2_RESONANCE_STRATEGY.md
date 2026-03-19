@@ -105,7 +105,7 @@ The current four-molecule benchmark indicates:
 - `H30H30` is negligible for `H2CO` and `H2CS`,
   moderate for `H2S`,
   and dominant for `H2O`;
-- in `H2O`, the dominant `H30H30` scaffolds are `diag_1_iii_iii` and
+- in `H2O`, the dominant `H30H30` scaffolds are `diag_0_iii_iii`, `diag_1_iii_iii`, and
   `diag_1_iii_iij_0`.
 
 This makes it unlikely that the immediate resonance problem belongs to the

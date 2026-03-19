@@ -21,6 +21,7 @@ import warnings
 
 import sympy as sp
 import numpy as np
+from h30h30_resonance import regularized_two_level_term
 
 MON_KEYS = ("xxxx", "yyyy", "zzzz", "xxyy", "xxzz", "yyzz")
 _PLACEHOLDER_WARNED: set[str] = set()
@@ -51,6 +52,22 @@ _H30H30_DIAG1_COEFFS = {
     "tau_xxzz": -sp.Rational(1, 450),
     "tau_yyzz": -sp.Rational(1, 6750),
 }
+_H30H30_DIAG1_III_III_CORR_COEFFS = {
+    "tau_xxxx": sp.Rational(95380905500501926630542832453, 78597476697155953731211100160000),
+    "tau_yyyy": sp.Rational(4665533883647099384253680209777, 38407728618788958519503177318400000),
+    "tau_zzzz": sp.Rational(2938992038611330760549838559979, 2389355529692276679534356547502080),
+    "tau_xxyy": sp.Rational(1607740160042717136437130066887045259597407, 1246055980446161799287711984926400286661017600),
+    "tau_xxzz": sp.Rational(2110666378664113721263895466152755623451, 387696403325576518640091138025254247464960),
+    "tau_yyzz": -sp.Rational(1315576067630219637513598955718127721039429, 2576142871015368516864322807338654849564672000),
+}
+_H30H30_DIAG1_III_III_ROTMIX_COEFFS = {
+    "tau_xxxx": sp.Integer(0),
+    "tau_yyyy": sp.Integer(0),
+    "tau_zzzz": sp.Integer(0),
+    "tau_xxyy": -sp.Rational(529, 12441600),
+    "tau_xxzz": -sp.Rational(3, 5120000),
+    "tau_yyzz": -sp.Rational(121, 1382400),
+}
 _H30H30_DIAG1_III_IIJ0_COEFFS = {
     "tau_xxxx": -sp.Rational(227363455692979534858168034909, 23579243009146786119363330048000),
     "tau_yyyy": -sp.Rational(132870342778744056191079919357, 93525313195102983407881113600000),
@@ -66,6 +83,30 @@ _H30H30_DIAG0_III_IIJ1_COEFFS = {
     "tau_xxyy": sp.Rational(94984702792100712326341262521802248841, 333764994762364767666351424533857219641344),
     "tau_xxzz": sp.Rational(4756903441008869353372586963090568356939, 1570170433468584900492369109002279702233088),
     "tau_yyzz": -sp.Rational(147893492940862692381337950801113843314157, 217362054741921718610427236869199002932019200),
+}
+_H30H30_DIAG0_III_IIJ2_COEFFS = {
+    "tau_xxxx": -sp.Rational(438532066996440782413516299313, 265266483852901343842837463040000),
+    "tau_yyyy": -sp.Rational(9636185244522385908224693217616021, 8641738939227515666888214896640000000),
+    "tau_zzzz": -sp.Rational(106392049509917391552004970086462217, 60480561845335753450713400108646400000),
+    "tau_xxyy": -sp.Rational(127558197189119260754299070794511739907303717, 127039301131425089693005010963199404225986560000),
+    "tau_xxzz": -sp.Rational(2028035868070401130846736371427011472281933, 588813912550719337684638415875854888337408000),
+    "tau_yyzz": sp.Rational(235383200534512692877933907870493374206066871, 573835824518673337131527905334685367740530688000),
+}
+_H30H30_IIJ_IIJ1_COEFFS = {
+    "tau_xxxx": -sp.Rational(1423325721574754350122972529, 1768443225686008958952249753600),
+    "tau_yyyy": -sp.Rational(2342819248469263597431749047349, 1080217367403439458361026862080000),
+    "tau_zzzz": -sp.Rational(3346599684038788746878574958109, 6300058525555807651115979177984000),
+    "tau_xxyy": -sp.Rational(3811404382454666303729694206747223606395, 3504532445004830060496689957605500806234112),
+    "tau_xxzz": -sp.Rational(970133581163586025009826597520948258205, 785085216734292450246184554501139851116544),
+    "tau_yyzz": -sp.Rational(377655083952895771689907883880675869233811, 695558575174149499553367157981436809382461440),
+}
+_H30H30_IIJ_IIJ2_COEFFS = {
+    "tau_xxxx": sp.Rational(105323423687644952657628091, 175440796199008825292881920000),
+    "tau_yyyy": sp.Rational(873641643321250912126568126898883753, 129626084088412735003323223449600000000),
+    "tau_zzzz": sp.Rational(1117694852646885108524117612727467, 114546518646469230020290530508800000),
+    "tau_xxyy": sp.Rational(72941392926741425861045260010844192597882121, 23525796505819461054260187215407297078886400000),
+    "tau_xxzz": sp.Rational(64540823071388631974630915045526119703559, 20444927519122199225161056106800516956160000),
+    "tau_yyzz": -sp.Rational(22372449244727659421033485146368876653681, 664161833933649695754083223766996953403392000),
 }
 
 
@@ -515,6 +556,60 @@ def _h30h30_diag1_iii_iii(
     return _complete_tau(tau)
 
 
+def _h30h30_diag1_iii_iii_correction_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Second diagonal-family candidate for ``D^(1)_{iii,iii}``.
+
+    This uses the same one-mode structural class ``Phi_iii^2 / omega_i^7`` as
+    the leading diagonal scaffold, but with the componentwise appendix
+    coefficients associated with ``D^(1)_{iii,iii}``. It is kept separate so we
+    can test whether the oversized diagonal core is really missing a second
+    diagonal family rather than a resonance treatment.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        phi_sq = phi3[i, i, i] ** 2
+        denom = omega[i] ** 7
+        tau["tau_xxxx"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_xxxx"] * hbar * phi_sq * mu1[0, 0, i] ** 2 / denom
+        tau["tau_yyyy"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_yyyy"] * hbar * phi_sq * mu1[1, 1, i] ** 2 / denom
+        tau["tau_zzzz"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_zzzz"] * hbar * phi_sq * mu1[2, 2, i] ** 2 / denom
+        tau["tau_xxyy"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
+        tau["tau_xxzz"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
+        tau["tau_yyzz"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
+    return _complete_tau(tau)
+
+
+def _h30h30_diag1_iii_iii_rotmix_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Mixed-only rotational-mixing candidate for ``D^(1)_{iii,iii}``.
+
+    This candidate is extracted from the restricted symbolic probe
+    ``iii-only/full-rot - iii-only/diag-rot``. It keeps the same scalar
+    ``Phi_iii^2 / omega_i^7`` class as the leading diagonal core, but carries
+    support only on the mixed quartic tensor components.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        phi_sq = phi3[i, i, i] ** 2
+        denom = omega[i] ** 7
+        tau["tau_xxyy"] += _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
+        tau["tau_xxzz"] += _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
+        tau["tau_yyzz"] += _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
+    return _complete_tau(tau)
+
+
 def _h30h30_placeholder_residual(
     mu1,
     phi3: sp.MutableDenseNDimArray,
@@ -599,32 +694,214 @@ def _h30h30_diag0_iii_iij_1_candidate(
     return _complete_tau(tau)
 
 
+def _h30h30_diag0_iii_iij_2_resonance_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Signed-denominator candidate for ``D^(0;2)_{iii,iij}``.
+
+    This candidate is kept *out* of the operative channel total. Its purpose is
+    to expose the first plausible near-resonant family carrying a signed factor
+    ``2*omega_i - omega_j`` so that the Martin/2x2 machinery has a meaningful
+    scaffold-level target once numerator units are fully validated.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_mix = phi3[i, i, i] * phi3[i, i, j]
+            detuning = 2 * omega[i] - omega[j]
+            denom = omega[i] ** 3 * omega[j] * (omega[i] + omega[j]) * detuning * (2 * omega[i] + omega[j])
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_DIAG0_III_IIJ2_COEFFS["tau_xxxx"] * hbar * phi_mix * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_DIAG0_III_IIJ2_COEFFS["tau_yyyy"] * hbar * phi_mix * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_DIAG0_III_IIJ2_COEFFS["tau_zzzz"] * hbar * phi_mix * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_DIAG0_III_IIJ2_COEFFS["tau_xxyy"] * hbar * phi_mix * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_DIAG0_III_IIJ2_COEFFS["tau_xxzz"] * hbar * phi_mix * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_DIAG0_III_IIJ2_COEFFS["tau_yyzz"] * hbar * phi_mix * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
+def _h30h30_diag0_iii_iij_2_regularized_preview(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+    *,
+    metric_center: float = 1.0,
+    metric_width: float = 0.05,
+    level_shift: float = 1.0e-3,
+    method: str = "tanh",
+) -> Dict[str, sp.Expr]:
+    """Regularized preview for the signed ``D^(0;2)_{iii,iij}`` candidate.
+
+    This stays outside the operative channel total. It is only meant to show
+    how the Martin/2x2 machinery would modify the first signed-denominator
+    family once numerator units are considered stable enough.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_mix = phi3[i, i, i] * phi3[i, i, j]
+            detuning = 2 * omega[i] - omega[j]
+            rest = omega[i] ** 3 * omega[j] * (omega[i] + omega[j]) * (2 * omega[i] + omega[j])
+            coeffs = (
+                ("tau_xxxx", _H30H30_DIAG0_III_IIJ2_COEFFS["tau_xxxx"], mu1[0, 0, i] * mu1[0, 0, j]),
+                ("tau_yyyy", _H30H30_DIAG0_III_IIJ2_COEFFS["tau_yyyy"], mu1[1, 1, i] * mu1[1, 1, j]),
+                ("tau_zzzz", _H30H30_DIAG0_III_IIJ2_COEFFS["tau_zzzz"], mu1[2, 2, i] * mu1[2, 2, j]),
+                ("tau_xxyy", _H30H30_DIAG0_III_IIJ2_COEFFS["tau_xxyy"], (mu1[0, 0, i] * mu1[0, 0, j] + mu1[1, 1, i] * mu1[1, 1, j]) / 2),
+                ("tau_xxzz", _H30H30_DIAG0_III_IIJ2_COEFFS["tau_xxzz"], (mu1[0, 0, i] * mu1[0, 0, j] + mu1[2, 2, i] * mu1[2, 2, j]) / 2),
+                ("tau_yyzz", _H30H30_DIAG0_III_IIJ2_COEFFS["tau_yyzz"], (mu1[1, 1, i] * mu1[1, 1, j] + mu1[2, 2, i] * mu1[2, 2, j]) / 2),
+            )
+            for key, coeff, mix in coeffs:
+                numerator_like = sp.simplify(coeff * hbar * phi_mix * mix / rest)
+                try:
+                    reg = regularized_two_level_term(
+                        float(numerator_like),
+                        float(detuning),
+                        metric_center=metric_center,
+                        metric_width=metric_width,
+                        level_shift_cm=level_shift,
+                        method=method,
+                    )
+                    tau[key] += sp.Float(reg)
+                except (TypeError, ValueError):
+                    tau[key] += sp.simplify(numerator_like / detuning)
+    return _complete_tau(tau)
+
+
+def _h30h30_iij_iij_1_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """First ``iij,iij`` scaffold candidate with pure-power denominator."""
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_sq = phi3[i, i, j] ** 2
+            denom = omega[i] ** 4 * omega[j] ** 3
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_IIJ_IIJ1_COEFFS["tau_xxxx"] * hbar * phi_sq * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_IIJ_IIJ1_COEFFS["tau_yyyy"] * hbar * phi_sq * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_IIJ_IIJ1_COEFFS["tau_zzzz"] * hbar * phi_sq * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_IIJ_IIJ1_COEFFS["tau_xxyy"] * hbar * phi_sq * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_IIJ_IIJ1_COEFFS["tau_xxzz"] * hbar * phi_sq * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_IIJ_IIJ1_COEFFS["tau_yyzz"] * hbar * phi_sq * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
+def _h30h30_iij_iij_2_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Second ``iij,iij`` scaffold candidate with pair-sum denominator."""
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_sq = phi3[i, i, j] ** 2
+            denom = omega[i] ** 3 * omega[j] ** 2 * (omega[i] + omega[j]) ** 2
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_IIJ_IIJ2_COEFFS["tau_xxxx"] * hbar * phi_sq * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_IIJ_IIJ2_COEFFS["tau_yyyy"] * hbar * phi_sq * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_IIJ_IIJ2_COEFFS["tau_zzzz"] * hbar * phi_sq * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_IIJ_IIJ2_COEFFS["tau_xxyy"] * hbar * phi_sq * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_IIJ_IIJ2_COEFFS["tau_xxzz"] * hbar * phi_sq * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_IIJ_IIJ2_COEFFS["tau_yyzz"] * hbar * phi_sq * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
 def channel_h30h30_decomposed(
     mu1,
     phi3: sp.MutableDenseNDimArray,
     omega: Iterable[float],
     hbar: sp.Symbol,
 ) -> dict[str, Dict[str, sp.Expr]]:
-    """Return the current ``H30H30`` split into leading scaffold and residual.
+    """Return the current ``H30H30`` split with trusted and extended totals.
 
-    ``D0_iii_iii`` is the first scaffold-first restoration step. The residual
-    remains diagnostic-only and corresponds to the old placeholder kernel.
+    At the present stage the diagonal family is split explicitly into:
+
+    - ``pure_diagonal_total`` = ``D^(0)_{iii,iii}``;
+    - ``trusted_total`` = ``D^(0)_{iii,iii} + D^(1)_{iii,iii}``.
+
+    The remaining scaffold families are kept explicit for diagnostics, but the
+    external VPT-vs-RVCI sanity check shows that they are not yet in a
+    physically acceptable normalization range. Therefore:
+
+    - ``trusted_total`` is the solver-facing provisional channel;
+    - ``extended_total`` is the diagnostic scaffold sum beyond the trusted core.
     """
     _warn_placeholder("H30H30")
     leading = _h30h30_diag1_iii_iii(mu1, phi3, omega, hbar)
+    leading_corr = _h30h30_diag1_iii_iii_correction_candidate(mu1, phi3, omega, hbar)
     semidiag = _h30h30_diag1_iii_iij_0(mu1, phi3, omega, hbar)
     candidate = _h30h30_diag0_iii_iij_1_candidate(mu1, phi3, omega, hbar)
+    candidate_res = _h30h30_diag0_iii_iij_2_resonance_candidate(mu1, phi3, omega, hbar)
+    candidate_res_reg = _h30h30_diag0_iii_iij_2_regularized_preview(mu1, phi3, omega, hbar)
+    iij1 = _h30h30_iij_iij_1_candidate(mu1, phi3, omega, hbar)
+    iij2 = _h30h30_iij_iij_2_candidate(mu1, phi3, omega, hbar)
+    rotmix_diag1 = _h30h30_diag1_iii_iii_rotmix_candidate(mu1, phi3, omega, hbar)
     residual = _h30h30_placeholder_residual(mu1, phi3, omega)
-    total = _sum_tau_dicts(leading, semidiag, residual)
+    pure_diagonal_total = leading
+    trusted_total = _sum_tau_dicts(pure_diagonal_total, leading_corr)
+    extended_total = _sum_tau_dicts(trusted_total, semidiag, residual)
+    resonance_preview_total = _sum_tau_dicts(trusted_total, candidate_res_reg)
+    diagonal_pair_preview_total = trusted_total
     return {
-        "total": total,
+        "total": trusted_total,
+        "pure_diagonal_total": pure_diagonal_total,
+        "trusted_total": trusted_total,
+        "extended_total": extended_total,
+        "resonance_preview_total": resonance_preview_total,
+        "diagonal_pair_preview_total": diagonal_pair_preview_total,
         "D0_iii_iii": leading,
-        "diag_1_iii_iii": leading,
+        "diag_0_iii_iii": leading,
+        "D1_iii_iii": leading_corr,
+        "diag_1_iii_iii": leading_corr,
+        "diag_1_iii_iii_correction_candidate": leading_corr,
+        "diag_1_iii_iii_rotmix_candidate": rotmix_diag1,
         "D0_iii_iij_0": semidiag,
         "diag_1_iii_iij_0": semidiag,
         "D0_iii_iij_1_candidate": candidate,
         "diag_0_iii_iij_1_candidate": candidate,
+        "D0_iii_iij_2_resonance_candidate": candidate_res,
+        "diag_0_iii_iij_2_resonance_candidate": candidate_res,
+        "D0_iii_iij_2_regularized_preview": candidate_res_reg,
+        "diag_0_iii_iij_2_regularized_preview": candidate_res_reg,
+        "D0_iij_iij_1_candidate": iij1,
+        "diag_0_iij_iij_1_candidate": iij1,
+        "D0_iij_iij_2_candidate": iij2,
+        "diag_0_iij_iij_2_candidate": iij2,
         "placeholder_residual": residual,
+        # Backward-compatible aliases retained while the H30H30 branch is being
+        # rebuilt around the paper2 seven-scaffold notation.
+        "legacy_diag_1_iii_iii": leading,
     }
 
 

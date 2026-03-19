@@ -84,7 +84,7 @@ H30H30 / order2:
 1. `H22` is small in every quartic constant. It cannot explain the failure of the standard VPT2 picture for water.
 2. `H12H30` is negligible on the scale of the standard baseline and cannot explain the water anomaly.
 3. The entire pathological behavior of H2O at quartic VPT4 level is driven by `H30H30`.
-4. Within `H30H30`, the dominant scaffold is `diag_1_iii_iii`, with a secondary contribution from `diag_1_iii_iij_0`; the remaining scaffolds are much smaller.
+4. Within `H30H30`, the dominant diagonal scaffolds are `diag_0_iii_iii` and `diag_1_iii_iii`, with a secondary contribution from `diag_1_iii_iij_0`; the remaining scaffolds are much smaller.
 5. Therefore the immediate technical problem for Paper 2 is not the standard sector, and not even the first geometric breakdown channel `H22`, but the quantitative formulation of the cubic-cubic anharmonic channel.
 6. This is consistent with the fact that H2O is the molecule for which published VPT/VCI quartic comparisons are known to be most problematic.
 

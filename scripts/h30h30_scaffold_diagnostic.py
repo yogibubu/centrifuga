@@ -52,7 +52,24 @@ def main() -> None:
             hbar=sp.Float(1.0),
         )
         print(f"\n{species.upper()}")
-        for name in ("diag_1_iii_iii", "diag_1_iii_iij_0", "diag_0_iii_iij_1_candidate", "placeholder_residual", "total"):
+        for name in (
+            "pure_diagonal_total",
+            "diag_0_iii_iii",
+            "diag_1_iii_iii_correction_candidate",
+            "diag_1_iii_iii_rotmix_candidate",
+            "trusted_total",
+            "diag_1_iii_iij_0",
+            "diag_0_iii_iij_1_candidate",
+            "diag_0_iii_iij_2_resonance_candidate",
+            "diag_0_iii_iij_2_regularized_preview",
+            "diag_0_iij_iij_1_candidate",
+            "diag_0_iij_iij_2_candidate",
+            "placeholder_residual",
+            "extended_total",
+            "resonance_preview_total",
+            "diagonal_pair_preview_total",
+            "total",
+        ):
             wat = to_watson_khz(
                 pieces[name],
                 abc_mhz=model.abc_mhz,
@@ -62,6 +79,36 @@ def main() -> None:
             )
             vec = np.array([float(wat[key]) for key in WATSON_KEYS], dtype=float)
             print(f"{name:>26}  norm={np.linalg.norm(vec): .6e}  values={dict(zip(WATSON_KEYS, vec))}")
+        pure = to_watson_khz(
+            pieces["pure_diagonal_total"],
+            abc_mhz=model.abc_mhz,
+            reduction="S",
+            spectroscopic_axes=quart.spectroscopic_axes,
+            tau_cm_scale=1.0,
+        )
+        corr = to_watson_khz(
+            pieces["diag_1_iii_iii_correction_candidate"],
+            abc_mhz=model.abc_mhz,
+            reduction="S",
+            spectroscopic_axes=quart.spectroscopic_axes,
+            tau_cm_scale=1.0,
+        )
+        trusted = to_watson_khz(
+            pieces["trusted_total"],
+            abc_mhz=model.abc_mhz,
+            reduction="S",
+            spectroscopic_axes=quart.spectroscopic_axes,
+            tau_cm_scale=1.0,
+        )
+        pure_vec = np.array([float(pure[key]) for key in WATSON_KEYS], dtype=float)
+        corr_vec = np.array([float(corr[key]) for key in WATSON_KEYS], dtype=float)
+        trusted_vec = np.array([float(trusted[key]) for key in WATSON_KEYS], dtype=float)
+        pure_norm = max(np.linalg.norm(pure_vec), 1.0e-30)
+        print(
+            "      diagonal balance  "
+            f"||D1||/||D0||={np.linalg.norm(corr_vec)/pure_norm: .6e}  "
+            f"||D0+D1||/||D0||={np.linalg.norm(trusted_vec)/pure_norm: .6e}"
+        )
 
 
 if __name__ == "__main__":
