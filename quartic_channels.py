@@ -68,6 +68,70 @@ _H30H30_DIAG1_III_III_ROTMIX_COEFFS = {
     "tau_xxzz": -sp.Rational(3, 5120000),
     "tau_yyzz": -sp.Rational(121, 1382400),
 }
+_H30H30_DIAG_BENCH_RESID11_COEFFS = {
+    "tau_xxxx": sp.Float("1.754153361804834e-4"),
+    "tau_yyyy": sp.Float("-3.9819030976143437e-5"),
+    "tau_zzzz": sp.Float("-3.026123904573756e-4"),
+    "tau_xxyy": sp.Float("9.788531833272127e-5"),
+    "tau_xxzz": sp.Float("1.3436286755205305e-4"),
+    "tau_yyzz": sp.Float("-4.84488876973955e-5"),
+}
+_H30H30_DIAG_BENCH_RESID13_COEFFS = {
+    "tau_xxxx": sp.Float("4.033909880204865e-6"),
+    "tau_yyyy": sp.Float("-4.4267945204592335e-6"),
+    "tau_zzzz": sp.Float("-1.0212473390823352e-5"),
+    "tau_xxyy": sp.Float("-3.938681274627949e-5"),
+    "tau_xxzz": sp.Float("5.999475178374548e-6"),
+    "tau_yyzz": sp.Float("1.9092642579184123e-5"),
+}
+_H30H30_WATERLIKE_BASIS1_WEIGHTS = {
+    "diag_1_iii_iij_0": sp.Float("2.104363095129133e-05"),
+    "diag_0_iii_iij_1_candidate": sp.Float("4.292399027992671e-05"),
+    "diag_0_iii_iij_2_resonance_candidate": sp.Float("1.9911769414548397e-05"),
+    "diag_0_iii_iij_2_regularized_preview": sp.Float("7.30904205538485e-07"),
+    "diag_0_iij_iij_1_candidate": sp.Float("-0.0012790344687563125"),
+    "diag_0_iij_iij_2_candidate": sp.Float("-0.0010457228496054626"),
+}
+_H30H30_WATERLIKE_BASIS2_WEIGHTS = {
+    "diag_1_iii_iij_0": sp.Float("0.000186228173363002"),
+    "diag_0_iii_iij_1_candidate": sp.Float("-0.01582346155069248"),
+    "diag_0_iii_iij_2_resonance_candidate": sp.Float("0.0004340669770381236"),
+    "diag_0_iii_iij_2_regularized_preview": sp.Float("1.552570980273269e-05"),
+    "diag_0_iij_iij_1_candidate": sp.Float("-0.01713900312125228"),
+    "diag_0_iij_iij_2_candidate": sp.Float("-0.010154277019498704"),
+}
+_H30H30_WATERLIKE_SCAFFOLD_BASIS1_WEIGHTS = {
+    "diag_1_iii_iij_0": sp.Float("0.0016723056589263618"),
+    "diag_0_iii_iij_1_candidate": sp.Float("0.9610237103797781"),
+    "diag_0_iii_iij_2_resonance_candidate": sp.Float("-0.2283854556552517"),
+    "diag_0_iii_iij_2_regularized_preview": sp.Float("-0.102107640379879"),
+    "diag_0_iij_iij_1_candidate": sp.Float("-0.10475133627416916"),
+    "diag_0_iij_iij_2_candidate": sp.Float("0.05359013390205153"),
+}
+_H30H30_WATERLIKE_SCAFFOLD_BASIS2_WEIGHTS = {
+    "diag_1_iii_iij_0": sp.Float("0.012700918862961983"),
+    "diag_0_iii_iij_1_candidate": sp.Float("-0.03900293399591244"),
+    "diag_0_iii_iij_2_resonance_candidate": sp.Float("0.03189795415480179"),
+    "diag_0_iii_iij_2_regularized_preview": sp.Float("0.00939775421472365"),
+    "diag_0_iij_iij_1_candidate": sp.Float("-0.7648149932117112"),
+    "diag_0_iij_iij_2_candidate": sp.Float("-0.6420823052341297"),
+}
+_H30H30_WATERLIKE_REDUCED_III_IIJ_WEIGHTS = {
+    "diag_1_iii_iij_0": sp.Float("0.001684003588808974"),
+    "diag_0_iii_iij_1_candidate": sp.Float("0.9677461584678673"),
+    "diag_0_iii_iij_2_resonance_candidate": sp.Float("-0.22998303264855013"),
+    "diag_0_iii_iij_2_regularized_preview": sp.Float("-0.10282189259284445"),
+    "diag_0_iij_iij_1_candidate": sp.Float("0.0"),
+    "diag_0_iij_iij_2_candidate": sp.Float("0.0"),
+}
+_H30H30_WATERLIKE_REDUCED_IIJ_IIJ_WEIGHTS = {
+    "diag_1_iii_iij_0": sp.Float("0.0"),
+    "diag_0_iii_iij_1_candidate": sp.Float("0.0"),
+    "diag_0_iii_iij_2_resonance_candidate": sp.Float("0.0"),
+    "diag_0_iii_iij_2_regularized_preview": sp.Float("0.0"),
+    "diag_0_iij_iij_1_candidate": sp.Float("-0.7658835101867324"),
+    "diag_0_iij_iij_2_candidate": sp.Float("-0.6429793533419633"),
+}
 _H30H30_DIAG1_III_IIJ0_COEFFS = {
     "tau_xxxx": -sp.Rational(227363455692979534858168034909, 23579243009146786119363330048000),
     "tau_yyyy": -sp.Rational(132870342778744056191079919357, 93525313195102983407881113600000),
@@ -541,19 +605,7 @@ def _h30h30_diag1_iii_iii(
     matches the exact one-mode symbolic scaling ``Phi_iii^2 / omega_i^7`` and
     uses the componentwise one-mode coefficients recovered from the BCH engine.
     """
-    omega = list(omega)
-    n_modes = mu1.shape[2]
-    tau = defaultdict(lambda: sp.Integer(0))
-    for i in range(n_modes):
-        phi_sq = phi3[i, i, i] ** 2
-        denom = omega[i] ** 7
-        tau["tau_xxxx"] += _H30H30_DIAG1_COEFFS["tau_xxxx"] * hbar * phi_sq * mu1[0, 0, i] ** 2 / denom
-        tau["tau_yyyy"] += _H30H30_DIAG1_COEFFS["tau_yyyy"] * hbar * phi_sq * mu1[1, 1, i] ** 2 / denom
-        tau["tau_zzzz"] += _H30H30_DIAG1_COEFFS["tau_zzzz"] * hbar * phi_sq * mu1[2, 2, i] ** 2 / denom
-        tau["tau_xxyy"] += _H30H30_DIAG1_COEFFS["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
-        tau["tau_xxzz"] += _H30H30_DIAG1_COEFFS["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
-        tau["tau_yyzz"] += _H30H30_DIAG1_COEFFS["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
-    return _complete_tau(tau)
+    return _h30h30_apply_diag_coeff_vector(mu1, phi3, omega, hbar, _H30H30_DIAG1_COEFFS)
 
 
 def _h30h30_diag1_iii_iii_correction_candidate(
@@ -570,19 +622,7 @@ def _h30h30_diag1_iii_iii_correction_candidate(
     can test whether the oversized diagonal core is really missing a second
     diagonal family rather than a resonance treatment.
     """
-    omega = list(omega)
-    n_modes = mu1.shape[2]
-    tau = defaultdict(lambda: sp.Integer(0))
-    for i in range(n_modes):
-        phi_sq = phi3[i, i, i] ** 2
-        denom = omega[i] ** 7
-        tau["tau_xxxx"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_xxxx"] * hbar * phi_sq * mu1[0, 0, i] ** 2 / denom
-        tau["tau_yyyy"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_yyyy"] * hbar * phi_sq * mu1[1, 1, i] ** 2 / denom
-        tau["tau_zzzz"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_zzzz"] * hbar * phi_sq * mu1[2, 2, i] ** 2 / denom
-        tau["tau_xxyy"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
-        tau["tau_xxzz"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
-        tau["tau_yyzz"] += _H30H30_DIAG1_III_III_CORR_COEFFS["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
-    return _complete_tau(tau)
+    return _h30h30_apply_diag_coeff_vector(mu1, phi3, omega, hbar, _H30H30_DIAG1_III_III_CORR_COEFFS)
 
 
 def _h30h30_diag1_iii_iii_rotmix_candidate(
@@ -598,16 +638,65 @@ def _h30h30_diag1_iii_iii_rotmix_candidate(
     ``Phi_iii^2 / omega_i^7`` class as the leading diagonal core, but carries
     support only on the mixed quartic tensor components.
     """
+    return _h30h30_apply_diag_coeff_vector(mu1, phi3, omega, hbar, _H30H30_DIAG1_III_III_ROTMIX_COEFFS)
+
+
+def _h30h30_apply_diag_coeff_vector(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+    coeffs: Dict[str, sp.Expr],
+) -> Dict[str, sp.Expr]:
+    """Apply a one-mode diagonal benchmark coefficient vector.
+
+    All vectors here live in the same scalar class ``Phi_iii^2 / omega_i^7``.
+    They differ only by the six componentwise tensor coefficients.
+    """
     omega = list(omega)
     n_modes = mu1.shape[2]
     tau = defaultdict(lambda: sp.Integer(0))
     for i in range(n_modes):
         phi_sq = phi3[i, i, i] ** 2
         denom = omega[i] ** 7
-        tau["tau_xxyy"] += _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
-        tau["tau_xxzz"] += _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
-        tau["tau_yyzz"] += _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
+        tau["tau_xxxx"] += coeffs["tau_xxxx"] * hbar * phi_sq * mu1[0, 0, i] ** 2 / denom
+        tau["tau_yyyy"] += coeffs["tau_yyyy"] * hbar * phi_sq * mu1[1, 1, i] ** 2 / denom
+        tau["tau_zzzz"] += coeffs["tau_zzzz"] * hbar * phi_sq * mu1[2, 2, i] ** 2 / denom
+        tau["tau_xxyy"] += coeffs["tau_xxyy"] * hbar * phi_sq * mu1[0, 0, i] * mu1[1, 1, i] / denom
+        tau["tau_xxzz"] += coeffs["tau_xxzz"] * hbar * phi_sq * mu1[0, 0, i] * mu1[2, 2, i] / denom
+        tau["tau_yyzz"] += coeffs["tau_yyzz"] * hbar * phi_sq * mu1[1, 1, i] * mu1[2, 2, i] / denom
     return _complete_tau(tau)
+
+
+def _h30h30_diag_bench_resid11_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Third benchmark-derived diagonal pivot from the one-mode full-rot probe."""
+    return _h30h30_apply_diag_coeff_vector(mu1, phi3, omega, hbar, _H30H30_DIAG_BENCH_RESID11_COEFFS)
+
+
+def _h30h30_diag_bench_resid13_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Fourth benchmark-derived diagonal pivot from the one-mode full-rot probe."""
+    return _h30h30_apply_diag_coeff_vector(mu1, phi3, omega, hbar, _H30H30_DIAG_BENCH_RESID13_COEFFS)
+
+
+def _h30h30_linear_combo(
+    pieces: dict[str, Dict[str, sp.Expr]],
+    weights: Dict[str, sp.Expr],
+) -> Dict[str, sp.Expr]:
+    """Build a tau-space linear combination of already constructed scaffolds."""
+    total = _zero_tau()
+    for name, coeff in weights.items():
+        total = _sum_tau_dicts(total, _scale_tau(pieces[name], coeff))
+    return total
 
 
 def _h30h30_placeholder_residual(
@@ -867,7 +956,23 @@ def channel_h30h30_decomposed(
     iij1 = _h30h30_iij_iij_1_candidate(mu1, phi3, omega, hbar)
     iij2 = _h30h30_iij_iij_2_candidate(mu1, phi3, omega, hbar)
     rotmix_diag1 = _h30h30_diag1_iii_iii_rotmix_candidate(mu1, phi3, omega, hbar)
+    bench_resid11 = _h30h30_diag_bench_resid11_candidate(mu1, phi3, omega, hbar)
+    bench_resid13 = _h30h30_diag_bench_resid13_candidate(mu1, phi3, omega, hbar)
     residual = _h30h30_placeholder_residual(mu1, phi3, omega)
+    followup_pieces = {
+        "diag_1_iii_iij_0": semidiag,
+        "diag_0_iii_iij_1_candidate": candidate,
+        "diag_0_iii_iij_2_resonance_candidate": candidate_res,
+        "diag_0_iii_iij_2_regularized_preview": candidate_res_reg,
+        "diag_0_iij_iij_1_candidate": iij1,
+        "diag_0_iij_iij_2_candidate": iij2,
+    }
+    waterlike_basis1 = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_BASIS1_WEIGHTS)
+    waterlike_basis2 = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_BASIS2_WEIGHTS)
+    waterlike_scaffold_basis1 = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_SCAFFOLD_BASIS1_WEIGHTS)
+    waterlike_scaffold_basis2 = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_SCAFFOLD_BASIS2_WEIGHTS)
+    waterlike_reduced_iii_iij = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_REDUCED_III_IIJ_WEIGHTS)
+    waterlike_reduced_iij_iij = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_REDUCED_IIJ_IIJ_WEIGHTS)
     pure_diagonal_total = leading
     trusted_total = _sum_tau_dicts(pure_diagonal_total, leading_corr)
     extended_total = _sum_tau_dicts(trusted_total, semidiag, residual)
@@ -886,6 +991,14 @@ def channel_h30h30_decomposed(
         "diag_1_iii_iii": leading_corr,
         "diag_1_iii_iii_correction_candidate": leading_corr,
         "diag_1_iii_iii_rotmix_candidate": rotmix_diag1,
+        "diag_bench_resid11_candidate": bench_resid11,
+        "diag_bench_resid13_candidate": bench_resid13,
+        "waterlike_basis1_candidate": waterlike_basis1,
+        "waterlike_basis2_candidate": waterlike_basis2,
+        "waterlike_scaffold_basis1_candidate": waterlike_scaffold_basis1,
+        "waterlike_scaffold_basis2_candidate": waterlike_scaffold_basis2,
+        "waterlike_reduced_iii_iij_candidate": waterlike_reduced_iii_iij,
+        "waterlike_reduced_iij_iij_candidate": waterlike_reduced_iij_iij,
         "D0_iii_iij_0": semidiag,
         "diag_1_iii_iij_0": semidiag,
         "D0_iii_iij_1_candidate": candidate,

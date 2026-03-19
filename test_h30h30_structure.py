@@ -6,10 +6,19 @@ import sympy as sp
 from scripts.h30h30_diagonal_symbolic_probe import _build_diag_only_collapsed, _diag_scaffold_sum
 from scripts.h30h30_diagonal_subspace_probe import _collapsed_diag_vector
 from scripts.h30h30_diagonal_rotmix_probe import _collapsed_tau_vector, UNIVERSAL_DIAG
+from scripts.h30h30_diag_benchmark_basis import build_one_mode_benchmark_basis
 from quartic_channels import (
     _H30H30_DIAG1_COEFFS,
+    _H30H30_DIAG_BENCH_RESID11_COEFFS,
+    _H30H30_DIAG_BENCH_RESID13_COEFFS,
     _H30H30_DIAG1_III_III_CORR_COEFFS,
     _H30H30_DIAG1_III_III_ROTMIX_COEFFS,
+    _H30H30_WATERLIKE_BASIS1_WEIGHTS,
+    _H30H30_WATERLIKE_BASIS2_WEIGHTS,
+    _H30H30_WATERLIKE_SCAFFOLD_BASIS1_WEIGHTS,
+    _H30H30_WATERLIKE_SCAFFOLD_BASIS2_WEIGHTS,
+    _H30H30_WATERLIKE_REDUCED_III_IIJ_WEIGHTS,
+    _H30H30_WATERLIKE_REDUCED_IIJ_IIJ_WEIGHTS,
     channel_h30h30_decomposed,
 )
 import derive_watson_quartic_vanvleck as dv
@@ -292,3 +301,64 @@ def test_h30h30_rotmix_diag1_candidate_is_mixed_only():
     assert _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_xxyy"] == -sp.Rational(529, 12441600)
     assert _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_xxzz"] == -sp.Rational(3, 5120000)
     assert _H30H30_DIAG1_III_III_ROTMIX_COEFFS["tau_yyzz"] == -sp.Rational(121, 1382400)
+
+
+def test_h30h30_one_mode_benchmark_derived_basis_has_rank_four():
+    basis, labels = build_one_mode_benchmark_basis()
+    assert labels == [
+        "diag(seed=7)",
+        "rotmix(seed=7)",
+        "residual(seed=11)",
+        "residual(seed=13)",
+    ]
+    assert np.linalg.matrix_rank(basis) == 4
+
+
+def test_h30h30_one_mode_benchmark_derived_basis_reconstructs_sampled_seeds():
+    basis, _labels = build_one_mode_benchmark_basis()
+    for seed in (7, 11, 13):
+        full = _collapsed_diag_vector(1, seed, diag_rot_only=False)
+        coeffs, *_ = np.linalg.lstsq(basis, full, rcond=None)
+        residual = full - basis @ coeffs
+        assert np.linalg.norm(residual) < 1.0e-12
+
+
+def test_h30h30_benchmark_residual_candidates_are_nontrivial():
+    for coeffs in (_H30H30_DIAG_BENCH_RESID11_COEFFS, _H30H30_DIAG_BENCH_RESID13_COEFFS):
+        assert any(abs(float(sp.N(val))) > 0.0 for val in coeffs.values())
+
+
+def test_h30h30_waterlike_basis_weights_are_nontrivial():
+    for weights in (
+        _H30H30_WATERLIKE_BASIS1_WEIGHTS,
+        _H30H30_WATERLIKE_BASIS2_WEIGHTS,
+        _H30H30_WATERLIKE_SCAFFOLD_BASIS1_WEIGHTS,
+        _H30H30_WATERLIKE_SCAFFOLD_BASIS2_WEIGHTS,
+        _H30H30_WATERLIKE_REDUCED_III_IIJ_WEIGHTS,
+        _H30H30_WATERLIKE_REDUCED_IIJ_IIJ_WEIGHTS,
+    ):
+        assert any(abs(float(sp.N(val))) > 0.0 for val in weights.values())
+
+
+def test_h30h30_waterlike_preview_total_contains_named_candidates():
+    mu1 = sp.MutableDenseNDimArray.zeros(3, 3, 2)
+    phi3 = sp.MutableDenseNDimArray.zeros(2, 2, 2)
+    omega = (sp.Float("0.02"), sp.Float("0.03"))
+    hbar = sp.Float("1.0")
+    mu1[0, 0, 0] = sp.Float("2.0")
+    mu1[0, 0, 1] = sp.Float("7.0")
+    mu1[1, 1, 0] = sp.Float("3.0")
+    mu1[1, 1, 1] = sp.Float("11.0")
+    mu1[2, 2, 0] = sp.Float("5.0")
+    mu1[2, 2, 1] = sp.Float("13.0")
+    phi3[0, 0, 0] = sp.Float("1.2")
+    phi3[0, 0, 1] = sp.Float("0.4")
+    phi3[1, 1, 0] = sp.Float("0.6")
+
+    pieces = channel_h30h30_decomposed(mu1, phi3, omega, hbar)
+    assert any(sp.simplify(val) != 0 for val in pieces["waterlike_basis1_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["waterlike_basis2_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["waterlike_scaffold_basis1_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["waterlike_scaffold_basis2_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["waterlike_reduced_iii_iij_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["waterlike_reduced_iij_iij_candidate"].values())

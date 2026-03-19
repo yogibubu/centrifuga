@@ -246,6 +246,142 @@ rotational benchmark family. This strongly suggests that the diagonal sector
 needs at least one additional benchmark-derived basis vector beyond
 `diag_0 + rotmix`.
 
+This can now be stated more sharply. The helper
+[scripts/h30h30_diag_benchmark_basis.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_diag_benchmark_basis.py)
+builds the minimal one-mode benchmark-derived basis obtained from the sampled
+collapsed probes:
+
+- `diag(seed=7)`
+- `rotmix(seed=7)`
+- `residual(seed=11)`
+- `residual(seed=13)`
+
+and that basis has rank `4` while reconstructing the sampled full-rotation
+vectors for seeds `7`, `11`, and `13` exactly. So the minimal one-mode
+diagonal enlarged sector is no longer consistent with a two-pivot closure.
+The next reconstruction step must therefore target at least a four-vector
+benchmark-derived carrier before any solver-facing reduction is attempted.
+
+That four-vector carrier can also be tested immediately on the molecular
+side. The script
+[scripts/h30h30_diag_benchmark_basis_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_diag_benchmark_basis_fit.py)
+fits the external `PFIT/RVCI(E)-VPT` quartic deltas in the basis
+
+- `diag_0_iii_iii`
+- `diag_1_iii_iii_rotmix_candidate`
+- `diag_bench_resid11_candidate`
+- `diag_bench_resid13_candidate`
+
+with the following residual norms:
+
+- `H2O`: about `3.6e1`
+- `H2S`: about `2.25`
+- `H2CO`: about `5.8e-1`
+- `H2CS`: about `1.5e-1`
+
+So the benchmark-derived four-vector basis is already much healthier than the
+old diagonal placeholder pair, and it captures the `H2CO/H2CS` side rather
+well. But `H2O` remains badly described. This strongly suggests that the next
+missing ingredient is not just "more diagonal basis", but specifically a
+water-like correction that is not contained in the one-mode benchmark-derived
+carrier.
+
+The follow-up audit
+[scripts/h30h30_post_bench4_residual_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_post_bench4_residual_audit.py)
+shows something more specific: after the benchmark-derived 4D diagonal fit,
+the remaining `H2O` residual is *not* strongly aligned with the current signed
+`iii,iij` candidate. The one-block correlations are all weak, with the best
+single follow-up currently coming from `diag_0_iij_iij_2_candidate`, not from
+the signed `diag_0_iii_iij_2_resonance_candidate`.
+
+So the next missing `H2O`-like correction does not yet look like a clean
+"turn on the signed near-resonant scaffold" story. The more likely reading is
+that the water-side residual still mixes semidiagonal and off-diagonal
+structures that are not captured by the present coded `iii,iij` / `iij,iij`
+families.
+
+This picture can now be sharpened one step further. The script
+[scripts/h30h30_waterlike_residual_span.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_waterlike_residual_span.py)
+shows that the post-diagonal residuals of `H2O` and `H2S`
+
+- have sampled rank `2` in Watson space;
+- are contained exactly in the span of the *already coded* follow-up families
+  `diag_1_iii_iij_0`, `diag_0_iii_iij_1_candidate`,
+  `diag_0_iii_iij_2_(...)`, `diag_0_iij_iij_(...)`.
+
+So the current evidence no longer points to a *missing new scaffold family* on
+the water side. Instead, it points to a poor basis choice inside the existing
+semi-/off-diagonal follow-up span.
+
+One must however be careful not to overinterpret raw interpolation. The helper
+[scripts/h30h30_diag4_plus_water2_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_diag4_plus_water2_fit.py)
+shows that adding a rank-2 "water-like" residual basis to the diagonal 4D
+carrier reproduces the four benchmark molecules exactly, but this is partly a
+dimensionality effect in the 5D Watson parameter space. The meaningful point is
+not exact interpolation; it is that the residual correction still appears to be
+low-rank and already lives inside the present follow-up scaffold span.
+
+The two orthonormal water-like directions are now also exposed operationally in
+[quartic_channels.py](/Users/vincenzobarone/centrifugal/quartic_channels.py)
+as
+
+- `waterlike_basis1_candidate`
+- `waterlike_basis2_candidate`
+
+obtained as fixed linear combinations of the currently coded follow-up
+scaffolds. They should be interpreted as *diagnostic basis vectors* of the
+semi-/off-diagonal residual sector, not as normalized physical contributions to
+be added with unit coefficient.
+
+For interpretation, an even cleaner representation is now available through
+[scripts/h30h30_waterlike_scaffold_basis.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_waterlike_scaffold_basis.py).
+In scaffold coefficient space, the sampled water-like residual is again rank
+`2`, and its dominant directions are:
+
+- an `iii,iij`-dominated axis led by `diag_0_iii_iij_1_candidate`, with
+  subleading signed and `iij,iij` admixtures;
+- an `iij,iij`-dominated axis led by
+  `diag_0_iij_iij_1_candidate` / `diag_0_iij_iij_2_candidate`.
+
+These scaffold-space directions are also exposed in
+[quartic_channels.py](/Users/vincenzobarone/centrifugal/quartic_channels.py)
+as
+
+- `waterlike_scaffold_basis1_candidate`
+- `waterlike_scaffold_basis2_candidate`
+
+and are currently the most interpretable summary of the residual sector beyond
+the diagonal benchmark-derived carrier.
+
+An even cleaner reduction is now available. If the first scaffold-space
+direction is projected onto the `iii,iij` family only, and the second onto the
+`iij,iij` family only, the resulting reduced pivots
+
+- `waterlike_reduced_iii_iij_candidate`
+- `waterlike_reduced_iij_iij_candidate`
+
+give the simplest interpretable summary of the residual sector. They do *not*
+reproduce the `H2O/H2S` residual as accurately as the unreduced two-vector
+water-like basis, but they show that the dominant content separates into:
+
+- one reduced `iii,iij` pivot;
+- one reduced `iij,iij` pivot.
+
+This is presently the cleanest roadmap for the BCH-side closure of `H30H30`.
+
+The last sanity check is global, not species-specific. The script
+[scripts/h30h30_diag6_global_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_diag6_global_fit.py)
+fits all four benchmark molecules simultaneously in the six-vector basis
+
+- diagonal benchmark carrier `diag4`
+- water-like residual carrier `water2`
+
+with *shared* coefficients. That fit fails badly: the residual norms remain
+large for all four systems and the fitted norms become strongly distorted.
+So the current six-vector carrier is a useful diagnostic organization of the
+channel, but it is not yet a solver-facing universal parameterization with
+species-independent coefficients.
+
 ### 5. A first signed ``iii,iij`` family is now visible
 
 The new candidate
