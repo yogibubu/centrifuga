@@ -146,6 +146,21 @@ def _rotate_abc(A: float, B: float, C: float, rep_from: str, rep_to: str) -> tup
     return C, A, B
 
 
+def _flip_handedness_abc(A: float, B: float, C: float) -> tuple[float, float, float]:
+    """Return the fixed-representation r<->l flip by swapping the last two axes."""
+    return A, C, B
+
+
+def _flip_tau_last_two_axes(tau: np.ndarray) -> np.ndarray:
+    """Swap the last two local axes in the compressed quartic tensor."""
+    tau = np.asarray(tau, dtype=float).reshape(6)
+    return tau[np.array([0, 2, 1, 4, 3, 5], dtype=int)]
+
+
+def _rep_label(rep: str, handedness: str = "r") -> str:
+    return f"{_norm_rep(rep)}{handedness.lower()}"
+
+
 # --- Quartic Yamada / Yamada-like maps --------------------------------------------
 
 def get_Q_A(rep: str, A: float, B: float, C: float) -> np.ndarray:
@@ -574,6 +589,22 @@ def _h22_scalar_diagnostic(tau_std: dict[str, float], tau_h22: dict[str, float])
     }
 
 
+def _h22_intrinsic_share_diagnostic(
+    tau_h22: dict[str, float],
+    tau_intrinsic: dict[str, float],
+) -> dict[str, float]:
+    tau_h22_mat = _tau_matrix_from_compressed_tau_float(tau_h22)
+    tau_intrinsic_mat = _tau_matrix_from_compressed_tau_float(tau_intrinsic)
+    h22_norm = float(np.linalg.norm(tau_h22_mat, ord="fro"))
+    intrinsic_norm = float(np.linalg.norm(tau_intrinsic_mat, ord="fro"))
+    share = intrinsic_norm / h22_norm if h22_norm > 0.0 else float("inf")
+    return {
+        "D_N": share,
+        "tau_h22_fro": h22_norm,
+        "tau_intrinsic_fro": intrinsic_norm,
+    }
+
+
 def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[str, object]:
     rep = _norm_rep(representation)
     red = _norm_reduction(reduction)
@@ -597,25 +628,39 @@ def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[
     tau_std = channel_h12h12(mu1, omega_au)
     tau_h22 = channel_h22(mu2, omega_au, sp.Integer(1))
     h22_decomp = channel_h22_from_mu1_intrinsic(mu1, intrinsic, inertia0, omega_au, sp.Integer(1))
-    sigma, sigma1 = _sigma_values_quartic(*[float(x) for x in model.abc_mhz])
-    taup = _gaussian_tauprime_from_compressed_tau(tau_h22)
-    tmat = gaussian_t_from_tauprime(taup)
-    watson_a = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_asymmetric_a_from_t(tmat, sp.Float(sigma)).items()}
-    watson_s = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_symmetric_from_t(tmat, sp.Float(sigma1)).items()}
+    rotor_limit = classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
 
     decomp_khz: dict[str, dict[str, float]] = {}
-    for name, tau in h22_decomp.items():
-        taup_piece = _gaussian_tauprime_from_compressed_tau(tau)
-        tmat_piece = gaussian_t_from_tauprime(taup_piece)
-        if red == "A":
-            piece = gaussian_asymmetric_a_from_t(tmat_piece, sp.Float(sigma))
-        else:
-            piece = gaussian_symmetric_from_t(tmat_piece, sp.Float(sigma1))
-        decomp_khz[name] = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in piece.items()}
-
-    total = watson_a if red == "A" else watson_s
     tau_std_float = {k: float(sp.N(v)) for k, v in tau_std.items()}
     tau_h22_float = {k: float(sp.N(v)) for k, v in tau_h22.items()}
+    tau_intrinsic_float = {k: float(sp.N(v)) for k, v in h22_decomp["intrinsic"].items()}
+    tau_h22_khz = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in tau_h22.items()}
+
+    if rotor_limit["is_special_limit"]:
+        watson_a: dict[str, float] = {}
+        watson_s: dict[str, float] = {}
+        total_special = project_special_quartic_constants(
+            tau_h22_khz,
+            np.asarray(model.abc_mhz, dtype=float),
+            np.asarray(model.moments_amu_a2, dtype=float),
+        )
+        total = {} if total_special is None else dict(total_special["quartic_mhz"])
+    else:
+        sigma, sigma1 = _sigma_values_quartic(*[float(x) for x in model.abc_mhz])
+        taup = _gaussian_tauprime_from_compressed_tau(tau_h22)
+        tmat = gaussian_t_from_tauprime(taup)
+        watson_a = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_asymmetric_a_from_t(tmat, sp.Float(sigma)).items()}
+        watson_s = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_symmetric_from_t(tmat, sp.Float(sigma1)).items()}
+        for name, tau in h22_decomp.items():
+            taup_piece = _gaussian_tauprime_from_compressed_tau(tau)
+            tmat_piece = gaussian_t_from_tauprime(taup_piece)
+            if red == "A":
+                piece = gaussian_asymmetric_a_from_t(tmat_piece, sp.Float(sigma))
+            else:
+                piece = gaussian_symmetric_from_t(tmat_piece, sp.Float(sigma1))
+            decomp_khz[name] = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in piece.items()}
+        total = watson_a if red == "A" else watson_s
+
     return {
         "representation": rep,
         "reduction": red,
@@ -626,8 +671,11 @@ def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[
         "h22_decomposition_khz": decomp_khz,
         "tau_std_float": tau_std_float,
         "tau_h22_float": tau_h22_float,
+        "tau_intrinsic_float": tau_intrinsic_float,
         "d_diagnostic": _h22_scalar_diagnostic(tau_std_float, tau_h22_float),
-        "maxabs_total_khz": float(max(abs(v) for v in total.values())),
+        "dn_diagnostic": _h22_intrinsic_share_diagnostic(tau_h22_float, tau_intrinsic_float),
+        "h22_tau_total_khz": tau_h22_khz,
+        "maxabs_total_khz": float(max((abs(v) for v in total.values()), default=0.0)),
     }
 
 
@@ -1232,7 +1280,11 @@ class App(tk.Tk):
             ctrl,
             text="Manual quartic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
         ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
-        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=3, column=1, columnspan=6, sticky="w", pady=(4, 0))
+        ttk.Label(
+            ctrl,
+            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
+        ).grid(row=3, column=1, columnspan=6, sticky="w")
+        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=4, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         grid = ttk.Frame(parent)
         grid.pack(fill=tk.X, pady=(12, 0))
@@ -1362,8 +1414,16 @@ class App(tk.Tk):
             ctrl,
             text="Manual sextic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
         ).grid(row=2, column=1, columnspan=7, sticky="w", pady=(4, 0))
-        ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=3, column=1, columnspan=7, sticky="w")
-        ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=4, column=1, columnspan=7, sticky="w", pady=(4, 0))
+        ttk.Label(
+            ctrl,
+            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
+        ).grid(row=3, column=1, columnspan=7, sticky="w")
+        ttk.Label(
+            ctrl,
+            text="The validated sextic transport currently covers cyclic right-handed representation changes; the fixed-representation r<->l flip does not preserve the validated 5D sextic subspace and is therefore reported explicitly but not generated as a separate numeric target.",
+        ).grid(row=4, column=1, columnspan=7, sticky="w")
+        ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=5, column=1, columnspan=7, sticky="w")
+        ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=6, column=1, columnspan=7, sticky="w", pady=(4, 0))
 
         h22s_frame = ttk.LabelFrame(parent, text="Optional sextic analysis from harmonic input", padding=8)
         h22s_frame.pack(fill=tk.X, pady=(10, 0))
@@ -1844,9 +1904,9 @@ class App(tk.Tk):
 
             self.q_report.delete("1.0", tk.END)
             self.q_report.insert(tk.END, "Quartic transform completed.\n\n")
-            self.q_report.insert(tk.END, f"Input: rep={rep_in}, reduction={red}, method={m_used}\n")
-            self.q_report.insert(tk.END, f"Output #1: rep={rep_outs[0]}, reduction={red}\n")
-            self.q_report.insert(tk.END, f"Output #2: rep={rep_outs[1]}, reduction={red}\n")
+            self.q_report.insert(tk.END, f"Input: rep={_rep_label(rep_in)}, reduction={red}, method={m_used}\n")
+            self.q_report.insert(tk.END, f"Output #1: rep={_rep_label(rep_outs[0])}, reduction={red}\n")
+            self.q_report.insert(tk.END, f"Output #2: rep={_rep_label(rep_outs[1])}, reduction={red}\n")
             meta = self._set_symmetry_status_from_entry("q_symm_xyz")
             if meta:
                 abc_xyz = _abc_from_xyz_meta(meta)
@@ -1862,12 +1922,27 @@ class App(tk.Tk):
                         tk.END,
                         "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
                         f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
-                        f"input constants interpreted as rep={rep_in}, reduction={red}.\n",
+                        f"input constants interpreted as rep={_rep_label(rep_in)}, reduction={red}.\n",
                     )
             self.q_report.insert(
                 tk.END,
                 "Quartic transform uses the corrected pseudoinverse tensor route "
                 "tau -> tau' -> T -> Watson constants.\n",
+            )
+            flip_abc = _flip_handedness_abc(A, B, C)
+            self.q_report.insert(
+                tk.END,
+                f"Fixed-representation handedness flip: {_rep_label(rep_in)} <-> {_norm_rep(rep_in)}l is obtained by swapping the last two axes, "
+                f"so ABC=({A:.6f}, {B:.6f}, {C:.6f}) MHz -> ({flip_abc[0]:.6f}, {flip_abc[1]:.6f}, {flip_abc[2]:.6f}) MHz.\n",
+            )
+            tau_flip = _flip_tau_last_two_axes(tau_in)
+            D_flip = _quartic_forward_constants(red, tau_flip, *flip_abc)
+            names = QUARTIC_A_NAMES if red == "A" else QUARTIC_S_NAMES
+            self.q_report.insert(
+                tk.END,
+                f"Same-representation opposite-handedness constants ({_norm_rep(rep_in)}l): "
+                + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names, D_flip))
+                + "\n",
             )
 
             # Stability diagnostics for each linear transform.
@@ -1880,18 +1955,18 @@ class App(tk.Tk):
             tb1 = compute_T_over_B(_rotate_abc(A, B, C, rep_in, rep_outs[0])[1], D1)
             tb2 = compute_T_over_B(_rotate_abc(A, B, C, rep_in, rep_outs[1])[1], D2)
             self.q_report.insert(tk.END, "\nStability diagnostics\n")
-            self.q_report.insert(tk.END, f"{rep_in}->{rep_outs[0]}: cond2={m1['cond2']:.3e}, cond1={m1['cond1']:.3e}, condinf={m1['condinf']:.3e}\n")
+            self.q_report.insert(tk.END, f"{_rep_label(rep_in)}->{_rep_label(rep_outs[0])}: cond2={m1['cond2']:.3e}, cond1={m1['cond1']:.3e}, condinf={m1['condinf']:.3e}\n")
             self.q_report.insert(tk.END, f"                sigma_min={m1['sigma_min']:.3e}, sigma_max={m1['sigma_max']:.3e}, cond2*eps={m1['amp_eps']:.3e}\n")
             self.q_report.insert(tk.END, f"                warning={stability_warning(m1['cond2'])}, s111={s1:.3e}, T/B={tb1:.3e}\n")
-            self.q_report.insert(tk.END, f"{rep_in}->{rep_outs[1]}: cond2={m2['cond2']:.3e}, cond1={m2['cond1']:.3e}, condinf={m2['condinf']:.3e}\n")
+            self.q_report.insert(tk.END, f"{_rep_label(rep_in)}->{_rep_label(rep_outs[1])}: cond2={m2['cond2']:.3e}, cond1={m2['cond1']:.3e}, condinf={m2['condinf']:.3e}\n")
             self.q_report.insert(tk.END, f"                sigma_min={m2['sigma_min']:.3e}, sigma_max={m2['sigma_max']:.3e}, cond2*eps={m2['amp_eps']:.3e}\n")
             self.q_report.insert(tk.END, f"                warning={stability_warning(m2['cond2'])}, s111={s2:.3e}, T/B={tb2:.3e}\n")
             self.q_report.insert(tk.END, f"Gaps (MHz): A-B={m1['A_minus_B']:.6f}, B-C={m1['B_minus_C']:.6f}, A-C={m1['A_minus_C']:.6f}\n")
             self.q_report.insert(tk.END, "\nTau' spectral invariants\n")
             for label, spec in (
-                (rep_in, spec_in),
-                (rep_outs[0], spec1),
-                (rep_outs[1], spec2),
+                (_rep_label(rep_in), spec_in),
+                (_rep_label(rep_outs[0]), spec1),
+                (_rep_label(rep_outs[1]), spec2),
             ):
                 self.q_report.insert(
                     tk.END,
@@ -1907,9 +1982,9 @@ class App(tk.Tk):
                 )
             self.q_report.insert(tk.END, "\nReduced 3+2 coordinates on pseudoinverse slice\n")
             for label, red5 in (
-                (rep_in, red5_in),
-                (rep_outs[0], red5_1),
-                (rep_outs[1], red5_2),
+                (_rep_label(rep_in), red5_in),
+                (_rep_label(rep_outs[0]), red5_1),
+                (_rep_label(rep_outs[1]), red5_2),
             ):
                 self.q_report.insert(
                     tk.END,
@@ -1925,7 +2000,7 @@ class App(tk.Tk):
             rt2 = float(np.max(np.abs(D2_back - D_in)))
             self.q_report.insert(
                 tk.END,
-                f"Tensor round-trip max diff: {rt1:.3e} via {rep_outs[0]}, {rt2:.3e} via {rep_outs[1]}\n",
+                f"Tensor round-trip max diff: {rt1:.3e} via {_rep_label(rep_outs[0])}, {rt2:.3e} via {_rep_label(rep_outs[1])}\n",
             )
 
             self.last_quartic_result = {
@@ -2033,29 +2108,42 @@ class App(tk.Tk):
                 inertia0 = _sympy_rank2_tensor(np.asarray(model.i_tensor_au, dtype=float))
                 tau_h22 = channel_h22(mu2, omega_au, sp.Integer(1))
                 h22_decomp = channel_h22_from_mu1_intrinsic(mu1, intrinsic, inertia0, omega_au, sp.Integer(1))
-                sigma, sigma1 = _sigma_values_quartic(*[float(x) for x in model.abc_mhz])
-                taup = _gaussian_tauprime_from_compressed_tau(tau_h22)
-                tmat = gaussian_t_from_tauprime(taup)
-                watson_a = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_asymmetric_a_from_t(tmat, sp.Float(sigma)).items()}
-                watson_s = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_symmetric_from_t(tmat, sp.Float(sigma1)).items()}
+                rotor_limit = classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
                 decomp_khz: dict[str, dict[str, float]] = {}
                 decomp_tau_khz: dict[str, dict[str, float]] = {}
+                tau_h22_khz = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in tau_h22.items()}
                 for name, tau in h22_decomp.items():
-                    taup_piece = _gaussian_tauprime_from_compressed_tau(tau)
-                    tmat_piece = gaussian_t_from_tauprime(taup_piece)
-                    piece = gaussian_asymmetric_a_from_t(tmat_piece, sp.Float(sigma)) if red == "A" else gaussian_symmetric_from_t(tmat_piece, sp.Float(sigma1))
-                    decomp_khz[name] = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in piece.items()}
                     decomp_tau_khz[name] = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in tau.items()}
-                total = watson_a if red == "A" else watson_s
+                if rotor_limit["is_special_limit"]:
+                    watson_a = {}
+                    watson_s = {}
+                    total_special = project_special_quartic_constants(
+                        tau_h22_khz,
+                        np.asarray(model.abc_mhz, dtype=float),
+                        np.asarray(model.moments_amu_a2, dtype=float),
+                    )
+                    total = {} if total_special is None else dict(total_special["quartic_mhz"])
+                else:
+                    sigma, sigma1 = _sigma_values_quartic(*[float(x) for x in model.abc_mhz])
+                    taup = _gaussian_tauprime_from_compressed_tau(tau_h22)
+                    tmat = gaussian_t_from_tauprime(taup)
+                    watson_a = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_asymmetric_a_from_t(tmat, sp.Float(sigma)).items()}
+                    watson_s = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in gaussian_symmetric_from_t(tmat, sp.Float(sigma1)).items()}
+                    for name, tau in h22_decomp.items():
+                        taup_piece = _gaussian_tauprime_from_compressed_tau(tau)
+                        tmat_piece = gaussian_t_from_tauprime(taup_piece)
+                        piece = gaussian_asymmetric_a_from_t(tmat_piece, sp.Float(sigma)) if red == "A" else gaussian_symmetric_from_t(tmat_piece, sp.Float(sigma1))
+                        decomp_khz[name] = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in piece.items()}
+                    total = watson_a if red == "A" else watson_s
                 res = {
                     "representation": rep,
                     "reduction": red,
                     "abc_mhz": tuple(float(x) for x in model.abc_mhz),
                     "h22_total_khz": total,
                     "h22_decomposition_khz": decomp_khz,
-                    "h22_tau_total_khz": {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in tau_h22.items()},
+                    "h22_tau_total_khz": tau_h22_khz,
                     "h22_tau_decomposition_khz": decomp_tau_khz,
-                    "maxabs_total_khz": float(max(abs(v) for v in total.values())),
+                    "maxabs_total_khz": float(max((abs(v) for v in total.values()), default=0.0)),
                 }
             names = ("DJ", "DJK", "DK", "dJ", "dK") if red == "A" else ("DJ", "DJK", "DK", "d1", "d2")
 
@@ -2105,6 +2193,14 @@ class App(tk.Tk):
                 "component-wise D_ab: "
                 + ", ".join(f"{lbl}={float(val):.6g}" for lbl, val in d_diag["componentwise"].items())
                 + "\n",
+            )
+            dn_diag = res["dn_diagnostic"]
+            self.q_report.insert(
+                tk.END,
+                "Intrinsic share D_N = ||tau(N)||_F / ||tau(H22)||_F = "
+                f"{float(dn_diag['D_N']):.6g} "
+                f"(||tau(N)||_F={float(dn_diag['tau_intrinsic_fro']):.6g}, "
+                f"||tau(H22)||_F={float(dn_diag['tau_h22_fro']):.6g})\n",
             )
             self.q_report.insert(tk.END, f"max|H22|={res['maxabs_total_khz']:.6g} kHz\n")
             total = res["h22_total_khz"]
@@ -2572,9 +2668,9 @@ class App(tk.Tk):
 
             self.s_report.delete("1.0", tk.END)
             self.s_report.insert(tk.END, "Sextic tensor transform completed.\n\n")
-            self.s_report.insert(tk.END, f"Input: rep={rep_in}, reduction={red_in}\n")
-            self.s_report.insert(tk.END, f"Output #1: rep={rep_outs[0]}, reduction={red_out}\n")
-            self.s_report.insert(tk.END, f"Output #2: rep={rep_outs[1]}, reduction={red_out}\n")
+            self.s_report.insert(tk.END, f"Input: rep={_rep_label(rep_in)}, reduction={red_in}\n")
+            self.s_report.insert(tk.END, f"Output #1: rep={_rep_label(rep_outs[0])}, reduction={red_out}\n")
+            self.s_report.insert(tk.END, f"Output #2: rep={_rep_label(rep_outs[1])}, reduction={red_out}\n")
             meta = self._set_symmetry_status_from_entry("s_symm_xyz")
             if meta:
                 abc_xyz = _abc_from_xyz_meta(meta)
@@ -2591,7 +2687,7 @@ class App(tk.Tk):
                         tk.END,
                         "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
                         f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
-                        f"input constants interpreted as rep={rep_in}, reduction={red_in}.\n",
+                        f"input constants interpreted as rep={_rep_label(rep_in)}, reduction={red_in}.\n",
                     )
                     self.s_report.insert(
                         tk.END,
@@ -2609,6 +2705,18 @@ class App(tk.Tk):
                     f"XYZ=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
                     f"max|ΔABC|={delta_info['max_delta_abc_mhz']:.6f} MHz.\n",
                 )
+            flip_abc = _flip_handedness_abc(A, B, C)
+            self.s_report.insert(
+                tk.END,
+                f"Fixed-representation handedness flip: {_rep_label(rep_in)} <-> {_norm_rep(rep_in)}l is obtained by swapping the last two axes, "
+                f"so ABC=({A:.6f}, {B:.6f}, {C:.6f}) MHz -> ({flip_abc[0]:.6f}, {flip_abc[1]:.6f}, {flip_abc[2]:.6f}) MHz.\n",
+            )
+            self.s_report.insert(
+                tk.END,
+                "Explicit opposite-handed sextic constants are not generated as a separate numeric target in the current validated 5D transport, "
+                "because the fixed-representation r<->l flip does not preserve that sextic physical subspace. "
+                "Use the reported axis swap together with the appendix table to reinterpret the handedness convention.\n",
+            )
             self.s_report.insert(
                 tk.END,
                 "Sextic transform uses the validated 5D invariant-subspace route with explicit A<->S conversion.\n"
@@ -2620,11 +2728,11 @@ class App(tk.Tk):
             self.s_report.insert(tk.END, f"\nPhysical-subspace residuals: in={phys_in:.3e}, out1={phys1:.3e}, out2={phys2:.3e}\n")
             self.s_report.insert(
                 tk.END,
-                f"Round-trip check ({rep_in}->{rep_outs[0]}->{rep_in}) max error: {err1:.3e}\n",
+                f"Round-trip check ({_rep_label(rep_in)}->{_rep_label(rep_outs[0])}->{_rep_label(rep_in)}) max error: {err1:.3e}\n",
             )
             self.s_report.insert(
                 tk.END,
-                f"Round-trip check ({rep_in}->{rep_outs[1]}->{rep_in}) max error: {err2:.3e}\n",
+                f"Round-trip check ({_rep_label(rep_in)}->{_rep_label(rep_outs[1])}->{_rep_label(rep_in)}) max error: {err2:.3e}\n",
             )
             self.s_report.insert(
                 tk.END,

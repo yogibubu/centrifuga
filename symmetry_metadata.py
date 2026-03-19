@@ -486,6 +486,111 @@ def _abelian_character_table(point_group: str, axis_label: str | None, labels: t
     return None
 
 
+def _nonabelian_operation_keys(point_group: str, labels: list[str]) -> tuple[str, ...] | None:
+    if point_group == "C3v":
+        sigma_v = next((lab for lab in labels if lab.startswith("sigma_v")), None)
+        need = ("E", "C3z^1", sigma_v) if sigma_v is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D3":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy")), None)
+        need = ("E", "C3z^1", c2_perp) if c2_perp is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D3h":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy")), None)
+        sigma_v = next((lab for lab in labels if lab.startswith("sigma_v")), None)
+        need = ("E", "C3z^1", c2_perp, "sigma_xy", "S3", sigma_v) if c2_perp is not None and sigma_v is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    return None
+
+
+def _nonabelian_character_table(point_group: str, labels: tuple[str, ...]) -> dict[str, tuple[int, ...]] | None:
+    if point_group == "C3v":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "E": (2, -1, 0),
+        }
+    if point_group == "D3":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "E": (2, -1, 0),
+        }
+    if point_group == "D3h":
+        return {
+            "A1'": (1, 1, 1, 1, 1, 1),
+            "A2'": (1, 1, -1, 1, 1, -1),
+            "E'": (2, -1, 0, 2, -1, 0),
+            'A1"': (1, 1, 1, -1, -1, -1),
+            'A2"': (1, 1, -1, -1, -1, 1),
+            'E"': (2, -1, 0, -2, 1, 0),
+        }
+    return None
+
+
+def _frequency_blocks(freq_cm: np.ndarray, *, tol: float = 1.0e-3) -> list[list[int]]:
+    vals = np.asarray(freq_cm, dtype=float).reshape(-1)
+    if vals.size == 0:
+        return []
+    blocks: list[list[int]] = [[0]]
+    for idx in range(1, vals.size):
+        if abs(vals[idx] - vals[blocks[-1][-1]]) <= tol:
+            blocks[-1].append(idx)
+        else:
+            blocks.append([idx])
+    return blocks
+
+
+def _linear_sigma_v_label(axis_label: str, labels: list[str]) -> str | None:
+    if axis_label == "x":
+        candidates = ("sigma_xy", "sigma_xz")
+    elif axis_label == "y":
+        candidates = ("sigma_xy", "sigma_yz")
+    else:
+        candidates = ("sigma_xz", "sigma_yz")
+    return next((lab for lab in candidates if lab in labels), None)
+
+
+def _linear_mode_irreps(
+    point_group: str,
+    axis_label: str,
+    labels: list[str],
+    op_map: dict[str, tuple[np.ndarray, list[int]]],
+    vib_arr: np.ndarray,
+    freq_cm: np.ndarray,
+    n_atoms: int,
+) -> list[str]:
+    out: list[str] = []
+    inv_key = "i" if point_group == "Dinfh" and "i" in op_map else None
+    sigma_v_key = _linear_sigma_v_label(axis_label, labels)
+
+    for block in _frequency_blocks(freq_cm):
+        V = vib_arr[:, block]
+        parity = ""
+        if inv_key is not None:
+            rot, perm = op_map[inv_key]
+            op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
+            tr = float(np.trace(V.T @ (op @ V)))
+            parity = "_g" if tr > 0.0 else "_u"
+
+        if len(block) == 1:
+            sign = ""
+            if sigma_v_key is not None:
+                rot, perm = op_map[sigma_v_key]
+                op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
+                overlap = float(V[:, 0].T @ (op @ V[:, 0]))
+                sign = "+" if overlap >= 0.0 else "-"
+            out.append(f"Sigma{parity}{sign}")
+            continue
+
+        if len(block) == 2:
+            out.extend([f"Pi{parity}", f"Pi{parity}"])
+            continue
+
+        out.extend(["?"] * len(block))
+    return out
+
+
 def assign_normal_mode_irreps(model: Any, *, tol: float = 1.0e-5) -> list[str] | None:
     symbols = getattr(model, "symbols", None)
     coords = getattr(model, "coords_pa_ang", None)
@@ -500,33 +605,63 @@ def assign_normal_mode_irreps(model: Any, *, tol: float = 1.0e-5) -> list[str] |
     elements, _classes, permutations = symmetry_elements_from_geometry(symbols, np.asarray(coords, dtype=float), tol=1.0e-3)
     op_map = {label: (rot, perm) for (label, rot), perm in zip(elements, permutations)}
     labels = [label for label, _rot in elements]
+    n_atoms = len(symbols)
+    vib_arr = np.asarray(vib, dtype=float)
+    freq_cm = np.asarray(getattr(model, "vib_freq_cm", []), dtype=float)
+    if freq_cm.size != vib_arr.shape[1]:
+        return None
+    _axis_n, axis_label = _highest_cn_axis(labels)
+    axis_label = axis_label if axis_label in {"x", "y", "z"} else "z"
+
+    if point_group in {"Dinfh", "Cinfv"}:
+        return _linear_mode_irreps(point_group, axis_label, labels, op_map, vib_arr, freq_cm, n_atoms)
+
     keys = _abelian_operation_keys(point_group, labels)
+    if keys is not None:
+        chart = _abelian_character_table(point_group, axis_label, keys)
+        if chart is None:
+            return None
+        out: list[str] = []
+        for mode_idx in range(vib_arr.shape[1]):
+            vec = vib_arr[:, mode_idx]
+            chars: list[int] = []
+            supported = True
+            for key in keys:
+                rot, perm = op_map[key]
+                op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
+                overlap = float(vec @ (op @ vec))
+                if abs(abs(overlap) - 1.0) > tol:
+                    supported = False
+                    break
+                chars.append(1 if overlap >= 0.0 else -1)
+            if not supported:
+                out.append("?")
+                continue
+            sig = tuple(chars)
+            match = next((name for name, row in chart.items() if tuple(row) == sig), "?")
+            out.append(match)
+        return out
+
+    keys = _nonabelian_operation_keys(point_group, labels)
     if keys is None:
         return None
-    axis_n, axis_label = _highest_cn_axis(labels)
-    chart = _abelian_character_table(point_group, axis_label, keys)
+    chart = _nonabelian_character_table(point_group, keys)
     if chart is None:
         return None
 
-    n_atoms = len(symbols)
-    vib_arr = np.asarray(vib, dtype=float)
     out: list[str] = []
-    for mode_idx in range(vib_arr.shape[1]):
-        vec = vib_arr[:, mode_idx]
+    for block in _frequency_blocks(freq_cm):
+        V = vib_arr[:, block]
         chars: list[int] = []
         supported = True
         for key in keys:
             rot, perm = op_map[key]
             op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
-            overlap = float(vec @ (op @ vec))
-            if abs(abs(overlap) - 1.0) > tol:
-                supported = False
-                break
-            chars.append(1 if overlap >= 0.0 else -1)
+            chars.append(int(round(float(np.trace(V.T @ (op @ V))))))
         if not supported:
-            out.append("?")
+            out.extend("?" for _ in block)
             continue
         sig = tuple(chars)
         match = next((name for name, row in chart.items() if tuple(row) == sig), "?")
-        out.append(match)
+        out.extend(match for _ in block)
     return out
