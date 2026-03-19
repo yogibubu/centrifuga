@@ -9,7 +9,8 @@ minimal API needed by the app:
 - detect a Schoenflies point group from oriented coordinates,
 - return the associated rotational symmetry number.
 
-It does not attempt irrep assignment of normal modes; that is a separate task.
+It can also assign one-dimensional normal-mode irreps for the abelian groups
+used in the current CeDiTT workflow.
 """
 
 from __future__ import annotations
@@ -389,3 +390,143 @@ def point_group_metadata_from_model(model: Any, *, tol: float = 1.0e-3) -> dict[
         "operation_labels": [label for label, _r in elements],
         "has_permutations": bool(permutations),
     }
+
+
+def _operation_matrix_from_mapping(rotation: np.ndarray, mapping: list[int], n_atoms: int) -> np.ndarray:
+    op = np.zeros((3 * n_atoms, 3 * n_atoms), dtype=float)
+    for i, j in enumerate(mapping):
+        op[3 * i : 3 * i + 3, 3 * j : 3 * j + 3] = rotation
+    return op
+
+
+def _axis_plane_labels(axis: str) -> tuple[str, tuple[str, str], tuple[str, str]]:
+    if axis == "x":
+        return "sigma_yz", ("sigma_xy", "sigma_xz"), ("y", "z")
+    if axis == "y":
+        return "sigma_xz", ("sigma_xy", "sigma_yz"), ("x", "z")
+    return "sigma_xy", ("sigma_xz", "sigma_yz"), ("x", "y")
+
+
+def _abelian_operation_keys(point_group: str, labels: list[str]) -> tuple[str, ...] | None:
+    axis, _axis_name = _highest_cn_axis(labels)
+    axis_use = _axis_name if _axis_name in {"x", "y", "z"} else "z"
+    sigma_h_label, sigma_v_labels, _perp = _axis_plane_labels(axis_use)
+    c2_label = f"C2{axis_use}^1"
+    if point_group == "C1":
+        return ("E",)
+    if point_group == "Ci":
+        return ("E", "i")
+    if point_group == "Cs":
+        for lab in labels:
+            if lab.startswith("sigma"):
+                return ("E", lab)
+        return None
+    if point_group == "C2":
+        return ("E", c2_label) if c2_label in labels else None
+    if point_group == "C2v":
+        need = ("E", c2_label, sigma_v_labels[0], sigma_v_labels[1])
+        return need if all(lab in labels for lab in need) else None
+    if point_group == "C2h":
+        need = ("E", c2_label, "i", sigma_h_label)
+        return need if all(lab in labels for lab in need) else None
+    if point_group == "D2":
+        need = ("E", "C2z^1", "C2y^1", "C2x^1")
+        return need if all(lab in labels for lab in need) else None
+    if point_group == "D2h":
+        need = ("E", "C2z^1", "C2y^1", "C2x^1", "i", "sigma_xy", "sigma_xz", "sigma_yz")
+        return need if all(lab in labels for lab in need) else None
+    return None
+
+
+def _abelian_character_table(point_group: str, axis_label: str | None, labels: tuple[str, ...]) -> dict[str, tuple[int, ...]] | None:
+    if point_group == "C1":
+        return {"A": (1,)}
+    if point_group == "Ci":
+        return {"Ag": (1, 1), "Au": (1, -1)}
+    if point_group == "Cs":
+        return {"A'": (1, 1), "A''": (1, -1)}
+    if point_group == "C2":
+        return {"A": (1, 1), "B": (1, -1)}
+    if point_group == "C2v":
+        if axis_label not in {"x", "y", "z"}:
+            axis_label = "z"
+        sigma_h_label, sigma_v_labels, perp = _axis_plane_labels(axis_label)
+        # Standard naming with the principal C2 axis along ``axis_label``.
+        return {
+            "A1": (1, 1, 1, 1),
+            "A2": (1, 1, -1, -1),
+            f"B1[{perp[0]}]": (1, -1, 1, -1),
+            f"B2[{perp[1]}]": (1, -1, -1, 1),
+        }
+    if point_group == "C2h":
+        return {
+            "Ag": (1, 1, 1, 1),
+            "Bg": (1, -1, 1, -1),
+            "Au": (1, 1, -1, -1),
+            "Bu": (1, -1, -1, 1),
+        }
+    if point_group == "D2":
+        return {
+            "A": (1, 1, 1, 1),
+            "B1": (1, 1, -1, -1),
+            "B2": (1, -1, 1, -1),
+            "B3": (1, -1, -1, 1),
+        }
+    if point_group == "D2h":
+        return {
+            "Ag": (1, 1, 1, 1, 1, 1, 1, 1),
+            "B1g": (1, 1, -1, -1, 1, 1, -1, -1),
+            "B2g": (1, -1, 1, -1, 1, -1, 1, -1),
+            "B3g": (1, -1, -1, 1, 1, -1, -1, 1),
+            "Au": (1, 1, 1, 1, -1, -1, -1, -1),
+            "B1u": (1, 1, -1, -1, -1, -1, 1, 1),
+            "B2u": (1, -1, 1, -1, -1, 1, -1, 1),
+            "B3u": (1, -1, -1, 1, -1, 1, 1, -1),
+        }
+    return None
+
+
+def assign_normal_mode_irreps(model: Any, *, tol: float = 1.0e-5) -> list[str] | None:
+    symbols = getattr(model, "symbols", None)
+    coords = getattr(model, "coords_pa_ang", None)
+    vib = getattr(model, "vib_vecs_mw_pa", None)
+    abc = getattr(model, "abc_mhz", None)
+    moments = getattr(model, "moments_amu_a2", None)
+    if symbols is None or coords is None or vib is None or abc is None or moments is None:
+        return None
+
+    rotor_type = rotor_type_for_symmetry(np.asarray(abc, dtype=float), np.asarray(moments, dtype=float))
+    sigma, point_group = point_group_from_geometry(symbols, np.asarray(coords, dtype=float), rotor_type, tol=1.0e-3)
+    elements, _classes, permutations = symmetry_elements_from_geometry(symbols, np.asarray(coords, dtype=float), tol=1.0e-3)
+    op_map = {label: (rot, perm) for (label, rot), perm in zip(elements, permutations)}
+    labels = [label for label, _rot in elements]
+    keys = _abelian_operation_keys(point_group, labels)
+    if keys is None:
+        return None
+    axis_n, axis_label = _highest_cn_axis(labels)
+    chart = _abelian_character_table(point_group, axis_label, keys)
+    if chart is None:
+        return None
+
+    n_atoms = len(symbols)
+    vib_arr = np.asarray(vib, dtype=float)
+    out: list[str] = []
+    for mode_idx in range(vib_arr.shape[1]):
+        vec = vib_arr[:, mode_idx]
+        chars: list[int] = []
+        supported = True
+        for key in keys:
+            rot, perm = op_map[key]
+            op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
+            overlap = float(vec @ (op @ vec))
+            if abs(abs(overlap) - 1.0) > tol:
+                supported = False
+                break
+            chars.append(1 if overlap >= 0.0 else -1)
+        if not supported:
+            out.append("?")
+            continue
+        sig = tuple(chars)
+        match = next((name for name, row in chart.items() if tuple(row) == sig), "?")
+        out.append(match)
+    return out

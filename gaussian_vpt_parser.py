@@ -32,6 +32,7 @@ class GaussianHarmonicData:
     reduced_masses_amu: np.ndarray
     force_constants_mdyne_a: np.ndarray
     normal_modes: np.ndarray
+    mode_symmetry_labels: tuple[str, ...] | None = None
     harmonic_to_anharmonic: np.ndarray | None = None
 
     def principal_axis_coordinates(self) -> np.ndarray:
@@ -82,6 +83,7 @@ class GaussianHarmonicData:
             reduced_masses_amu=self.reduced_masses_amu[order].copy(),
             force_constants_mdyne_a=self.force_constants_mdyne_a[order].copy(),
             normal_modes=self.normal_modes[:, order].copy(),
+            mode_symmetry_labels=None if self.mode_symmetry_labels is None else tuple(self.mode_symmetry_labels[idx] for idx in order),
             harmonic_to_anharmonic=np.arange(order.size, dtype=int),
         )
 
@@ -255,6 +257,35 @@ def _find_thermochemistry_masses(lines: list[str], n_atoms: int) -> np.ndarray:
     if len(masses) < n_atoms:
         raise ValueError("Could not parse thermochemistry masses.")
     return np.array(masses[:n_atoms], dtype=float)
+
+
+def _find_last_harmonic_mode_symmetry_labels(lines: list[str]) -> tuple[str, ...] | None:
+    indices = [i for i, line in enumerate(lines) if line.strip().startswith("Harmonic frequencies (cm**-1)")]
+    if not indices:
+        return None
+    start = indices[-1]
+    labels: list[str] = []
+    i = start
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith("Frequencies --") or line.startswith("Frequencies ---"):
+            freq_tokens = re.findall(r"[-+]?\d+\.\d+(?:[DdEe][-+]?\d+)?", line)
+            j = i - 1
+            while j >= 0 and not lines[j].strip():
+                j -= 1
+            prev_tokens = lines[j].split() if j >= 0 else []
+            if prev_tokens and len(prev_tokens) >= len(freq_tokens):
+                tail = prev_tokens[-len(freq_tokens):]
+                if all(not re.fullmatch(r"[-+]?\d+(?:\.\d+)?", tok) for tok in tail):
+                    labels.extend(tail)
+                else:
+                    labels.extend(["?"] * len(freq_tokens))
+            else:
+                labels.extend(["?"] * len(freq_tokens))
+        if line.startswith("Fundamental Bands") or line.startswith("And Diagonal Anharmonicity"):
+            break
+        i += 1
+    return tuple(labels) if labels else None
 
 
 def _find_principal_axes(lines: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -723,6 +754,7 @@ def parse_gaussian_harmonic_data(path: str | Path) -> GaussianHarmonicData:
     masses = _find_thermochemistry_masses(lines, len(atomic_numbers))
     moments, principal_axes, rot_ghz = _find_principal_axes(lines)
     freqs, red_masses, force_constants, modes = _find_last_harmonic_modes(lines)
+    mode_symmetry_labels = _find_last_harmonic_mode_symmetry_labels(lines)
     mapping = _find_mode_equivalency(lines, freqs.size)
     return GaussianHarmonicData(
         atomic_numbers=atomic_numbers,
@@ -735,6 +767,7 @@ def parse_gaussian_harmonic_data(path: str | Path) -> GaussianHarmonicData:
         reduced_masses_amu=red_masses,
         force_constants_mdyne_a=force_constants,
         normal_modes=modes,
+        mode_symmetry_labels=mode_symmetry_labels,
         harmonic_to_anharmonic=mapping,
     )
 

@@ -53,12 +53,14 @@ from distortion_workflow import (
     project_special_sextic_constants,
 )
 from symmetry_metadata import (
+    assign_normal_mode_irreps,
     point_group_from_geometry,
     point_group_metadata_from_model,
     rotor_type_for_symmetry,
     symbols_from_atomic_numbers,
 )
 from quartic_channels import (
+    channel_h12h12,
     channel_h22,
     channel_h22_from_mu1_intrinsic,
 )
@@ -535,6 +537,43 @@ def _gaussian_tauprime_from_compressed_tau(tau: dict[str, sp.Expr]) -> dict[tupl
     }
 
 
+def _tau_matrix_from_compressed_tau_float(tau: dict[str, float]) -> np.ndarray:
+    return np.array(
+        [
+            [float(tau["tau_xxxx"]), 0.5 * float(tau["tau_xxyy"]), 0.5 * float(tau["tau_xxzz"])],
+            [0.5 * float(tau["tau_xxyy"]), float(tau["tau_yyyy"]), 0.5 * float(tau["tau_yyzz"])],
+            [0.5 * float(tau["tau_xxzz"]), 0.5 * float(tau["tau_yyzz"]), float(tau["tau_zzzz"])],
+        ],
+        dtype=float,
+    )
+
+
+def _h22_scalar_diagnostic(tau_std: dict[str, float], tau_h22: dict[str, float]) -> dict[str, object]:
+    tau_std_mat = _tau_matrix_from_compressed_tau_float(tau_std)
+    tau_h22_mat = _tau_matrix_from_compressed_tau_float(tau_h22)
+    std_norm = float(np.linalg.norm(tau_std_mat, ord="fro"))
+    h22_norm = float(np.linalg.norm(tau_h22_mat, ord="fro"))
+    scalar = h22_norm / std_norm if std_norm > 0.0 else float("inf")
+    componentwise = {}
+    keys = (
+        ("aa", "tau_xxxx"),
+        ("bb", "tau_yyyy"),
+        ("cc", "tau_zzzz"),
+        ("ab", "tau_xxyy"),
+        ("ac", "tau_xxzz"),
+        ("bc", "tau_yyzz"),
+    )
+    for label, key in keys:
+        denom = float(tau_std[key])
+        componentwise[label] = float(tau_h22[key] / denom) if abs(denom) > 1.0e-14 else float("inf")
+    return {
+        "D": scalar,
+        "tau_std_fro": std_norm,
+        "tau_h22_fro": h22_norm,
+        "componentwise": componentwise,
+    }
+
+
 def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[str, object]:
     rep = _norm_rep(representation)
     red = _norm_reduction(reduction)
@@ -555,6 +594,7 @@ def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[
     mu2 = _sympy_modepair_tensor(np.asarray(model.d2Inv_au, dtype=float))
     intrinsic = _sympy_modepair_tensor(np.asarray(model.d2Inv_intrinsic_au, dtype=float))
     inertia0 = _sympy_rank2_tensor(np.asarray(model.i_tensor_au, dtype=float))
+    tau_std = channel_h12h12(mu1, omega_au)
     tau_h22 = channel_h22(mu2, omega_au, sp.Integer(1))
     h22_decomp = channel_h22_from_mu1_intrinsic(mu1, intrinsic, inertia0, omega_au, sp.Integer(1))
     sigma, sigma1 = _sigma_values_quartic(*[float(x) for x in model.abc_mhz])
@@ -574,6 +614,8 @@ def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[
         decomp_khz[name] = {k: float(CMINV_TO_MHZ * 1000.0 * sp.N(v)) for k, v in piece.items()}
 
     total = watson_a if red == "A" else watson_s
+    tau_std_float = {k: float(sp.N(v)) for k, v in tau_std.items()}
+    tau_h22_float = {k: float(sp.N(v)) for k, v in tau_h22.items()}
     return {
         "representation": rep,
         "reduction": red,
@@ -582,6 +624,9 @@ def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[
         "h22_A_khz": watson_a,
         "h22_S_khz": watson_s,
         "h22_decomposition_khz": decomp_khz,
+        "tau_std_float": tau_std_float,
+        "tau_h22_float": tau_h22_float,
+        "d_diagnostic": _h22_scalar_diagnostic(tau_std_float, tau_h22_float),
         "maxabs_total_khz": float(max(abs(v) for v in total.values())),
     }
 
@@ -643,6 +688,29 @@ def _append_point_group_report(widget: tk.Text, model) -> None:
         f"sigma={meta['rotational_symmetry_number']}, "
         f"rotor class={meta['rotor_type_for_symmetry']}\n",
     )
+
+
+def _append_mode_symmetry_report(widget: tk.Text, model) -> None:
+    try:
+        labels = assign_normal_mode_irreps(model)
+        if not labels:
+            widget.insert(
+                tk.END,
+                "normal-mode symmetries: not yet available for this point group or degeneracy pattern in the current backend.\n",
+            )
+            return
+        entries = [
+            f"Q({idx + 1})={float(freq):.3f} [{labels[idx]}]"
+            for idx, freq in enumerate(np.asarray(model.vib_freq_cm, dtype=float))
+        ]
+        widget.insert(tk.END, "normal-mode symmetries: " + ", ".join(entries) + "\n")
+        if any("[" in label for label in labels):
+            widget.insert(
+                tk.END,
+                "  note: bracketed axis tags indicate the backend principal-axis convention used to distinguish non-totally-symmetric one-dimensional irreps.\n",
+            )
+    except Exception as exc:
+        widget.insert(tk.END, f"normal-mode symmetry assignment unavailable: {exc}\n")
 
 
 def _point_group_from_xyz_file(xyz_path: str) -> dict[str, object]:
@@ -720,6 +788,21 @@ def _abc_delta_info(
         "max_delta_abc_mhz": max_delta,
         "status": _harmonization_status(max_delta),
     }
+
+
+def _format_manual_xyz_consistency_line(
+    manual_abc: tuple[float, float, float] | list[float] | np.ndarray,
+    xyz_abc: tuple[float, float, float] | list[float] | np.ndarray,
+) -> str:
+    info = _abc_delta_info(manual_abc, xyz_abc)
+    src = info["source"]
+    dst = info["target"]
+    return (
+        f"Manual A,B,C vs XYZ [{info['status']}]: "
+        f"manual=({src[0]:.6f}, {src[1]:.6f}, {src[2]:.6f}) MHz; "
+        f"XYZ=({dst[0]:.6f}, {dst[1]:.6f}, {dst[2]:.6f}) MHz; "
+        f"max|ΔABC|={info['max_delta_abc_mhz']:.6f} MHz.\n"
+    )
 
 
 def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None, *, title: str) -> None:
@@ -997,7 +1080,8 @@ class App(tk.Tk):
         self.s_o1_labels: list[ttk.Label] = []
         self.s_o2_labels: list[ttk.Label] = []
         self.last_quartic_result: dict[str, object] | None = None
-        self.symmetry_status_var = tk.StringVar(value="Symmetry not assigned.")
+        self.q_symmetry_status_var = tk.StringVar(value="Quartic XYZ reference: not assigned.")
+        self.s_symmetry_status_var = tk.StringVar(value="Sextic XYZ reference: not assigned.")
 
         self._build_ui()
 
@@ -1075,26 +1159,26 @@ class App(tk.Tk):
         notebook = ttk.Notebook(root)
         notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
-        symm_frame = ttk.Frame(root)
-        symm_frame.pack(fill=tk.X)
-        ttk.Label(symm_frame, textvariable=self.symmetry_status_var).pack(anchor="w")
-
-        status_frame = ttk.Frame(root)
-        status_frame.pack(fill=tk.X)
-        ttk.Label(status_frame, textvariable=self.symmetry_status_var).pack(anchor="w")
-
         q_tab = self._make_scrollable_tab(notebook)
         s_tab = self._make_scrollable_tab(notebook)
         notebook.add(q_tab["container"], text="Quartic")
         notebook.add(s_tab["container"], text="Sextic")
 
-        self._build_quartic_tab(q_tab["content"])
-        self._build_sextic_tab(s_tab["content"])
+        self._build_quartic_tab(q_tab["content"], q_tab["report_host"])
+        self._build_sextic_tab(s_tab["content"], s_tab["report_host"])
 
     def _make_scrollable_tab(self, notebook: ttk.Notebook) -> dict[str, tk.Widget]:
         container = ttk.Frame(notebook)
-        canvas = tk.Canvas(container, highlightthickness=0)
-        vscroll = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        split = ttk.Panedwindow(container, orient=tk.VERTICAL)
+        split.pack(fill=tk.BOTH, expand=True)
+
+        controls_host = ttk.Frame(split)
+        report_host = ttk.LabelFrame(split, text="Results", padding=6)
+        split.add(controls_host, weight=3)
+        split.add(report_host, weight=2)
+
+        canvas = tk.Canvas(controls_host, highlightthickness=0)
+        vscroll = ttk.Scrollbar(controls_host, orient="vertical", command=canvas.yview)
         content = ttk.Frame(canvas, padding=10)
 
         canvas.configure(yscrollcommand=vscroll.set)
@@ -1119,9 +1203,14 @@ class App(tk.Tk):
         for widget in (canvas, content):
             widget.bind("<MouseWheel>", _on_mousewheel, add="+")
 
-        return {"container": container, "canvas": canvas, "content": content}
+        return {
+            "container": container,
+            "canvas": canvas,
+            "content": content,
+            "report_host": report_host,
+        }
 
-    def _build_quartic_tab(self, parent: ttk.Frame) -> None:
+    def _build_quartic_tab(self, parent: ttk.Frame, report_parent: ttk.Frame) -> None:
         ctrl = ttk.Frame(parent)
         ctrl.pack(fill=tk.X)
 
@@ -1143,6 +1232,7 @@ class App(tk.Tk):
             ctrl,
             text="Manual quartic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
         ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
+        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=3, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         grid = ttk.Frame(parent)
         grid.pack(fill=tk.X, pady=(12, 0))
@@ -1171,7 +1261,7 @@ class App(tk.Tk):
             self.q_o2_labels.append(lbl)
             ttk.Entry(grid, width=16, textvariable=self._sv(f"q_out2_{name}", ""), state="readonly").grid(row=8, column=i, padx=4, pady=2)
 
-        h22_frame = ttk.LabelFrame(parent, text="Validated quartic H22 from harmonic input", padding=8)
+        h22_frame = ttk.LabelFrame(parent, text="Validated quartic H22 nonlinearity from harmonic input", padding=8)
         h22_frame.pack(fill=tk.X, pady=(10, 0))
         ttk.Label(h22_frame, text="Formatted checkpoint").grid(row=0, column=0, sticky="w")
         ttk.Entry(h22_frame, width=60, textvariable=self._sv("q_h22_fchk", "")).grid(row=0, column=1, padx=4, sticky="we")
@@ -1190,6 +1280,10 @@ class App(tk.Tk):
                 "When used with a Hessian, XYZ and Hessian must refer to the same Cartesian orientation."
             ),
         ).grid(row=3, column=1, sticky="w", pady=(4, 0))
+        ttk.Label(h22_frame, text="Intrinsic D").grid(row=4, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(h22_frame, width=18, textvariable=self._sv("q_h22_D", ""), state="readonly").grid(row=4, column=1, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(h22_frame, text="max component D_ab").grid(row=4, column=2, sticky="w", pady=(6, 0))
+        ttk.Entry(h22_frame, width=18, textvariable=self._sv("q_h22_Dmax", ""), state="readonly").grid(row=4, column=3, padx=4, sticky="w", pady=(6, 0))
         h22_frame.columnconfigure(1, weight=1)
 
         alpha_frame = ttk.LabelFrame(parent, text="Gaussian alpha parser / mode filtering", padding=8)
@@ -1240,13 +1334,13 @@ class App(tk.Tk):
         ttk.Button(qbtn, text="Export CSV", command=self._export_quartic_csv).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(qbtn, text="Export LaTeX", command=self._export_quartic_latex).pack(side=tk.LEFT, padx=(8, 0))
 
-        self.q_report = scrolledtext.ScrolledText(parent, height=11, wrap="word")
+        self.q_report = scrolledtext.ScrolledText(report_parent, height=12, wrap="word")
         self.q_report.pack(fill=tk.BOTH, expand=True)
 
         self.vars["q_red"].trace_add("write", self._refresh_quartic_labels)
         self._refresh_quartic_labels()
 
-    def _build_sextic_tab(self, parent: ttk.Frame) -> None:
+    def _build_sextic_tab(self, parent: ttk.Frame, report_parent: ttk.Frame) -> None:
         ctrl = ttk.Frame(parent)
         ctrl.pack(fill=tk.X)
 
@@ -1257,6 +1351,8 @@ class App(tk.Tk):
         ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_in", "A")).grid(row=0, column=3, padx=4)
         ttk.Label(ctrl, text="Output reduction").grid(row=0, column=4, sticky="w")
         ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_out", "A")).grid(row=0, column=5, padx=4)
+        ttk.Button(ctrl, text="Preset A->A", command=lambda: self._set_sextic_preset("A")).grid(row=0, column=6, padx=(8, 0))
+        ttk.Button(ctrl, text="Preset S->S", command=lambda: self._set_sextic_preset("S")).grid(row=0, column=7, padx=(4, 0))
         ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Entry(ctrl, width=48, textvariable=self._sv("s_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
         ttk.Button(ctrl, text="Browse", command=self._browse_s_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
@@ -1265,7 +1361,9 @@ class App(tk.Tk):
         ttk.Label(
             ctrl,
             text="Manual sextic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
-        ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
+        ).grid(row=2, column=1, columnspan=7, sticky="w", pady=(4, 0))
+        ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=3, column=1, columnspan=7, sticky="w")
+        ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=4, column=1, columnspan=7, sticky="w", pady=(4, 0))
 
         h22s_frame = ttk.LabelFrame(parent, text="Optional sextic analysis from harmonic input", padding=8)
         h22s_frame.pack(fill=tk.X, pady=(10, 0))
@@ -1294,6 +1392,10 @@ class App(tk.Tk):
                 "If a Gaussian anharmonic log is also provided, the app uses it only to recover the genuine 3-index cubic remainder."
             ),
         ).grid(row=5, column=1, sticky="w", pady=(4, 0))
+        ttk.Label(h22s_frame, text="Companion quartic D").grid(row=6, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(h22s_frame, width=18, textvariable=self._sv("s_h22_D", ""), state="readonly").grid(row=6, column=1, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(h22s_frame, text="largest linear component").grid(row=6, column=2, sticky="w", pady=(6, 0))
+        ttk.Entry(h22s_frame, width=24, textvariable=self._sv("s_h22_linear_max", ""), state="readonly").grid(row=6, column=3, padx=4, sticky="w", pady=(6, 0))
         h22s_frame.columnconfigure(1, weight=1)
 
         grid = ttk.Frame(parent)
@@ -1329,7 +1431,7 @@ class App(tk.Tk):
         ttk.Button(sbtn, text="Compute harmonic/cubic sextic hierarchy", command=self._run_sextic_hierarchy).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Button(sbtn, text="Compute sextic H22-linear diagnostic", command=self._run_sextic_h22_from_fchk).pack(side=tk.LEFT, padx=(8, 0))
 
-        self.s_report = scrolledtext.ScrolledText(parent, height=10, wrap="word")
+        self.s_report = scrolledtext.ScrolledText(report_parent, height=12, wrap="word")
         self.s_report.pack(fill=tk.BOTH, expand=True)
         self.vars["s_red_in"].trace_add("write", self._refresh_sextic_labels)
         self.vars["s_red_out"].trace_add("write", self._refresh_sextic_labels)
@@ -1353,6 +1455,12 @@ class App(tk.Tk):
             lbl.configure(text=nm)
         for lbl, nm in zip(self.s_o2_labels, out_names):
             lbl.configure(text=nm)
+
+    def _set_sextic_preset(self, reduction: str) -> None:
+        red = _norm_reduction(reduction)
+        self.vars["s_rep_in"].set("I")
+        self.vars["s_red_in"].set(red)
+        self.vars["s_red_out"].set(red)
 
     def _browse_h22_fchk(self) -> None:
         pth = filedialog.askopenfilename(
@@ -1440,17 +1548,30 @@ class App(tk.Tk):
     def _set_symmetry_status_from_entry(self, entry_key: str) -> dict[str, object] | None:
         path = self.vars[entry_key].get().strip()
         if not path:
-            self.symmetry_status_var.set("Symmetry not assigned.")
+            self._set_status_var(entry_key, None)
             return None
         meta = _symmetry_meta_from_xyz_path(path)
-        self._set_symmetry_status(meta)
+        self._set_symmetry_status(entry_key, meta)
         if meta and entry_key in {"q_symm_xyz", "s_symm_xyz"}:
             self._apply_xyz_abc_reference(meta)
         return meta
 
-    def _set_symmetry_status(self, meta: dict[str, object] | None) -> None:
+    def _status_var_for_key(self, entry_key: str) -> tk.StringVar:
+        if entry_key.startswith("q_"):
+            return self.q_symmetry_status_var
+        return self.s_symmetry_status_var
+
+    def _set_status_var(self, entry_key: str, text: str | None) -> None:
+        var = self._status_var_for_key(entry_key)
+        if text is None:
+            prefix = "Quartic" if entry_key.startswith("q_") else "Sextic"
+            var.set(f"{prefix} XYZ reference: not assigned.")
+            return
+        var.set(text)
+
+    def _set_symmetry_status(self, entry_key: str, meta: dict[str, object] | None) -> None:
         if not meta:
-            self.symmetry_status_var.set("Symmetry not assigned.")
+            self._set_status_var(entry_key, None)
             return
         point_group = meta.get("point_group", "unknown")
         rotor = meta.get("rotor_type_for_symmetry", "unknown")
@@ -1458,12 +1579,13 @@ class App(tk.Tk):
         abc = meta.get("abc_mhz_from_xyz")
         if abc:
             a_mhz, b_mhz, c_mhz = [float(x) for x in abc]
-            self.symmetry_status_var.set(
+            self._set_status_var(
+                entry_key,
                 f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}; "
-                f"A={a_mhz:.3f} MHz, B={b_mhz:.3f} MHz, C={c_mhz:.3f} MHz"
+                f"A={a_mhz:.3f} MHz, B={b_mhz:.3f} MHz, C={c_mhz:.3f} MHz",
             )
             return
-        self.symmetry_status_var.set(f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}")
+        self._set_status_var(entry_key, f"Symmetry: {point_group}; rotor class: {rotor}; σ={sigma}")
 
     def _browse_s_h22_hessian(self) -> None:
         pth = filedialog.askopenfilename(title="Select Cartesian Hessian for sextic H22-linear diagnostic", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
@@ -1506,7 +1628,7 @@ class App(tk.Tk):
     def _use_xyz_abc_reference(self, xyz_key: str) -> tuple[float, float, float] | None:
         meta = _symmetry_meta_from_xyz_path(self.vars[xyz_key].get().strip())
         abc_xyz = self._apply_xyz_abc_reference(meta)
-        self._set_symmetry_status(meta)
+        self._set_symmetry_status(xyz_key, meta)
         return abc_xyz
 
     def _preferred_xyz_path(self, *keys: str) -> str:
@@ -1564,6 +1686,9 @@ class App(tk.Tk):
     def _set_values(self, prefix: str, names: tuple[str, ...], values: np.ndarray) -> None:
         for nm, vv in zip(names, values):
             self.vars[f"{prefix}_{nm}"].set(f"{float(vv):.10g}")
+
+    def _report_section(self, widget: tk.Text, title: str) -> None:
+        widget.insert(tk.END, f"\n[{title}]\n")
 
     def _export_quartic_csv(self) -> None:
         if self.last_quartic_result is None:
@@ -1934,7 +2059,7 @@ class App(tk.Tk):
                 }
             names = ("DJ", "DJK", "DK", "dJ", "dK") if red == "A" else ("DJ", "DJK", "DK", "d1", "d2")
 
-            self.q_report.insert(tk.END, "\nValidated quartic H22 from harmonic input\n")
+            self.q_report.insert(tk.END, "\nValidated quartic H22 nonlinearity from harmonic input\n")
             self.q_report.insert(tk.END, f"source={from_path}\n")
             abc = res["abc_mhz"]
             self.vars["A"].set(f"{abc[0]:.10g}")
@@ -1960,9 +2085,26 @@ class App(tk.Tk):
                 tk.END,
                 f"harmonic frequencies (cm^-1): {_format_freqs_cm(model.vib_freq_cm)}\n",
             )
+            _append_mode_symmetry_report(self.q_report, model)
             self.q_report.insert(
                 tk.END,
                 "geometry and Hessian were reoriented internally to the selected input representation before building the harmonic model.\n",
+            )
+            d_diag = res["d_diagnostic"]
+            d_component_max = max(abs(float(val)) for val in d_diag["componentwise"].values())
+            self.vars["q_h22_D"].set(f"{float(d_diag['D']):.10g}")
+            self.vars["q_h22_Dmax"].set(f"{d_component_max:.10g}")
+            self.q_report.insert(
+                tk.END,
+                "Intrinsic diagnostic D = ||tau(H22)||_F / ||tau_std||_F = "
+                f"{float(d_diag['D']):.6g} "
+                f"(||tau_std||_F={float(d_diag['tau_std_fro']):.6g}, ||tau(H22)||_F={float(d_diag['tau_h22_fro']):.6g})\n",
+            )
+            self.q_report.insert(
+                tk.END,
+                "component-wise D_ab: "
+                + ", ".join(f"{lbl}={float(val):.6g}" for lbl, val in d_diag["componentwise"].items())
+                + "\n",
             )
             self.q_report.insert(tk.END, f"max|H22|={res['maxabs_total_khz']:.6g} kHz\n")
             total = res["h22_total_khz"]
@@ -2005,7 +2147,8 @@ class App(tk.Tk):
                     )
             self.q_report.insert(
                 tk.END,
-                "Interpretation: this is the validated quartic H22 path used in the CeDiTT3 benchmark workflow.\n",
+                "Interpretation: this is the validated quartic first-nonlinearity diagnostic of CeDiTT; "
+                "because tau_std and tau(H22) are explicit perturbative tensors, their standard-sector transport is linear across representations.\n",
             )
         except Exception as exc:
             messagebox.showerror("H22 diagnostic error", str(exc))
@@ -2208,9 +2351,15 @@ class App(tk.Tk):
                 tk.END,
                 f"harmonic frequencies (cm^-1): {_format_freqs_cm(model.vib_freq_cm)}\n",
             )
+            _append_mode_symmetry_report(self.q_report, model)
             self.q_report.insert(
                 tk.END,
                 f"semi-diagonal cubic matrix size={mat.shape[0]}x{mat.shape[1]}\n",
+            )
+            self.q_report.insert(
+                tk.END,
+                "This alpha route is the low-cost companion of the standard sextic semi-diagonal sector: "
+                "it uses the same harmonic ingredients plus only iii/iij cubic information, with no genuine three-index ijk cubic block.\n",
             )
             self.q_report.insert(
                 tk.END,
@@ -2529,7 +2678,7 @@ class App(tk.Tk):
             comps = ("aaa", "aab", "aac", "abb", "abc", "acc", "bbb", "bbc", "bcc", "ccc")
             max_key = max(comps, key=lambda k: abs(cand[k]["linear_hz"]))
             rotor_limit = classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
-            self.s_report.insert(tk.END, "\nSextic H22-linear diagnostic candidate from harmonic input\n")
+            self.s_report.insert(tk.END, "\nFirst post-standard sextic H22-linear diagnostic from harmonic input\n")
             self.s_report.insert(tk.END, f"source={source}\n")
             self.s_report.insert(
                 tk.END,
@@ -2554,6 +2703,7 @@ class App(tk.Tk):
                 tk.END,
                 f"harmonic frequencies (cm^-1): {_format_freqs_cm(model.vib_freq_cm)}\n",
             )
+            _append_mode_symmetry_report(self.s_report, model)
             self.s_report.insert(
                 tk.END,
                 "geometry and Hessian were reoriented internally to the selected input representation before building the harmonic model.\n",
@@ -2561,6 +2711,24 @@ class App(tk.Tk):
             self.s_report.insert(
                 tk.END,
                 f"largest linear component: {max_key} = {cand[max_key]['linear_hz']:.6g} Hz\n",
+            )
+            omega_au = tuple(sp.Float(abs(x) / AU_FREQ_TO_CMINV) for x in model.vib_freq_cm)
+            n_modes = model.dInv_au.shape[2]
+            mu1 = sp.MutableDenseNDimArray(
+                [sp.Float(model.dInv_au[a, b, k]) for a in range(3) for b in range(3) for k in range(n_modes)],
+                (3, 3, n_modes),
+            )
+            mu2 = _sympy_modepair_tensor(np.asarray(model.d2Inv_au, dtype=float))
+            tau_std = {k: float(sp.N(v)) for k, v in channel_h12h12(mu1, omega_au).items()}
+            tau_h22 = {k: float(sp.N(v)) for k, v in channel_h22(mu2, omega_au, sp.Integer(1)).items()}
+            d_diag = _h22_scalar_diagnostic(tau_std, tau_h22)
+            self.vars["s_h22_D"].set(f"{float(d_diag['D']):.10g}")
+            self.vars["s_h22_linear_max"].set(f"{max_key} = {cand[max_key]['linear_hz']:.10g} Hz")
+            self.s_report.insert(
+                tk.END,
+                "Companion quartic intrinsic diagnostic D = "
+                f"{float(d_diag['D']):.6g} "
+                f"(||tau_std||_F={float(d_diag['tau_std_fro']):.6g}, ||tau(H22)||_F={float(d_diag['tau_h22_fro']):.6g})\n",
             )
             self.s_report.insert(tk.END, "component-wise linear response (Hz)\n")
             for key in comps:
@@ -2594,7 +2762,8 @@ class App(tk.Tk):
                     )
             self.s_report.insert(
                 tk.END,
-                "Interpretation: this is the first sextic post-standard diagnostic candidate induced linearly by tau(H22); it is operational but not benchmark-grade in the same sense as quartic H22.\n",
+                "Interpretation: this is the first post-standard sextic diagnostic induced linearly by tau(H22); "
+                "it is operational and representation-aware, but not benchmark-grade in the same sense as quartic H22.\n",
             )
         except Exception as exc:
             messagebox.showerror("Sextic H22 diagnostic error", str(exc))
@@ -2635,7 +2804,7 @@ class App(tk.Tk):
             max_full = max(comps, key=lambda k: abs(levels[k]["total_full_hz"]))
             rotor_limit = classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
 
-            self.s_report.insert(tk.END, "\nSextic harmonic/cubic hierarchy\n")
+            self.s_report.insert(tk.END, "\nStandard sextic partition from harmonic/cubic input\n")
             self.s_report.insert(tk.END, f"harmonic source={source}\n")
             self.s_report.insert(tk.END, f"cubic source={cubic_source}\n")
             self.s_report.insert(
@@ -2658,6 +2827,7 @@ class App(tk.Tk):
             self.vars["B"].set(f"{float(model.abc_mhz[1]):.10g}")
             self.vars["C"].set(f"{float(model.abc_mhz[2]):.10g}")
             self.s_report.insert(tk.END, f"harmonic frequencies (cm^-1): {_format_freqs_cm(model.vib_freq_cm)}\n")
+            _append_mode_symmetry_report(self.s_report, model)
             self.s_report.insert(
                 tk.END,
                 "geometry and Hessian were reoriented internally to the selected input representation before building the harmonic model.\n",
@@ -2672,7 +2842,7 @@ class App(tk.Tk):
             )
             self.s_report.insert(
                 tk.END,
-                "component-wise sextic hierarchy (Hz): geometry, cubic(2-index), cubic(3-index), total(2-index), total(full)\n",
+                "component-wise sextic partition (Hz): geometry, cubic(2-index), cubic(3-index), total(2-index), total(full)\n",
             )
             for key in comps:
                 vals = levels[key]
@@ -2719,15 +2889,15 @@ class App(tk.Tk):
                     )
             self.s_report.insert(
                 tk.END,
-                "Interpretation: with harmonic input only, the app returns the sextic geometry level; "
-                "with a 2-index cubic matrix, it adds the semi-diagonal cubic sector; "
-                "with a full anharmonic log, it can also separate the genuine 3-index cubic remainder.\n",
+                "Interpretation: with harmonic input only, the app returns the standard sextic geometry sector; "
+                "with a 2-index cubic matrix, it adds the semi-diagonal iii/iij cubic sector; "
+                "with a full anharmonic log, it also separates the genuine three-index ijk cubic remainder.\n",
             )
             self.s_report.insert(
                 tk.END,
                 "Computational note: in finite-difference schemes based on analytic gradients, "
-                "the semi-diagonal cubic sector scales linearly with the number of modes, "
-                "whereas the genuine 3-index sector scales quadratically.\n",
+                "the semi-diagonal iii/iij cubic sector scales linearly with the number of modes, "
+                "whereas the genuine ijk sector scales quadratically.\n",
             )
         except Exception as exc:
             messagebox.showerror("Sextic hierarchy error", str(exc))
