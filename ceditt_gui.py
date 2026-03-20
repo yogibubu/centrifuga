@@ -33,12 +33,14 @@ from rovib_distortion import (
 )
 from gaussian_vpt_parser import (
     align_gaussian_cubic_force_constants,
+    apply_mode_signs_to_cubic_force_constants,
     parse_gaussian_alpha_data,
     parse_gaussian_harmonic_data,
     parse_gaussian_anharmonic_force_data,
     parse_gaussian_fchk_harmonic_data,
+    reorder_cubic_force_constants,
 )
-from compare_gaussian_sextic import sextic_cubic_hierarchy_hz, sextic_h22_linear_candidate_hz
+from compare_gaussian_sextic import FAC3AU, sextic_cubic_hierarchy_hz, sextic_h22_linear_candidate_hz
 from compare_gaussian_sextic import split_cubic_force_constants
 from vibrot_alpha import (
     alpha_matrix_from_cubic_two_index_cm,
@@ -717,6 +719,87 @@ def _build_harmonic_model_from_inputs(
     return model, source
 
 
+def _normalize_mode_columns(modes: np.ndarray) -> np.ndarray:
+    arr = np.asarray(modes, dtype=float)
+    norms = np.linalg.norm(arr, axis=0)
+    out = np.array(arr, copy=True)
+    for i, val in enumerate(norms):
+        if abs(val) <= 1.0e-30:
+            raise ValueError(f"Normal mode {i + 1} has near-zero norm and cannot be matched.")
+        out[:, i] /= val
+    return out
+
+
+def _mode_overlap_mapping_from_fchks(
+    source_fchk_path: str,
+    target_fchk_path: str,
+) -> dict[str, object]:
+    source = parse_gaussian_fchk_harmonic_data(source_fchk_path)
+    target = parse_gaussian_fchk_harmonic_data(target_fchk_path)
+    if source.n_modes != target.n_modes:
+        raise ValueError("Source and target fchk files have different numbers of vibrational modes.")
+    if source.atomic_numbers.shape != target.atomic_numbers.shape or not np.array_equal(source.atomic_numbers, target.atomic_numbers):
+        raise ValueError("Source and target fchk files must refer to the same atom ordering.")
+    src = _normalize_mode_columns(np.asarray(source.vib_modes, dtype=float))
+    tgt = _normalize_mode_columns(np.asarray(target.vib_modes, dtype=float))
+    overlap = src.T @ tgt
+    abs_overlap = np.abs(overlap)
+    n_modes = source.n_modes
+    mapping = np.full(n_modes, -1, dtype=int)
+    target_signs = np.ones(n_modes, dtype=float)
+    source_used: set[int] = set()
+    target_used: set[int] = set()
+    diag_abs = np.zeros(n_modes, dtype=float)
+    diag_signed = np.zeros(n_modes, dtype=float)
+    for _ in range(n_modes):
+        best = None
+        best_val = -1.0
+        for i in range(n_modes):
+            if i in source_used:
+                continue
+            for j in range(n_modes):
+                if j in target_used:
+                    continue
+                val = abs_overlap[i, j]
+                if val > best_val:
+                    best = (i, j)
+                    best_val = val
+        if best is None:
+            raise ValueError("Could not construct a complete one-to-one mode mapping.")
+        i, j = best
+        source_used.add(i)
+        target_used.add(j)
+        mapping[i] = j
+        signed = float(overlap[i, j])
+        diag_signed[j] = signed
+        diag_abs[j] = abs(signed)
+        target_signs[j] = 1.0 if signed >= 0.0 else -1.0
+    if np.any(mapping < 0):
+        raise ValueError("Incomplete mode mapping between source and target fchk files.")
+    return {
+        "mapping": mapping,
+        "target_signs": target_signs,
+        "overlap_matrix": overlap,
+        "diag_abs": diag_abs,
+        "diag_signed": diag_signed,
+        "min_abs_overlap": float(np.min(diag_abs)),
+        "max_offdiag_abs_overlap": float(np.max(np.abs(abs_overlap - np.diag(diag_abs)))),
+    }
+
+
+def _raw_cubic_to_reduced_with_target_freqs(phi3_raw_au: np.ndarray, target_freq_cm: np.ndarray) -> np.ndarray:
+    freq = np.abs(np.asarray(target_freq_cm, dtype=float))
+    phi3_raw = np.asarray(phi3_raw_au, dtype=float)
+    out = np.zeros_like(phi3_raw)
+    n_modes = freq.size
+    for i in range(n_modes):
+        for j in range(n_modes):
+            for k in range(n_modes):
+                den = math.sqrt(freq[i] * freq[j] * freq[k])
+                out[i, j, k] = 0.0 if den <= 1.0e-30 else phi3_raw[i, j, k] * FAC3AU / den
+    return out
+
+
 def _format_freqs_cm(freq_cm: np.ndarray, limit: int = 12) -> str:
     vals = [f"{float(x):.3f}" for x in np.asarray(freq_cm, dtype=float)]
     if len(vals) <= limit:
@@ -863,22 +946,184 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
     b_lin = ltype.get("B_linear_cm")
     if b_lin is not None:
         widget.insert(tk.END, f"  B_linear={float(b_lin):.8g} cm^-1\n")
+    conv = ltype.get("literature_convention")
+    if conv:
+        widget.insert(
+            tk.END,
+            "  literature convention: "
+            f"{conv.get('name')} "
+            f"(basis={','.join(conv.get('basis', []))}, active={conv.get('active_minimal_channel')})\n",
+        )
+    pure_branch = ltype.get("pure_rotational_branch")
+    if pure_branch:
+        scalars = pure_branch.get("scalars", {})
+        widget.insert(
+            tk.END,
+            "  pure rotational branch: "
+            f"D={scalars.get('D_mhz')} MHz, H={scalars.get('H_hz')} Hz\n",
+        )
+    pair_branch = ltype.get("pairwise_ltype_branch")
+    if pair_branch:
+        feeds = pair_branch.get("rotational_feeds", {})
+        widget.insert(
+            tk.END,
+            "  pairwise l-type branch: "
+            f"{int(pair_branch.get('pair_count', 0))} pair(s), "
+            f"active channel={pair_branch.get('active_operator_channel')}\n",
+        )
+        widget.insert(
+            tk.END,
+            "    rotational feeds: "
+            f"{feeds.get('quartic_feed_operator')} "
+            f"({'on' if feeds.get('quartic_feed_present') else 'off'}), "
+            f"{feeds.get('sextic_feed_operator')} "
+            f"({'on' if feeds.get('sextic_feed_present') else 'off'})\n",
+        )
+    if ltype.get("effective_model"):
+        widget.insert(tk.END, f"  primary circular-basis model: {ltype['effective_model']}\n")
+    if ltype.get("effective_model_alt"):
+        widget.insert(tk.END, f"  equivalent real-basis form: {ltype['effective_model_alt']}\n")
+    basis_real = ltype.get("full_operator_basis_real")
+    basis_circular = ltype.get("full_operator_basis_circular", ltype.get("full_operator_basis_alt"))
+    if basis_real:
+        widget.insert(
+            tk.END,
+            "  full pair basis (real, equivalent): "
+            + ", ".join(str(entry["operator"]) for entry in basis_real)
+            + "\n",
+        )
+    if basis_circular:
+        widget.insert(
+            tk.END,
+            "  full pair basis (circular, primary): "
+            + ", ".join(str(entry["operator"]) for entry in basis_circular)
+            + "\n",
+        )
     for pair in pairs:
         modes = pair["modes"]
+        pair_tag = pair.get("pair_label")
         line = (
             f"  modes {modes[0] + 1}/{modes[1] + 1}: "
             f"nu={float(pair['freq_cm']):.6g} cm^-1, "
             f"zeta_parallel={float(pair['zeta_parallel']):.6g}, "
             f"|q_t|={float(pair['q_t_abs_hz']):.6g} Hz"
         )
+        if pair_tag:
+            line += f", pair={pair_tag}"
+        if "pair_irrep" in pair:
+            line += f", irrep={pair['pair_irrep']}"
         if "q_tJ_diagnostic_hz" in pair:
             line += f", |q_t^J|={float(pair['q_tJ_diagnostic_hz']):.6g} Hz"
         if "q_tH_diagnostic_hz" in pair:
             line += f", |q_t^H|={float(pair['q_tH_diagnostic_hz']):.6g} Hz"
         widget.insert(tk.END, line + "\n")
+        qconv = pair.get("conventional_constants_hz")
+        if qconv:
+            widget.insert(
+                tk.END,
+                "    legacy pair constants: "
+                f"q_t={float(qconv['q_t']):.6g} Hz, "
+                f"q_t^J={float(qconv['q_tJ']):.6g} Hz, "
+                f"q_t^H={float(qconv['q_tH']):.6g} Hz\n",
+            )
+        qlit = pair.get("literature_constants_hz")
+        if qlit:
+            widget.insert(
+                tk.END,
+                "    primary circular-basis constants: "
+                f"q_l={float(qlit['q_l']):.6g} Hz, "
+                f"q_l^J={float(qlit['q_lJ']):.6g} Hz, "
+                f"q_l^H={float(qlit['q_lH']):.6g} Hz\n",
+            )
+        qlit0 = pair.get("literature_harmonic_estimate_hz")
+        if qlit0:
+            widget.insert(
+                tk.END,
+                "    leading harmonic literature estimate: "
+                f"q_l^(0)={float(qlit0['q_l_leading']):.6g} Hz "
+                f"[{qlit0['formula']}]\n",
+            )
+        qlitw = pair.get("literature_watson_estimate_hz")
+        if qlitw:
+            widget.insert(
+                tk.END,
+                "    Watson-like literature estimate: "
+                f"q_l^(W)={float(qlitw['q_l_watson']):.6g} Hz "
+                f"[{qlitw['formula']}]\n",
+            )
+        qspec = pair.get("spectroscopic_linear_constants_hz")
+        if qspec:
+            widget.insert(
+                tk.END,
+                "    spectroscopic q estimates: "
+                f"q_e^(0)={float(qspec['q_e0']):.6g} Hz, "
+                f"q_e^(W)={float(qspec['q_eW']):.6g} Hz, "
+                f"q_v={qspec['q_v']}\n",
+            )
+        qeff = pair.get("effective_linear_model_hz")
+        if qeff:
+            c = qeff["constants_hz"]
+            widget.insert(
+                tk.END,
+                "    effective linear model: "
+                f"q_e^(W)={float(c['q_eW']):.6g} Hz, "
+                f"q_J^(pair)={float(c['q_J_pair']):.6g} Hz, "
+                f"q_H^(pair)={float(c['q_H_pair']):.6g} Hz\n",
+            )
+        conv_map = pair.get("conventional_pair_mapping")
+        if conv_map:
+            widget.insert(
+                tk.END,
+                "    conventional-ready mapping: "
+                f"active={conv_map['active_channel']}, "
+                f"inactive={','.join(conv_map['inactive_channels'])}\n",
+            )
+        coeffs_real = pair.get("pair_basis_coefficients_real_hz")
+        if coeffs_real:
+            widget.insert(
+                tk.END,
+                "    pair basis coefficients (real): "
+                + ", ".join(f"{key}={float(val):.6g}" for key, val in coeffs_real.items())
+                + " Hz\n",
+            )
+        coeffs_alt = pair.get("pair_basis_coefficients_alt_hz")
+        if coeffs_alt:
+            widget.insert(
+                tk.END,
+                "    pair basis coefficients (circular): "
+                + ", ".join(f"{key}={float(val):.6g}" for key, val in coeffs_alt.items())
+                + " Hz\n",
+            )
+        solver_basis = pair.get("solver_facing_circular_basis")
+        solver_blocks = pair.get("solver_facing_blocks_hz")
+        if solver_basis and solver_blocks:
+            widget.insert(
+                tk.END,
+                "    solver-facing circular basis: " + ", ".join(str(x) for x in solver_basis) + "\n",
+            )
+            for block_name in ("J0", "J2", "J4"):
+                block = solver_blocks.get(block_name)
+                if not block:
+                    continue
+                widget.insert(
+                    tk.END,
+                    f"    {block_name} vector: "
+                    + ", ".join(f"{float(v):.6g}" for v in block["vector"])
+                    + "\n",
+                )
+        for term in pair.get("operator_terms_hz", []):
+            widget.insert(
+                tk.END,
+                f"    {term['operator']}: {float(term['coefficient_hz']):.6g} Hz\n",
+            )
+        for term in pair.get("operator_terms_alt_hz", []):
+            widget.insert(
+                tk.END,
+                f"    {term['operator']} (circular basis): {float(term['coefficient_hz']):.6g} Hz\n",
+            )
     widget.insert(
         tk.END,
-        "  Interpretation: these are the linear-molecule l-type doubling terms detected from near-degenerate bending pairs.\n",
+        "  Interpretation: these coefficients define the current minimal pairwise l-type effective Hamiltonian, reported in equivalent real- and circular-doublet bases.\n",
     )
 
 
@@ -1442,6 +1687,9 @@ class App(tk.Tk):
         ttk.Label(h22s_frame, text="Cubic log").grid(row=4, column=0, sticky="w", pady=(4, 0))
         ttk.Entry(h22s_frame, width=60, textvariable=self._sv("s_cubic_log", "")).grid(row=4, column=1, padx=4, sticky="we", pady=(4, 0))
         ttk.Button(h22s_frame, text="Browse", command=self._browse_s_cubic_log).grid(row=4, column=2, padx=(4, 0), pady=(4, 0))
+        ttk.Label(h22s_frame, text="Cubic modes (.fchk, optional)").grid(row=5, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(h22s_frame, width=60, textvariable=self._sv("s_cubic_fchk", "")).grid(row=5, column=1, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(h22s_frame, text="Browse", command=self._browse_s_cubic_fchk).grid(row=5, column=2, padx=(4, 0), pady=(4, 0))
         ttk.Label(
             h22s_frame,
             text=(
@@ -1449,13 +1697,14 @@ class App(tk.Tk):
                 "and for the H22-induced diagnostic. XYZ can be given either as a file path or pasted directly into the field. "
                 "When used with a Hessian, XYZ and Hessian must refer to the same Cartesian orientation. "
                 "The main low-cost route is geometry + Hessian, optionally completed by a cubic 2-index N x N matrix with entry (i,j)=phi_iij. "
-                "If a Gaussian anharmonic log is also provided, the app uses it only to recover the genuine 3-index cubic remainder."
+                "If a Gaussian anharmonic log is also provided, the app uses it only to recover the genuine 3-index cubic remainder. "
+                "An optional second .fchk can define the normal-mode set attached to the cubic force field; in that case the app transfers the raw cubic tensor by mode overlap and rebuilds the reduced cubic constants with the frequencies of the primary harmonic model."
             ),
-        ).grid(row=5, column=1, sticky="w", pady=(4, 0))
-        ttk.Label(h22s_frame, text="Companion quartic D").grid(row=6, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(h22s_frame, width=18, textvariable=self._sv("s_h22_D", ""), state="readonly").grid(row=6, column=1, padx=4, sticky="w", pady=(6, 0))
-        ttk.Label(h22s_frame, text="largest linear component").grid(row=6, column=2, sticky="w", pady=(6, 0))
-        ttk.Entry(h22s_frame, width=24, textvariable=self._sv("s_h22_linear_max", ""), state="readonly").grid(row=6, column=3, padx=4, sticky="w", pady=(6, 0))
+        ).grid(row=6, column=1, sticky="w", pady=(4, 0))
+        ttk.Label(h22s_frame, text="Companion quartic D").grid(row=7, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(h22s_frame, width=18, textvariable=self._sv("s_h22_D", ""), state="readonly").grid(row=7, column=1, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(h22s_frame, text="largest linear component").grid(row=7, column=2, sticky="w", pady=(6, 0))
+        ttk.Entry(h22s_frame, width=24, textvariable=self._sv("s_h22_linear_max", ""), state="readonly").grid(row=7, column=3, padx=4, sticky="w", pady=(6, 0))
         h22s_frame.columnconfigure(1, weight=1)
 
         grid = ttk.Frame(parent)
@@ -1659,6 +1908,14 @@ class App(tk.Tk):
         )
         if pth:
             self.vars["s_cubic_log"].set(pth)
+
+    def _browse_s_cubic_fchk(self) -> None:
+        pth = filedialog.askopenfilename(
+            title="Select formatted checkpoint defining the cubic-mode basis",
+            filetypes=[("Gaussian fchk", "*.fchk"), ("All files", "*.*")],
+        )
+        if pth:
+            self.vars["s_cubic_fchk"].set(pth)
 
     def _browse_s_cubic_2idx(self) -> None:
         pth = filedialog.askopenfilename(
@@ -2879,32 +3136,58 @@ class App(tk.Tk):
     def _run_sextic_hierarchy(self) -> None:
         try:
             rep = _norm_rep(self.vars["s_rep_in"].get())
+            omega_fchk = self.vars["s_h22_fchk"].get().strip()
             model, source = _build_harmonic_model_from_inputs(
                 rep,
-                fchk_path=self.vars["s_h22_fchk"].get().strip(),
+                fchk_path=omega_fchk,
                 xyz_path=self.vars["s_h22_xyz"].get().strip(),
                 hessian_path=self.vars["s_h22_hessian"].get().strip(),
             )
             axes = {"a": 0, "b": 1, "c": 2}
             cubic_log = self.vars["s_cubic_log"].get().strip()
+            cubic_fchk = self.vars["s_cubic_fchk"].get().strip()
             cubic_2idx = self.vars["s_cubic_2idx"].get().strip()
             phi3 = None
             cubic_source = "none (geometry-only sextic level)"
+            cubic_transfer_meta = None
             if cubic_2idx:
                 mat = read_cubic_two_index_matrix(cubic_2idx, np.abs(model.vib_freq_cm).size)
                 phi3 = expand_cubic_two_index_matrix(mat)
                 cubic_source = cubic_2idx + " (2-index only)"
             if cubic_log:
                 anh = parse_gaussian_anharmonic_force_data(cubic_log)
-                _mapping, phi3_full, _raw = align_gaussian_cubic_force_constants(anh, np.abs(model.vib_freq_cm))
+                if cubic_fchk:
+                    if not omega_fchk:
+                        raise ValueError("Dual-level cubic transfer requires the primary harmonic model to come from .fchk.")
+                    cubic_basis = parse_gaussian_fchk_harmonic_data(cubic_fchk)
+                    cubic_freq_cm = np.sqrt(np.asarray(cubic_basis.vib_e2[: cubic_basis.n_modes], dtype=float)) * AU_FREQ_TO_CMINV
+                    log_to_cubic_mapping, _phi3_reduced_cubic_basis, phi3_raw_cubic_basis = align_gaussian_cubic_force_constants(
+                        anh,
+                        cubic_freq_cm,
+                    )
+                    transfer = _mode_overlap_mapping_from_fchks(cubic_fchk, omega_fchk)
+                    phi3_raw_target = reorder_cubic_force_constants(phi3_raw_cubic_basis, transfer["mapping"])
+                    phi3_raw_target = apply_mode_signs_to_cubic_force_constants(phi3_raw_target, transfer["target_signs"])
+                    phi3_full = _raw_cubic_to_reduced_with_target_freqs(phi3_raw_target, model.vib_freq_cm)
+                    cubic_source = f"{cubic_log} + mode transfer from {cubic_fchk}"
+                    cubic_transfer_meta = {
+                        "log_to_cubic_mapping": log_to_cubic_mapping,
+                        **transfer,
+                    }
+                else:
+                    _mapping, phi3_full, _raw = align_gaussian_cubic_force_constants(anh, np.abs(model.vib_freq_cm))
                 if phi3 is None:
                     phi3 = phi3_full
-                    cubic_source = cubic_log + " (full cubic)"
+                    if not cubic_fchk:
+                        cubic_source = cubic_log + " (full cubic)"
                 else:
                     # Complete the 2-index input with the genuine 3-index remainder from the full log.
                     _phi3_sd_full, phi3_3ind = split_cubic_force_constants(phi3_full)
                     phi3 = phi3 + phi3_3ind
-                    cubic_source = f"{cubic_2idx} + 3-index remainder from {cubic_log}"
+                    if cubic_fchk:
+                        cubic_source = f"{cubic_2idx} + 3-index remainder from {cubic_log} transferred via {cubic_fchk}"
+                    else:
+                        cubic_source = f"{cubic_2idx} + 3-index remainder from {cubic_log}"
 
             levels = sextic_cubic_hierarchy_hz(model, phi3, axes)
             comps = ("aaa", "aab", "aac", "abb", "abc", "acc", "bbb", "bbc", "bcc", "ccc")
@@ -2915,6 +3198,30 @@ class App(tk.Tk):
             self.s_report.insert(tk.END, "\nStandard sextic partition from harmonic/cubic input\n")
             self.s_report.insert(tk.END, f"harmonic source={source}\n")
             self.s_report.insert(tk.END, f"cubic source={cubic_source}\n")
+            if cubic_transfer_meta is not None:
+                diag_abs = cubic_transfer_meta["diag_abs"]
+                diag_signed = cubic_transfer_meta["diag_signed"]
+                self.s_report.insert(
+                    tk.END,
+                    "cubic-mode transfer: Gaussian log reordered to the cubic-mode .fchk by frequency, then transferred to the omega-model .fchk by normal-mode overlap.\n",
+                )
+                self.s_report.insert(
+                    tk.END,
+                    "  source->target mode map="
+                    + ", ".join(f"{i + 1}->{int(j) + 1}" for i, j in enumerate(cubic_transfer_meta["mapping"]))
+                    + "\n",
+                )
+                self.s_report.insert(
+                    tk.END,
+                    "  signed modal overlaps="
+                    + ", ".join(f"Q({i + 1})={float(diag_signed[i]):+.6f}" for i in range(len(diag_signed)))
+                    + "\n",
+                )
+                self.s_report.insert(
+                    tk.END,
+                    f"  min|overlap|={float(cubic_transfer_meta['min_abs_overlap']):.6f}, "
+                    f"max offdiag |overlap|={float(cubic_transfer_meta['max_offdiag_abs_overlap']):.6f}\n",
+                )
             self.s_report.insert(
                 tk.END,
                 f"model ABC (MHz)=({float(model.abc_mhz[0]):.6f}, {float(model.abc_mhz[1]):.6f}, {float(model.abc_mhz[2]):.6f}), rep={rep}\n",
