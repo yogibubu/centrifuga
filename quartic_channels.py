@@ -132,6 +132,14 @@ _H30H30_WATERLIKE_REDUCED_IIJ_IIJ_WEIGHTS = {
     "diag_0_iij_iij_1_candidate": sp.Float("-0.7658835101867324"),
     "diag_0_iij_iij_2_candidate": sp.Float("-0.6429793533419633"),
 }
+_H30H30_CARBONYLLIKE_BASIS1_WEIGHTS = {
+    "diag_bench_resid11_candidate": sp.Float("-0.0013980367988617127"),
+    "diag_bench_resid13_candidate": sp.Float("0.03827827562192291"),
+    "waterlike_basis1_candidate": sp.Float("0.00436510966576928"),
+    "waterlike_basis2_candidate": sp.Float("2.3572728702808363"),
+    "waterlike_scaffold_basis1_candidate": sp.Float("-0.003965307333790079"),
+    "waterlike_scaffold_basis2_candidate": sp.Float("-0.07379931688894514"),
+}
 _H30H30_DIAG1_III_IIJ0_COEFFS = {
     "tau_xxxx": -sp.Rational(227363455692979534858168034909, 23579243009146786119363330048000),
     "tau_yyyy": -sp.Rational(132870342778744056191079919357, 93525313195102983407881113600000),
@@ -171,6 +179,20 @@ _H30H30_IIJ_IIJ2_COEFFS = {
     "tau_xxyy": sp.Rational(72941392926741425861045260010844192597882121, 23525796505819461054260187215407297078886400000),
     "tau_xxzz": sp.Rational(64540823071388631974630915045526119703559, 20444927519122199225161056106800516956160000),
     "tau_yyzz": -sp.Rational(22372449244727659421033485146368876653681, 664161833933649695754083223766996953403392000),
+}
+_H30H30_MANUAL_IIJ_PIVOT_COEFFS = {
+    "tau_xxxx": -sp.Rational(624163585, 1348422598656),
+    "tau_yyyy": -sp.Rational(138481405, 299649466368),
+    "tau_zzzz": -sp.Rational(13134816413, 299649466368000),
+    "tau_xxyy": -sp.Rational(929643954971, 866843099136000),
+    "tau_xxzz": -sp.Rational(418798627, 1498247331840),
+    "tau_yyzz": -sp.Rational(106615213, 374561832960),
+}
+_H30H30_MANUAL_IIJ_ORDER2_COEFFS = {
+    key: sp.simplify(3 * value) for key, value in _H30H30_MANUAL_IIJ_PIVOT_COEFFS.items()
+}
+_H30H30_MANUAL_IIJ_ORDER3_COEFFS = {
+    key: sp.simplify(-2 * value) for key, value in _H30H30_MANUAL_IIJ_PIVOT_COEFFS.items()
 }
 
 
@@ -926,6 +948,108 @@ def _h30h30_iij_iij_2_candidate(
     return _complete_tau(tau)
 
 
+def _h30h30_manual_iij_pivot_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Benchmark-calibrated two-mode ``iij`` pivot from the manual BCH probe.
+
+    The componentwise coefficients are taken directly from the explicit
+    ``n_modes=2`` manual sector recursion of ``H30,H30`` with ``diag-plus-ab``
+    rotational couplings. The scalar kernel is kept in the simplest pure-power
+    ``Phi_iij^2 / (omega_i^4 omega_j^3)`` class so the object can be used as a
+    solver-facing diagnostic candidate while the final perturbative
+    normalization is still being derived.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_sq = phi3[i, i, j] ** 2
+            denom = omega[i] ** 4 * omega[j] ** 3
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_MANUAL_IIJ_PIVOT_COEFFS["tau_xxxx"] * hbar * phi_sq * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_MANUAL_IIJ_PIVOT_COEFFS["tau_yyyy"] * hbar * phi_sq * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_MANUAL_IIJ_PIVOT_COEFFS["tau_zzzz"] * hbar * phi_sq * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_MANUAL_IIJ_PIVOT_COEFFS["tau_xxyy"] * hbar * phi_sq * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_MANUAL_IIJ_PIVOT_COEFFS["tau_xxzz"] * hbar * phi_sq * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_MANUAL_IIJ_PIVOT_COEFFS["tau_yyzz"] * hbar * phi_sq * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
+def _h30h30_manual_iij_order2_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Restricted-probe BCH order-2 piece of the manual ``iij`` pivot.
+
+    In the closed restricted probe this corresponds to
+    ``(1/4) [S^(2), [S^(1), H^(1)]]`` and is exactly ``3`` times the final
+    manual ``iij`` coefficient vector.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_sq = phi3[i, i, j] ** 2
+            denom = omega[i] ** 4 * omega[j] ** 3
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_MANUAL_IIJ_ORDER2_COEFFS["tau_xxxx"] * hbar * phi_sq * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_MANUAL_IIJ_ORDER2_COEFFS["tau_yyyy"] * hbar * phi_sq * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_MANUAL_IIJ_ORDER2_COEFFS["tau_zzzz"] * hbar * phi_sq * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_MANUAL_IIJ_ORDER2_COEFFS["tau_xxyy"] * hbar * phi_sq * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_MANUAL_IIJ_ORDER2_COEFFS["tau_xxzz"] * hbar * phi_sq * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_MANUAL_IIJ_ORDER2_COEFFS["tau_yyzz"] * hbar * phi_sq * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
+def _h30h30_manual_iij_order3_candidate(
+    mu1,
+    phi3: sp.MutableDenseNDimArray,
+    omega: Iterable[float],
+    hbar: sp.Symbol,
+) -> Dict[str, sp.Expr]:
+    """Restricted-probe BCH order-3 piece of the manual ``iij`` pivot.
+
+    In the closed restricted probe this corresponds to
+    ``(1/6) [S^(2), [S^(1), [S^(1), H_0]]]`` and is exactly ``-2`` times the
+    final manual ``iij`` coefficient vector.
+    """
+    omega = list(omega)
+    n_modes = mu1.shape[2]
+    tau = defaultdict(lambda: sp.Integer(0))
+    for i in range(n_modes):
+        for j in range(n_modes):
+            if i == j:
+                continue
+            phi_sq = phi3[i, i, j] ** 2
+            denom = omega[i] ** 4 * omega[j] ** 3
+            coeff_xx = mu1[0, 0, i] * mu1[0, 0, j]
+            coeff_yy = mu1[1, 1, i] * mu1[1, 1, j]
+            coeff_zz = mu1[2, 2, i] * mu1[2, 2, j]
+            tau["tau_xxxx"] += _H30H30_MANUAL_IIJ_ORDER3_COEFFS["tau_xxxx"] * hbar * phi_sq * coeff_xx / denom
+            tau["tau_yyyy"] += _H30H30_MANUAL_IIJ_ORDER3_COEFFS["tau_yyyy"] * hbar * phi_sq * coeff_yy / denom
+            tau["tau_zzzz"] += _H30H30_MANUAL_IIJ_ORDER3_COEFFS["tau_zzzz"] * hbar * phi_sq * coeff_zz / denom
+            tau["tau_xxyy"] += _H30H30_MANUAL_IIJ_ORDER3_COEFFS["tau_xxyy"] * hbar * phi_sq * (coeff_xx + coeff_yy) / (2 * denom)
+            tau["tau_xxzz"] += _H30H30_MANUAL_IIJ_ORDER3_COEFFS["tau_xxzz"] * hbar * phi_sq * (coeff_xx + coeff_zz) / (2 * denom)
+            tau["tau_yyzz"] += _H30H30_MANUAL_IIJ_ORDER3_COEFFS["tau_yyzz"] * hbar * phi_sq * (coeff_yy + coeff_zz) / (2 * denom)
+    return _complete_tau(tau)
+
+
 def channel_h30h30_decomposed(
     mu1,
     phi3: sp.MutableDenseNDimArray,
@@ -955,6 +1079,9 @@ def channel_h30h30_decomposed(
     candidate_res_reg = _h30h30_diag0_iii_iij_2_regularized_preview(mu1, phi3, omega, hbar)
     iij1 = _h30h30_iij_iij_1_candidate(mu1, phi3, omega, hbar)
     iij2 = _h30h30_iij_iij_2_candidate(mu1, phi3, omega, hbar)
+    manual_iij_o2 = _h30h30_manual_iij_order2_candidate(mu1, phi3, omega, hbar)
+    manual_iij_o3 = _h30h30_manual_iij_order3_candidate(mu1, phi3, omega, hbar)
+    manual_iij = _h30h30_manual_iij_pivot_candidate(mu1, phi3, omega, hbar)
     rotmix_diag1 = _h30h30_diag1_iii_iii_rotmix_candidate(mu1, phi3, omega, hbar)
     bench_resid11 = _h30h30_diag_bench_resid11_candidate(mu1, phi3, omega, hbar)
     bench_resid13 = _h30h30_diag_bench_resid13_candidate(mu1, phi3, omega, hbar)
@@ -973,9 +1100,22 @@ def channel_h30h30_decomposed(
     waterlike_scaffold_basis2 = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_SCAFFOLD_BASIS2_WEIGHTS)
     waterlike_reduced_iii_iij = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_REDUCED_III_IIJ_WEIGHTS)
     waterlike_reduced_iij_iij = _h30h30_linear_combo(followup_pieces, _H30H30_WATERLIKE_REDUCED_IIJ_IIJ_WEIGHTS)
+    residual_pieces = {
+        "diag_bench_resid11_candidate": bench_resid11,
+        "diag_bench_resid13_candidate": bench_resid13,
+        "waterlike_basis1_candidate": waterlike_basis1,
+        "waterlike_basis2_candidate": waterlike_basis2,
+        "waterlike_scaffold_basis1_candidate": waterlike_scaffold_basis1,
+        "waterlike_scaffold_basis2_candidate": waterlike_scaffold_basis2,
+    }
+    carbonyllike_basis1 = _h30h30_linear_combo(residual_pieces, _H30H30_CARBONYLLIKE_BASIS1_WEIGHTS)
     pure_diagonal_total = leading
     trusted_total = _sum_tau_dicts(pure_diagonal_total, leading_corr)
     extended_total = _sum_tau_dicts(trusted_total, semidiag, residual)
+    manual_iij_order2_preview_total = _sum_tau_dicts(trusted_total, manual_iij_o2)
+    manual_iij_order3_preview_total = _sum_tau_dicts(trusted_total, manual_iij_o3)
+    manual_iij_bch_closed_preview_total = _sum_tau_dicts(trusted_total, manual_iij_o2, manual_iij_o3)
+    manual_iij_preview_total = _sum_tau_dicts(trusted_total, manual_iij)
     resonance_preview_total = _sum_tau_dicts(trusted_total, candidate_res_reg)
     diagonal_pair_preview_total = trusted_total
     return {
@@ -983,6 +1123,10 @@ def channel_h30h30_decomposed(
         "pure_diagonal_total": pure_diagonal_total,
         "trusted_total": trusted_total,
         "extended_total": extended_total,
+        "manual_iij_order2_preview_total": manual_iij_order2_preview_total,
+        "manual_iij_order3_preview_total": manual_iij_order3_preview_total,
+        "manual_iij_bch_closed_preview_total": manual_iij_bch_closed_preview_total,
+        "manual_iij_preview_total": manual_iij_preview_total,
         "resonance_preview_total": resonance_preview_total,
         "diagonal_pair_preview_total": diagonal_pair_preview_total,
         "D0_iii_iii": leading,
@@ -997,6 +1141,7 @@ def channel_h30h30_decomposed(
         "waterlike_basis2_candidate": waterlike_basis2,
         "waterlike_scaffold_basis1_candidate": waterlike_scaffold_basis1,
         "waterlike_scaffold_basis2_candidate": waterlike_scaffold_basis2,
+        "carbonyllike_basis1_candidate": carbonyllike_basis1,
         "waterlike_reduced_iii_iij_candidate": waterlike_reduced_iii_iij,
         "waterlike_reduced_iij_iij_candidate": waterlike_reduced_iij_iij,
         "D0_iii_iij_0": semidiag,
@@ -1011,6 +1156,9 @@ def channel_h30h30_decomposed(
         "diag_0_iij_iij_1_candidate": iij1,
         "D0_iij_iij_2_candidate": iij2,
         "diag_0_iij_iij_2_candidate": iij2,
+        "manual_iij_order2_candidate": manual_iij_o2,
+        "manual_iij_order3_candidate": manual_iij_o3,
+        "manual_iij_pivot_candidate": manual_iij,
         "placeholder_residual": residual,
         # Backward-compatible aliases retained while the H30H30 branch is being
         # rebuilt around the paper2 seven-scaffold notation.

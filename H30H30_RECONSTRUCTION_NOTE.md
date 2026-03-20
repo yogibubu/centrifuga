@@ -369,6 +369,17 @@ water-like basis, but they show that the dominant content separates into:
 
 This is presently the cleanest roadmap for the BCH-side closure of `H30H30`.
 
+Operationally, the next BCH derivation should therefore *not* start from the
+full six follow-up placeholders. It should target directly:
+
+- a dominant `iii,iij` pivot, benchmark-aligned with
+  `waterlike_scaffold_basis1_candidate`;
+- a dominant `iij,iij` pivot, benchmark-aligned with
+  `waterlike_scaffold_basis2_candidate`.
+
+The reduced pivots remain useful only as qualitative guides. The numerically
+faithful residual basis is still the unreduced two-vector water-like carrier.
+
 The last sanity check is global, not species-specific. The script
 [scripts/h30h30_diag6_global_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_diag6_global_fit.py)
 fits all four benchmark molecules simultaneously in the six-vector basis
@@ -381,6 +392,255 @@ large for all four systems and the fitted norms become strongly distorted.
 So the current six-vector carrier is a useful diagnostic organization of the
 channel, but it is not yet a solver-facing universal parameterization with
 species-independent coefficients.
+
+The first direct BCH attack on these residual sectors has also been set up
+through
+[scripts/h30h30_sector_symbolic_probe.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_sector_symbolic_probe.py)
+and
+[scripts/h30h30_sector_timeout_sweep.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_sector_timeout_sweep.py).
+At the moment, however, even the symbol-class-preserving minimal probes remain
+computationally too heavy to yield a useful closed-form extraction of the
+dominant `iii,iij` and `iij,iij` pivots. So the next BCH-side progress will
+likely require either:
+
+- a more aggressively targeted commutator truncation;
+- or a direct extraction of the relevant nested-commutator families, bypassing
+  the current generic quartic build.
+
+For the benchmark set used so far, this restriction is also physically
+reasonable. In `H2O` and `H2S`, genuine three-mode `ijk` cubic blocks are
+forbidden by symmetry, while in `H2CO` and `H2CS` they are not expected to
+dominate the observed residual once the diagonal and two-mode sectors are
+treated correctly. So the present closure target for `H30H30` can legitimately
+remain focused on:
+
+- the diagonal benchmark-derived carrier;
+- the dominant `iii,iij` residual pivot;
+- the dominant `iij,iij` residual pivot.
+
+The direct BCH attack is also less blocked than it first appeared. The updated
+probe
+[scripts/h30h30_sector_symbolic_probe.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_sector_symbolic_probe.py)
+now supports an explicit recursive construction
+
+- `S1 -> K2 -> S2 -> K3 -> S3 -> K4`
+
+for the targeted `H30,H30` input built from `H12 + V3`. In the restricted
+`iii+iij` sector with `n_modes=2` and `diag-plus-ab` rotational couplings,
+this manual route is already tractable:
+
+- `|H1| = 84`
+- `|S1| = 56`
+- `|K2| = 613`
+- `|S2| = 414`
+- `K3` collapses to zero in this restricted probe
+- `|K4| = 2763`
+
+with a wall time of about `24 s` for the final `K4` build on the current
+machine. So the next derivation step should proceed through this explicit
+sector-by-sector recursion, not through the generic `build_effective_to_order`
+driver.
+
+The same manual probe also shows that, for `n_modes=2`, `seed=7`, and the
+restricted `diag-plus-ab` rotational set, the difference
+
+- `(iii+iij) - iii`
+
+almost coincides with the pure `iij` sector: the relative norm of
+`[(iii+iij)-iii] - iij` is only about `2.25e-2`. So the dominant unresolved
+follow-up pivot is indeed very close to a genuine two-mode `iij` object, with
+only a modest `iii↔iij` interference layer on top of it.
+
+This is now made fully explicit in
+[scripts/h30h30_iij_manual_breakdown.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_iij_manual_breakdown.py),
+which prints the normalized `iii`, `iij`, `iii+iij`, and interference pieces
+component by component. In the collapsed `n_modes=2`, `seed=7` probe, each
+normalized component remains a single rational term; for example
+
+- `tau_xxxx(interference) = -19/1492992`
+- `tau_xxyy(interference) = -2261/89579520`
+
+after division by `A^2 C^2 hbar`. So the next derivation target is now much
+sharper: derive the dominant `iij` pivot first, and only then reconstruct the
+small residual `iii↔iij` interference layer.
+
+This also makes clear what the next step is *not*. The audit
+[scripts/h30h30_iij_candidate_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_iij_candidate_audit.py)
+shows that the manual `iij` pivot is not well captured by the currently coded
+follow-up candidates:
+
+- best single-candidate alignment is only with `diag_0_iij_iij_1_candidate`
+  (`corr ≈ 0.79`, relative one-vector residual `≈ 0.61`);
+- even the full span of the five present `iii,iij / iij,iij` candidates leaves
+  a relative residual of about `0.44`.
+
+So the dominant `iij` pivot is not just a reweighting of the existing
+follow-up blocks. It requires a new solver-facing basis vector derived from the
+manual BCH sector recursion.
+
+That basis vector is now exposed in
+[quartic_channels.py](/Users/vincenzobarone/centrifugal/quartic_channels.py)
+as `manual_iij_pivot_candidate`. At the present stage it should still be read
+as a diagnostic solver-facing object: it uses the exact componentwise BCH
+coefficients recovered from the manual sector recursion, but keeps the simplest
+pure-power `Phi_iij^2 / (omega_i^4 omega_j^3)` kernel until the final
+perturbative normalization is derived explicitly.
+
+The same file now also exposes the closed restricted-probe BCH decomposition:
+
+- `manual_iij_order2_candidate`
+- `manual_iij_order3_candidate`
+- `manual_iij_order2_candidate + manual_iij_order3_candidate = manual_iij_pivot_candidate`
+
+so the solver-facing diagnostic branch mirrors the explicit BCH split rather
+than only the aggregated final vector.
+
+The first scalar-fit audit,
+[scripts/h30h30_manual_iij_scale_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_manual_iij_scale_fit.py),
+shows that this normalization is not yet universal. Fitting a single factor
+`alpha` against the residual left after `trusted_total` gives:
+
+- `H2O`: `alpha ≈ +2.49e-1`
+- `H2S`: `alpha ≈ -2.06e+1`
+- `H2CO`: `alpha ≈ -1.33e+1`
+- `H2CS`: `alpha ≈ -5.28e+0`
+
+while the global shared-factor fit is essentially useless
+(`alpha ≈ 1.63e-1`, with almost no reduction of the concatenated residual).
+So the manual `iij` pivot is structurally much better than the older
+follow-up blocks, but its perturbative normalization is still missing.
+
+The two-factor variant in
+[scripts/h30h30_manual_iij_split_scale_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_manual_iij_split_scale_fit.py),
+which fits separate prefactors for pure (`DJ`, `DJK`, `DK`) and mixed (`d1`,
+`d2`) Watson components, improves the global residual only modestly
+(`||post||/||res|| ≈ 9.57e-1`). So the missing normalization is not just a
+trivial pure-vs-mixed rescaling of the manual `iij` pivot.
+
+The next useful structural fact is now explicit in
+[scripts/h30h30_iij_bch_order_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_iij_bch_order_audit.py):
+in the restricted `iij` probe, the quartic pivot receives no contribution from
+BCH orders `1` or `4`. The entire coefficient vector comes from orders `2` and
+`3`, with a fixed componentwise ratio
+
+- order-2 contribution = `3 × final`
+- order-3 contribution = `-4 × final`
+
+for the representative components `tau_xxxx` and `tau_xxyy` (and analogously
+for the full six-component vector). So the missing perturbative prefactor is
+not a diffuse high-order effect: it is controlled by a very specific
+order-2/order-3 cancellation pattern inside the manual BCH recursion.
+
+The companion audit
+[scripts/h30h30_iij_bch_interference_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_iij_bch_interference_audit.py)
+shows that this is not a pure `S2` effect. In the restricted probe:
+
+- with `S2` alone, only the BCH power-2 contribution survives, and it appears
+  with the *opposite* sign;
+- the final order-2 coefficient is obtained only after `S1↔S2` interference;
+- the BCH power-3 contribution is purely mixed, since it vanishes for `S2`
+  alone and also vanishes for `S1` alone.
+
+So the missing normalization of the manual `iij` pivot is controlled by the
+interference between the first- and second-order generators, not by a single
+standalone `S2` kernel.
+
+This can now be sharpened one step further. The nested-commutator audit
+[scripts/h30h30_iij_bch_nested_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_iij_bch_nested_audit.py)
+shows that the BCH power-2 contribution is exactly
+
+\[
+\frac{1}{4}[S^{(2)},[S^{(1)},H^{(1)}]]
+\]
+
+for the representative `tau_xxxx`/`tau_xxyy` components in the restricted
+probe. The same audit now also shows that the BCH power-3 contribution is
+exactly
+
+\[
+\frac{1}{6}[S^{(2)},[S^{(1)},[S^{(1)},H_0]]].
+\]
+
+So, in the restricted probe, the manual `iij` prefactor is already closed as a
+sum of two explicit nested-commutator structures.
+
+At the same time, the new molecular audit
+[scripts/h30h30_manual_iij_bch_preview_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_manual_iij_bch_preview_audit.py)
+shows that neither BCH order contributes as a small standalone correction in
+Watson space: both `manual_iij_order2_candidate` and
+`manual_iij_order3_candidate` are individually far too large on the
+`H2O/H2S/H2CO/H2CS` benchmarks, while the much smaller final
+`manual_iij_pivot_candidate` is produced only by their strong cancellation.
+So the missing solver-facing ingredient is not a new tensorial direction, but
+the physically correct perturbative normalization that preserves that
+order-2/order-3 cancellation pattern beyond the restricted probe.
+
+This point is sharpened further by the two-parameter fit in
+[scripts/h30h30_manual_iij_bch_scale_fit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_manual_iij_bch_scale_fit.py):
+for all four benchmark species the fitted BCH coefficients satisfy exactly
+`alpha_3 / alpha_2 = -2/3`. So, at the solver-facing level, BCH orders 2 and 3
+do not span two independent directions; they project onto the same tensorial
+vector and differ only by the fixed internal BCH ratio already seen in the
+restricted probe. The unresolved part is therefore a single species-dependent
+overall prefactor multiplying that common `iij` direction.
+
+The follow-up audit
+[scripts/h30h30_manual_iij_alignment_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_manual_iij_alignment_audit.py)
+shows, however, that this common `iij` direction is not equally important for
+all species. Its residual alignment is strong for `H2S/H2CO/H2CS`, but almost
+absent for `H2O`. The post-`iij` residual audit
+[scripts/h30h30_post_iij_residual_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_post_iij_residual_audit.py)
+then shows that:
+
+- `H2O` remains strongly aligned with the water-like scaffold basis and with one
+  benchmark-derived diagonal residual direction;
+- `H2S` falls back almost entirely onto the benchmark-derived diagonal branch;
+- `H2CO/H2CS` remain distributed across the broader benchmark/water-like span.
+
+So the next derivation step should not force a single universal post-diagonal
+closure. The realistic split is now:
+
+- a common `iij`-driven branch, relevant especially for `H2S/H2CO/H2CS`;
+- a residual water-like/diagonal branch, still needed to explain `H2O`.
+
+The family-wise rank audit
+[scripts/h30h30_post_iij_family_rank_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_post_iij_family_rank_audit.py)
+sharpens this further:
+
+- the post-`iij` residuals of `H2CO/H2CS` are almost one-dimensional
+  (`cosine ≈ 0.999`);
+- the post-`iij` residuals of `H2O/H2S` remain genuinely two-dimensional
+  (`cosine ≈ -0.47`).
+
+So the carbonyl-like pair is already close to a shared closure after the common
+`iij` branch is removed, while the water-like pair still requires an explicitly
+two-component residual treatment.
+
+This is now confirmed explicitly by the family-local closure audit
+[scripts/h30h30_family_local_closure.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_family_local_closure.py):
+after subtracting `trusted_total` and the best one-parameter projection onto
+`manual_iij_pivot_candidate`,
+
+- the `H2O/H2S` residuals close exactly in a water-like `2D` family plane;
+- the `H2CO/H2CS` residuals close exactly in a carbonyl-like `2D` family plane,
+  with the second singular value much smaller than the first, i.e. a nearly
+  one-dimensional carbonyl residual branch.
+
+So the first genuinely stable closure statement for the current benchmarks is:
+
+- `trusted_total`
+- plus a common `iij` branch
+- plus a family-local residual plane
+
+rather than a single universal low-dimensional basis valid for all four
+species at once.
+
+The path tracker
+[scripts/h30h30_iij_bch_path_audit.py](/Users/vincenzobarone/centrifugal/scripts/h30h30_iij_bch_path_audit.py)
+confirms the corresponding generator-path interpretation: once the initial
+`H0` branch is tracked explicitly, the only nonzero path contributing to the
+`1/6 ad^3` sector is the one labelled `('1','H0','1','2')`, i.e. the path
+associated with `[S^{(2)},[S^{(1)},[S^{(1)},H_0]]]`.
 
 ### 5. A first signed ``iii,iij`` family is now visible
 

@@ -7,12 +7,16 @@ from scripts.h30h30_diagonal_symbolic_probe import _build_diag_only_collapsed, _
 from scripts.h30h30_diagonal_subspace_probe import _collapsed_diag_vector
 from scripts.h30h30_diagonal_rotmix_probe import _collapsed_tau_vector, UNIVERSAL_DIAG
 from scripts.h30h30_diag_benchmark_basis import build_one_mode_benchmark_basis
+from scripts.h30h30_sector_symbolic_probe import _collapsed_sector_vector
 from quartic_channels import (
     _H30H30_DIAG1_COEFFS,
     _H30H30_DIAG_BENCH_RESID11_COEFFS,
     _H30H30_DIAG_BENCH_RESID13_COEFFS,
     _H30H30_DIAG1_III_III_CORR_COEFFS,
     _H30H30_DIAG1_III_III_ROTMIX_COEFFS,
+    _H30H30_MANUAL_IIJ_PIVOT_COEFFS,
+    _H30H30_MANUAL_IIJ_ORDER2_COEFFS,
+    _H30H30_MANUAL_IIJ_ORDER3_COEFFS,
     _H30H30_WATERLIKE_BASIS1_WEIGHTS,
     _H30H30_WATERLIKE_BASIS2_WEIGHTS,
     _H30H30_WATERLIKE_SCAFFOLD_BASIS1_WEIGHTS,
@@ -265,6 +269,160 @@ def test_h30h30_diag_only_symbolic_probe_has_universal_ratios():
             assert sp.simplify(ratio - expected) == 0
 
 
+def test_h30h30_manual_sector_recursion_matches_full_builder_for_small_case():
+    rot_pairs = {(0, 0), (1, 1), (2, 2), (0, 1), (1, 0)}
+    full = _collapsed_sector_vector(
+        1,
+        7,
+        allowed_classes={"iii", "iij"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=False,
+    )
+    manual = _collapsed_sector_vector(
+        1,
+        7,
+        allowed_classes={"iii", "iij"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=True,
+    )
+    assert np.allclose(full, manual, atol=1.0e-12, rtol=1.0e-12)
+
+
+def test_h30h30_manual_iij_sector_dominates_iii_iij_followup_probe():
+    rot_pairs = {(0, 0), (1, 1), (2, 2), (0, 1), (1, 0)}
+    iii = _collapsed_sector_vector(
+        2,
+        7,
+        allowed_classes={"iii"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=True,
+    )
+    iij = _collapsed_sector_vector(
+        2,
+        7,
+        allowed_classes={"iij"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=True,
+    )
+    both = _collapsed_sector_vector(
+        2,
+        7,
+        allowed_classes={"iii", "iij"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=True,
+    )
+    interference = both - iii - iij
+    assert np.linalg.norm(interference) > 0.0
+    assert np.linalg.norm(interference) / np.linalg.norm(iij) < 3.0e-2
+
+
+def test_h30h30_manual_iij_pivot_is_not_closed_by_existing_followup_candidates():
+    from quartic_channels import (
+        _H30H30_DIAG1_III_IIJ0_COEFFS,
+        _H30H30_DIAG0_III_IIJ1_COEFFS,
+        _H30H30_DIAG0_III_IIJ2_COEFFS,
+        _H30H30_IIJ_IIJ1_COEFFS,
+        _H30H30_IIJ_IIJ2_COEFFS,
+    )
+
+    mon_keys = ("tau_xxxx", "tau_yyyy", "tau_zzzz", "tau_xxyy", "tau_xxzz", "tau_yyzz")
+    rot_pairs = {(0, 0), (1, 1), (2, 2), (0, 1), (1, 0)}
+    iij = _collapsed_sector_vector(
+        2,
+        7,
+        allowed_classes={"iij"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=True,
+    )
+    basis = np.column_stack([
+        np.array([float(sp.N(_H30H30_DIAG1_III_IIJ0_COEFFS[k])) for k in mon_keys], dtype=float),
+        np.array([float(sp.N(_H30H30_DIAG0_III_IIJ1_COEFFS[k])) for k in mon_keys], dtype=float),
+        np.array([float(sp.N(_H30H30_DIAG0_III_IIJ2_COEFFS[k])) for k in mon_keys], dtype=float),
+        np.array([float(sp.N(_H30H30_IIJ_IIJ1_COEFFS[k])) for k in mon_keys], dtype=float),
+        np.array([float(sp.N(_H30H30_IIJ_IIJ2_COEFFS[k])) for k in mon_keys], dtype=float),
+    ])
+    coeffs, *_ = np.linalg.lstsq(basis, iij, rcond=None)
+    relres = np.linalg.norm(iij - basis @ coeffs) / np.linalg.norm(iij)
+    assert relres > 0.4
+
+
+def test_h30h30_manual_iij_coeff_vector_matches_manual_sector_probe():
+    rot_pairs = {(0, 0), (1, 1), (2, 2), (0, 1), (1, 0)}
+    iij = _collapsed_sector_vector(
+        2,
+        7,
+        allowed_classes={"iij"},
+        diag_rot_only=False,
+        rot_pairs=rot_pairs,
+        manual=True,
+    )
+    coeff_vec = np.array(
+        [float(sp.N(_H30H30_MANUAL_IIJ_PIVOT_COEFFS[k])) for k in ("tau_xxxx", "tau_yyyy", "tau_zzzz", "tau_xxyy", "tau_xxzz", "tau_yyzz")],
+        dtype=float,
+    )
+    assert np.allclose(iij, coeff_vec, atol=1.0e-12, rtol=1.0e-12)
+
+
+def test_h30h30_manual_iij_order_decomposition_matches_closed_bch_ratios():
+    for key, value in _H30H30_MANUAL_IIJ_PIVOT_COEFFS.items():
+        assert sp.simplify(_H30H30_MANUAL_IIJ_ORDER2_COEFFS[key] - 3 * value) == 0
+        assert sp.simplify(_H30H30_MANUAL_IIJ_ORDER3_COEFFS[key] + 2 * value) == 0
+
+
+def test_h30h30_manual_iij_bch_prefactor_is_closed_in_restricted_probe():
+    import derive_watson_quartic_vanvleck as dv
+    from scripts.h30h30_sector_symbolic_probe import _filter_v3
+
+    dv.CHANNEL_AWARE = True
+    dv.PRUNE_MAX_J = 4
+    dv.PRUNE_MAX_V = 4
+    _h, hrv1, hrv2, v3, v4, omega, hbar, class_syms = dv.build_hprime_collapsed(
+        n_modes=2,
+        seed=7,
+        diag_rot_only=False,
+        rot_pairs={(0, 0), (1, 1), (2, 2), (0, 1), (1, 0)},
+        symbolic_omega=False,
+    )
+    v3f = _filter_v3(v3, {"iij"})
+    h1 = dv.build_targeted_input("H30,H30", hrv1, hrv2, v3f, v4)[1]
+    h_series = {0: {}, 1: h1, 2: {}, 3: {}, 4: {}}
+    partial1 = dv.bch_transform(h_series, {}, omega, hbar, max_order=1)
+    _, off1 = dv.split_diag_offdiag(partial1[1], omega, hbar)
+    s1 = dv.solve_s_order(off1, omega, hbar)
+    partial2 = dv.bch_transform(h_series, {1: s1}, omega, hbar, max_order=2)
+    _, off2 = dv.split_diag_offdiag(partial2[2], omega, hbar)
+    s2 = dv.solve_s_order(off2, omega, hbar)
+    a_sym, _b_sym, c_sym, _d_sym = class_syms
+    scale = a_sym**2 * c_sym**2 * hbar
+
+    def tau_pair(expr):
+        exprn = dv.prune_expr(dv.normal_order_expr(expr))
+        quartic = dv.extract_quartic_rot_ground(exprn)
+        tau = dv.tau_constants_from_poly(dv.commuting_projection(quartic))
+        piece = dv.decompose_tau_by_symbol_class(tau).get("H30,H30", {})
+        if not piece:
+            return None
+        return sp.simplify(piece["tau_xxxx"] / scale), sp.simplify(piece["tau_xxyy"] / scale)
+
+    order2_expected = (
+        -sp.Rational(624163585, 449474199552),
+        -sp.Rational(929643954971, 288947699712000),
+    )
+    order3_expected = (
+        sp.Rational(624163585, 674211299328),
+        sp.Rational(929643954971, 433421549568000),
+    )
+    assert tau_pair(dv.scale_expr(dv.comm_expr(s2, dv.comm_expr(s1, h1)), sp.Rational(1, 4))) == order2_expected
+    h0_branch = dv.comm_with_h0(s1, omega, hbar)
+    assert tau_pair(dv.scale_expr(dv.comm_expr(s2, dv.comm_expr(s1, h0_branch)), sp.Rational(1, 6))) == order3_expected
+
+
 def test_h30h30_one_offdiag_rotational_block_deforms_universal_diag_core():
     rot_pairs = {(0, 0), (1, 1), (2, 2), (0, 1), (1, 0)}
     full = _collapsed_tau_vector(2, 7, rot_pairs=rot_pairs)
@@ -362,3 +520,36 @@ def test_h30h30_waterlike_preview_total_contains_named_candidates():
     assert any(sp.simplify(val) != 0 for val in pieces["waterlike_scaffold_basis2_candidate"].values())
     assert any(sp.simplify(val) != 0 for val in pieces["waterlike_reduced_iii_iij_candidate"].values())
     assert any(sp.simplify(val) != 0 for val in pieces["waterlike_reduced_iij_iij_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["manual_iij_order2_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["manual_iij_order3_candidate"].values())
+    assert any(sp.simplify(val) != 0 for val in pieces["manual_iij_pivot_candidate"].values())
+    for key in pieces["manual_iij_pivot_candidate"]:
+        _assert_small(
+            sp.simplify(
+                pieces["manual_iij_order2_candidate"][key]
+                + pieces["manual_iij_order3_candidate"][key]
+                - pieces["manual_iij_pivot_candidate"][key]
+            )
+        )
+    for key in pieces["trusted_total"]:
+        _assert_small(
+            sp.simplify(
+                pieces["manual_iij_preview_total"][key]
+                - pieces["trusted_total"][key]
+                - pieces["manual_iij_pivot_candidate"][key]
+            )
+        )
+        _assert_small(
+            sp.simplify(
+                pieces["manual_iij_bch_closed_preview_total"][key]
+                - pieces["manual_iij_preview_total"][key]
+            )
+        )
+        _assert_small(
+            sp.simplify(
+                pieces["manual_iij_order2_preview_total"][key]
+                + pieces["manual_iij_order3_preview_total"][key]
+                - pieces["trusted_total"][key]
+                - pieces["manual_iij_bch_closed_preview_total"][key]
+            )
+        )
