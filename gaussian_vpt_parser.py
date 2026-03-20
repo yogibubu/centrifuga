@@ -132,6 +132,17 @@ class GaussianSexticBenchmark:
 
 
 @dataclass
+class GaussianLinearLTypeConstants:
+    q_e_cm: dict[int, float]
+    q_e_mhz: dict[int, float]
+    q_j_cm: dict[int, float]
+    q_j_mhz: dict[int, float]
+    q_k_cm: dict[int, float]
+    q_k_mhz: dict[int, float]
+    active_dd_22_count: int | None = None
+
+
+@dataclass
 class GaussianFchkHarmonicData:
     atomic_numbers: np.ndarray
     masses_amu: np.ndarray
@@ -573,6 +584,54 @@ def _find_last_section_index(lines: list[str], header: str) -> int:
     return indices[-1]
 
 
+def _find_linear_ltype_constants(lines: list[str]) -> GaussianLinearLTypeConstants:
+    q_e_cm: dict[int, float] = {}
+    q_j_cm: dict[int, float] = {}
+    q_k_cm: dict[int, float] = {}
+    current: str | None = None
+    pattern = re.compile(r"^\s*Q\(\s*(\d+)\)\s+([\-0-9Dd.+]+)")
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("q^e constants"):
+            current = "q_e"
+            continue
+        if stripped.startswith("q^J constants"):
+            current = "q_j"
+            continue
+        if stripped.startswith("q^K constants"):
+            current = "q_k"
+            continue
+        match = pattern.match(line)
+        if current and match:
+            idx = int(match.group(1))
+            value = _to_float(match.group(2))
+            if current == "q_e":
+                q_e_cm[idx] = value
+            elif current == "q_j":
+                q_j_cm[idx] = value
+            else:
+                q_k_cm[idx] = value
+            continue
+        if current and stripped.startswith("===="):
+            current = None
+    if not (q_e_cm or q_j_cm or q_k_cm):
+        raise ValueError("Could not parse linear l-type constants.")
+    active_dd_22 = None
+    for line in lines:
+        m = re.search(r"(\d+)\s+active resonances out of\s+(\d+)", line)
+        if m:
+            active_dd_22 = int(m.group(1))
+    return GaussianLinearLTypeConstants(
+        q_e_cm=q_e_cm,
+        q_e_mhz={key: val * CMINV_TO_MHZ for key, val in q_e_cm.items()},
+        q_j_cm=q_j_cm,
+        q_j_mhz={key: val * CMINV_TO_MHZ for key, val in q_j_cm.items()},
+        q_k_cm=q_k_cm,
+        q_k_mhz={key: val * CMINV_TO_MHZ for key, val in q_k_cm.items()},
+        active_dd_22_count=active_dd_22,
+    )
+
+
 def _find_tau_tensor(lines: list[str], start: int) -> np.ndarray:
     tau = np.zeros((3, 3, 3, 3), dtype=float)
     i = start
@@ -893,6 +952,11 @@ def parse_gaussian_sextic_benchmark(path: str | Path) -> GaussianSexticBenchmark
         nu=nu,
         lam=lam,
     )
+
+
+def parse_gaussian_linear_ltype_constants(path: str | Path) -> GaussianLinearLTypeConstants:
+    lines = Path(path).read_text().splitlines()
+    return _find_linear_ltype_constants(lines)
 
 
 def parse_gaussian_anharmonic_force_data(path: str | Path) -> GaussianAnharmonicForceData:

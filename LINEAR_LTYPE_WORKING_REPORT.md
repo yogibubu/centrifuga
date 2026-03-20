@@ -205,7 +205,7 @@ constant mapping.
 ## First external benchmark check
 
 Using the present `C2H2` implementation, the backend returns for each
-degenerate pair a primary circular-basis constant of about
+degenerate pair a primary circular-basis pairwise constant of about
 
 - `q_l = 0.0362 MHz`
 
@@ -229,6 +229,65 @@ This is a very useful diagnostic result:
 In other words, the operator carrier and the convention are now fixed,
 but the final benchmark-level mapping to the observed `l`-type
 constants is still missing.
+
+## Current benchmark-level results
+
+For the available real linear benchmark `C2H2`, the present
+implementation now gives:
+
+- pure rotational quartic scalar:
+  - `D = 0.0361984 MHz`
+- pair `Pi_g(1)`:
+  - `omega_t = 535.0236 cm^-1`
+  - `q_l = 0.0361984 MHz`
+  - `q_e^(0) = 131.860363 MHz`
+  - `q_e^(W) = 131.860375 MHz`
+  - `q_J^(pair) = 0.0361984 MHz`
+  - `q_H^(pair) = 0`
+- pair `Pi_u(1)`:
+  - `omega_t = 775.2714 cm^-1`
+  - `q_l = 0.0361984 MHz`
+  - `q_e^(0) = 90.998338 MHz`
+  - `q_e^(W) = 90.998346 MHz`
+  - `q_J^(pair) = 0.0361984 MHz`
+  - `q_H^(pair) = 0`
+
+These are the first results that should now be regarded as stable:
+
+- `q_e^(0)` and `q_e^(W)` provide the spectroscopic-scale `J0` term,
+- the tensorial pairwise branch provides the `J^2` and `J^4` feeds,
+- and the minimal effective linear model keeps these two layers
+  explicitly separated.
+
+For `HCCD`, where both a local benchmark calculation and NIST `q_ν`
+values are available, the current branch gives:
+
+- pure rotational quartic scalar:
+  - `D = 0.0251590 MHz`
+- pair `Pi(1)`:
+  - `omega_t = 467.0436 cm^-1`
+  - `q_e^(0) = 127.107822 MHz`
+  - `q_e^(W) = 127.107836 MHz`
+  - `q_v~2B/nu_anh = 100.095585 MHz` using `nu_anh = 593.082 cm^-1`
+- pair `Pi(2)`:
+  - `omega_t = 697.9785 cm^-1`
+  - `q_e^(0) = 85.052605 MHz`
+  - `q_e^(W) = 85.052614 MHz`
+  - `q_v~2B/nu_anh = 84.046604 MHz` using `nu_anh = 706.333 cm^-1`
+
+against the experimental HCCD values previously collected from NIST:
+
+- `nu4: q_ν = 132.993 MHz`
+- `nu5: q_ν = 105.702 MHz`
+
+So the present closure is now precise enough to say:
+
+- the branch already predicts the correct spectroscopic scale,
+- `q_e^(W)` is the correct equilibrium-level `J0` driver,
+- a first state-specific estimate can be built from the anharmonic
+  fundamentals,
+- but the final benchmark-level mapping to observed `q_ν` values is not
+  yet quantitatively closed for all degenerate modes.
 
 ## What is still missing before the block can be called definitive
 

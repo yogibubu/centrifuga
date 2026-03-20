@@ -1058,6 +1058,7 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
                 "    spectroscopic q estimates: "
                 f"q_e^(0)={float(qspec['q_e0']):.6g} Hz, "
                 f"q_e^(W)={float(qspec['q_eW']):.6g} Hz, "
+                f"q_e^(src)={float(qspec['q_e_source']):.6g} Hz, "
                 f"q_v={qspec['q_v']}\n",
             )
         qeff = pair.get("effective_linear_model_hz")
@@ -1066,9 +1067,47 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
             widget.insert(
                 tk.END,
                 "    effective linear model: "
-                f"q_e^(W)={float(c['q_eW']):.6g} Hz, "
+                f"q_e^(src)={float(c['q_e_source']):.6g} Hz, "
                 f"q_J^(pair)={float(c['q_J_pair']):.6g} Hz, "
                 f"q_H^(pair)={float(c['q_H_pair']):.6g} Hz\n",
+            )
+        gsrc = pair.get("gaussian_source_rotational_constants_hz")
+        if gsrc:
+            widget.insert(
+                tk.END,
+                "    Gaussian source q^J/q^K: "
+                f"q^J(recon)={float(gsrc['q_J_source']):.6g} Hz, "
+                f"q^K(recon)={float(gsrc['q_K_source']):.6g} Hz\n",
+            )
+        gbench = pair.get("gaussian_log_benchmark")
+        if gbench:
+            widget.insert(
+                tk.END,
+                "    Gaussian log benchmark: "
+                f"Q({int(gbench['Q_index'])}), "
+                f"q^e={float(gbench['q_e_mhz']):.6g} MHz, "
+                f"q^J={float(gbench['q_J_mhz']):.6g} MHz, "
+                f"q^K={float(gbench['q_K_mhz']):.6g} MHz, "
+                f"active DD(2-2)={gbench['active_dd_22_count']}\n",
+            )
+        gres = pair.get("gaussian_source_exact_constants_hz")
+        if gres:
+            widget.insert(
+                tk.END,
+                "    Gaussian RotL2x exact constants: "
+                f"q^e={float(gres['q_e']):.6g} Hz, "
+                f"q^J={float(gres['q_J']):.6g} Hz, "
+                f"q^K={float(gres['q_K']):.6g} Hz "
+                f"[Q({int(gres['Q_index'])}), active DD(2-2)={gres['active_dd_22_count']}]\n",
+            )
+        gfinal = pair.get("effective_linear_model_final_hz")
+        if gfinal:
+            c = gfinal["constants_hz"]
+            widget.insert(
+                tk.END,
+                "    final linear model: "
+                f"source={gfinal['source']}, "
+                f"q={', '.join(f'{k}={float(v):.6g} Hz' for k, v in c.items())}\n",
             )
         conv_map = pair.get("conventional_pair_mapping")
         if conv_map:
