@@ -143,6 +143,12 @@ class GaussianLinearLTypeConstants:
 
 
 @dataclass
+class GaussianLinearRotDistConstants:
+    d_mhz: float | None
+    h_mhz: float | None
+
+
+@dataclass
 class GaussianFchkHarmonicData:
     atomic_numbers: np.ndarray
     masses_amu: np.ndarray
@@ -152,6 +158,7 @@ class GaussianFchkHarmonicData:
     vib_e2: np.ndarray
     vib_modes: np.ndarray
     cartesian_force_constants: np.ndarray
+    point_group: str | None = None
 
 
 @dataclass
@@ -159,6 +166,64 @@ class GaussianAnharmonicForceData:
     frequencies_cm: np.ndarray
     phi3_reduced_cm: np.ndarray
     phi3_raw_au: np.ndarray
+    phi4_reduced_cm: np.ndarray
+    phi4_raw_au: np.ndarray
+
+
+@dataclass
+class GaussianResonanceEntry:
+    kind: str
+    lhs_modes: tuple[int, ...]
+    rhs_modes: tuple[int, ...]
+    freq_diff_cm: float
+    metric_1: float | None
+    metric_2: float | None
+    status: str
+
+
+@dataclass
+class GaussianVariationalOverlap:
+    dvpt2_state: str
+    overlap: float
+    variational_state_index: int
+
+
+@dataclass
+class GaussianVariationalEnergy:
+    dvpt2_state: str
+    deperturbed_energy_cm: float
+    after_diag_energy_cm: float
+
+
+@dataclass
+class GaussianVariationalStateDefinition:
+    variational_state_index: int
+    coefficient: float
+    dvpt2_state: str
+
+
+@dataclass
+class GaussianFundamentalBand:
+    mode_index: int
+    status: str
+    harmonic_cm: float
+    anharmonic_cm: float
+    overlap_flag: str | None = None
+
+
+@dataclass
+class GaussianAnharmonicAnalysis:
+    pt2_model: str
+    x_coriolis_cm: np.ndarray
+    x_third_derivative_cm: np.ndarray
+    x_fourth_derivative_cm: np.ndarray
+    x_total_cm: np.ndarray
+    resonances: tuple[GaussianResonanceEntry, ...]
+    active_resonance_counts: dict[str, int]
+    variational_overlaps: tuple[GaussianVariationalOverlap, ...]
+    variational_energies: tuple[GaussianVariationalEnergy, ...]
+    variational_state_definitions: tuple[GaussianVariationalStateDefinition, ...]
+    fundamental_bands: tuple[GaussianFundamentalBand, ...]
 
 
 def _last_block(text: str, header: str, n_lines: int | None = None) -> list[str]:
@@ -456,10 +521,26 @@ def _find_tau_prime(lines: list[str]) -> tuple[dict[str, float], dict[str, float
     start = indices[-1]
     tau_cm: dict[str, float] = {}
     tau_mhz: dict[str, float] = {}
-    for i in range(start + 3, start + 9):
-        parts = lines[i].split()
-        tau_cm[parts[1]] = _to_float(parts[2])
-        tau_mhz[parts[1]] = _to_float(parts[3])
+    pattern = re.compile(
+        r"^\s*TauP\s+([abc]{4})\s+([\-0-9Dd.+]+)\s+([\-0-9Dd.+]+)\s*$",
+        re.IGNORECASE,
+    )
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        if not line.strip():
+            if tau_cm:
+                break
+            continue
+        match = pattern.match(line)
+        if match:
+            key = match.group(1).lower()
+            tau_cm[key] = _to_float(match.group(2))
+            tau_mhz[key] = _to_float(match.group(3))
+            continue
+        if tau_cm:
+            break
+    if not tau_cm:
+        raise ValueError("Could not parse Tau Prime section.")
     return tau_cm, tau_mhz
 
 
@@ -632,6 +713,28 @@ def _find_linear_ltype_constants(lines: list[str]) -> GaussianLinearLTypeConstan
     )
 
 
+def _find_linear_rotdist_constants(lines: list[str]) -> GaussianLinearRotDistConstants:
+    d_mhz = None
+    h_mhz = None
+    indices = [i for i, line in enumerate(lines) if "Pickett input using symmetry:" in line]
+    if not indices:
+        return GaussianLinearRotDistConstants(d_mhz=None, h_mhz=None)
+    start = indices[-1]
+    for line in lines[start:]:
+        stripped = line.strip()
+        m_d = re.match(r"^D\s*=\s*([\-0-9Dd.+]+)\s*$", stripped)
+        if m_d:
+            d_mhz = _to_float(m_d.group(1))
+            continue
+        m_h = re.match(r"^H\s*=\s*([\-0-9Dd.+]+)\s*$", stripped)
+        if m_h:
+            h_mhz = _to_float(m_h.group(1))
+            continue
+        if d_mhz is not None and h_mhz is not None:
+            break
+    return GaussianLinearRotDistConstants(d_mhz=d_mhz, h_mhz=h_mhz)
+
+
 def _find_tau_tensor(lines: list[str], start: int) -> np.ndarray:
     tau = np.zeros((3, 3, 3, 3), dtype=float)
     i = start
@@ -659,6 +762,257 @@ def _find_tau_tensor(lines: list[str], start: int) -> np.ndarray:
     if not np.any(tau):
         raise ValueError("Could not parse Tau tensor block.")
     return tau
+
+
+def _find_lower_triangular_matrix_after_header(lines: list[str], header: str) -> np.ndarray:
+    start = _find_last_section_index(lines, header)
+    row_map: dict[int, list[float]] = {}
+    for i in range(start + 3, len(lines)):
+        line = lines[i]
+        if not line.strip():
+            continue
+        parts = line.split()
+        if parts and all(tok.isdigit() for tok in parts):
+            continue
+        if len(parts) >= 2 and parts[0].isdigit():
+            row_idx = int(parts[0])
+            row_map.setdefault(row_idx, []).extend(_to_float(tok) for tok in parts[1:])
+            continue
+        if row_map:
+            break
+    if not row_map:
+        raise ValueError(f"Could not parse lower-triangular matrix after header: {header}")
+    n = max(row_map)
+    out = np.zeros((n, n), dtype=float)
+    for row_idx in range(1, n + 1):
+        vals = row_map.get(row_idx, [])
+        if len(vals) != row_idx:
+            raise ValueError(f"Malformed lower-triangular matrix row {row_idx} after header: {header}")
+        out[row_idx - 1, :row_idx] = vals
+        out[:row_idx, row_idx - 1] = vals
+    return out
+
+
+def _find_resonance_entries(lines: list[str]) -> tuple[tuple[GaussianResonanceEntry, ...], dict[str, int]]:
+    entries: list[GaussianResonanceEntry] = []
+    active_counts = {"fermi_12": 0, "darling_22": 0, "darling_11": 0}
+    sections = (
+        ("fermi_12", "1-2 Fermi resonances"),
+        ("darling_22", "2-2 Darling-Dennison resonances"),
+        ("darling_11", "1-1 Darling-Dennison resonances"),
+    )
+    for kind, header in sections:
+        start = _find_last_section_index(lines, header)
+        found_table = False
+        for i in range(start + 1, len(lines)):
+            stripped = lines[i].strip()
+            if not stripped:
+                continue
+            if stripped.startswith("No resonances found."):
+                break
+            if "active resonances out of" in stripped:
+                m = re.search(r"(\d+)\s+active resonances out of\s+(\d+)", stripped)
+                if m:
+                    active_counts[kind] = int(m.group(1))
+                break
+            if stripped.startswith("I"):
+                found_table = True
+                continue
+            if not found_table:
+                continue
+            if kind == "fermi_12":
+                m_entry = re.match(
+                    r"^\s*(\d+)\s+\|\s+(\d+)\s+(\d+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+(\w+)\s*$",
+                    stripped,
+                )
+                if not m_entry:
+                    if entries:
+                        continue
+                    continue
+                entries.append(
+                    GaussianResonanceEntry(
+                        kind=kind,
+                        lhs_modes=(int(m_entry.group(1)),),
+                        rhs_modes=(int(m_entry.group(2)), int(m_entry.group(3))),
+                        freq_diff_cm=_to_float(m_entry.group(4)),
+                        metric_1=_to_float(m_entry.group(5)),
+                        metric_2=_to_float(m_entry.group(6)),
+                        status=m_entry.group(7),
+                    )
+                )
+                continue
+            if kind == "darling_22":
+                m_entry = re.match(
+                    r"^\s*(\d+)\s+(\d+)\s+\|\s+(\d+)\s+(\d+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+(\w+)\s*$",
+                    stripped,
+                )
+                if not m_entry:
+                    continue
+                entries.append(
+                    GaussianResonanceEntry(
+                        kind=kind,
+                        lhs_modes=(int(m_entry.group(1)), int(m_entry.group(2))),
+                        rhs_modes=(int(m_entry.group(3)), int(m_entry.group(4))),
+                        freq_diff_cm=_to_float(m_entry.group(5)),
+                        metric_1=_to_float(m_entry.group(6)),
+                        metric_2=None,
+                        status=m_entry.group(7),
+                    )
+                )
+                continue
+            if kind == "darling_11":
+                m_entry = re.match(
+                    r"^\s*(\d+)\s+(\d+)\s+\|\s+(\d+)\s+(\d+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+([\-0-9Dd.+]+)\s+\|\s+(\w+)\s*$",
+                    stripped,
+                )
+                if not m_entry:
+                    continue
+                entries.append(
+                    GaussianResonanceEntry(
+                        kind=kind,
+                        lhs_modes=(int(m_entry.group(1)), int(m_entry.group(2))),
+                        rhs_modes=(int(m_entry.group(3)), int(m_entry.group(4))),
+                        freq_diff_cm=_to_float(m_entry.group(5)),
+                        metric_1=_to_float(m_entry.group(6)),
+                        metric_2=_to_float(m_entry.group(7)),
+                        status=m_entry.group(8),
+                    )
+                )
+                continue
+    return tuple(entries), active_counts
+
+
+def _find_variational_overlaps(lines: list[str]) -> tuple[GaussianVariationalOverlap, ...]:
+    try:
+        start = _find_last_section_index(lines, "Projection of DVPT2 states on New Variational States")
+    except ValueError:
+        return ()
+    out: list[GaussianVariationalOverlap] = []
+    pattern = re.compile(r"State\s+(.+?)\s+has overlap of\s+([0-9.]+)%\s+with state\s+(\d+)")
+    for i in range(start + 1, len(lines)):
+        stripped = lines[i].strip()
+        m = pattern.search(stripped)
+        if m:
+            out.append(
+                GaussianVariationalOverlap(
+                    dvpt2_state=m.group(1).strip(),
+                    overlap=float(m.group(2)) / 100.0,
+                    variational_state_index=int(m.group(3)),
+                )
+            )
+            continue
+        if out and stripped.startswith("Vibrational Energies"):
+            break
+    return tuple(out)
+
+
+def _find_variational_energies(lines: list[str]) -> tuple[GaussianVariationalEnergy, ...]:
+    try:
+        start = _find_last_section_index(lines, "Vibrational Energies (cm^-1)")
+    except ValueError:
+        return ()
+    out: list[GaussianVariationalEnergy] = []
+    pattern = re.compile(r"^\s*(\d+\(\d+\))?(?:\s+(\d+\(\d+\)))?\s+([\-0-9Dd.+]+)\s+([\-0-9Dd.+]+)\s*$")
+    for i in range(start + 3, len(lines)):
+        stripped = lines[i].rstrip()
+        if not stripped:
+            if out:
+                break
+            continue
+        m = pattern.match(stripped)
+        if not m:
+            if out:
+                break
+            continue
+        labels = [grp for grp in (m.group(1), m.group(2)) if grp]
+        out.append(
+            GaussianVariationalEnergy(
+                dvpt2_state=";".join(labels),
+                deperturbed_energy_cm=_to_float(m.group(3)),
+                after_diag_energy_cm=_to_float(m.group(4)),
+            )
+        )
+    return tuple(out)
+
+
+def _find_variational_state_definitions(lines: list[str]) -> tuple[GaussianVariationalStateDefinition, ...]:
+    try:
+        start = _find_last_section_index(lines, "Definition of New States w.r.t. Deperturbed States")
+    except ValueError:
+        return ()
+    out: list[GaussianVariationalStateDefinition] = []
+    current_idx: int | None = None
+    pattern = re.compile(r"^\s*(\d+)\s*:\s*([+\-]?[0-9.]+)\s+x\s+(.+?)\s*$")
+    cont_pattern = re.compile(r"^\s*([+\-]?[0-9.]+)\s+x\s+(.+?)\s*$")
+    for i in range(start + 1, len(lines)):
+        stripped = lines[i].rstrip()
+        if not stripped:
+            if out:
+                break
+            continue
+        m = pattern.match(stripped)
+        if m:
+            current_idx = int(m.group(1))
+            out.append(
+                GaussianVariationalStateDefinition(
+                    variational_state_index=current_idx,
+                    coefficient=float(m.group(2)),
+                    dvpt2_state=m.group(3).strip(),
+                )
+            )
+            continue
+        m2 = cont_pattern.match(stripped)
+        if m2 and current_idx is not None:
+            out.append(
+                GaussianVariationalStateDefinition(
+                    variational_state_index=current_idx,
+                    coefficient=float(m2.group(1)),
+                    dvpt2_state=m2.group(2).strip(),
+                )
+            )
+            continue
+        if out:
+            break
+    return tuple(out)
+
+
+def _find_final_fundamental_bands(lines: list[str]) -> tuple[GaussianFundamentalBand, ...]:
+    try:
+        start = _find_last_section_index(lines, "Vibrational Energies at Anharmonic Level")
+    except ValueError:
+        return ()
+    band_start = None
+    for i in range(start, len(lines)):
+        if lines[i].strip() == "Fundamental Bands":
+            band_start = i
+            break
+    if band_start is None:
+        return ()
+    out: list[GaussianFundamentalBand] = []
+    pattern = re.compile(
+        r"^\s*(?:(H|L)\s+)?(\d+)\(1\)\s+(\w+)\s+([\-0-9Dd.+]+)\s+([\-0-9Dd.+]+)\s+"
+    )
+    for i in range(band_start + 3, len(lines)):
+        stripped = lines[i].rstrip()
+        if not stripped:
+            if out:
+                break
+            continue
+        m = pattern.match(stripped)
+        if not m:
+            if out:
+                break
+            continue
+        out.append(
+            GaussianFundamentalBand(
+                mode_index=int(m.group(2)),
+                status=m.group(3),
+                harmonic_cm=_to_float(m.group(4)),
+                anharmonic_cm=_to_float(m.group(5)),
+                overlap_flag=m.group(1),
+            )
+        )
+    return tuple(out)
 
 
 def _find_c1_matrix(lines: list[str], start: int) -> np.ndarray:
@@ -785,6 +1139,38 @@ def _find_cubic_force_constants(lines: list[str], n_modes: int) -> tuple[np.ndar
     return phi3_reduced, phi3_raw
 
 
+def _find_quartic_force_constants(lines: list[str], n_modes: int) -> tuple[np.ndarray, np.ndarray]:
+    indices = [i for i, line in enumerate(lines) if "QUARTIC FORCE CONSTANTS IN NORMAL MODES" in line]
+    if not indices:
+        raise ValueError("Could not find quartic force-constant section.")
+    start = indices[-1]
+    phi4_reduced = np.zeros((n_modes, n_modes, n_modes, n_modes), dtype=float)
+    phi4_raw = np.zeros((n_modes, n_modes, n_modes, n_modes), dtype=float)
+    pattern = re.compile(
+        r"^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\-0-9Dd.+]+)\s+([\-0-9Dd.+]+)\s+([\-0-9Dd.+]+)\s*$"
+    )
+    for i in range(start + 8, len(lines)):
+        line = lines[i]
+        if not line.strip():
+            if np.any(phi4_reduced):
+                break
+            continue
+        m = pattern.match(line)
+        if m:
+            idx = sorted((int(m.group(1)) - 1, int(m.group(2)) - 1, int(m.group(3)) - 1, int(m.group(4)) - 1))
+            value_reduced = _to_float(m.group(5))
+            value_raw = _to_float(m.group(7))
+            for p in set(permutations(idx)):
+                phi4_reduced[p] = value_reduced
+                phi4_raw[p] = value_raw
+            continue
+        if np.any(phi4_reduced) and "Num. of 4th derivatives" in line:
+            break
+    if not np.any(phi4_reduced):
+        raise ValueError("Could not parse quartic force constants.")
+    return phi4_reduced, phi4_raw
+
+
 def _parse_fchk_array(lines: list[str], label: str, kind: str) -> np.ndarray:
     for i, line in enumerate(lines):
         if line.startswith(label) and f" {kind}   N=" in line:
@@ -805,6 +1191,45 @@ def _parse_fchk_scalar(lines: list[str], label: str, kind: str) -> int | float:
         if line.startswith(label) and f" {kind}" in line:
             return int(line.split()[-1]) if kind == "I" else float(line.split()[-1].replace("D", "E"))
     raise ValueError(f"Could not find fchk scalar: {label}")
+
+
+def _parse_fchk_char_value(lines: list[str], label: str) -> str | None:
+    for i, line in enumerate(lines):
+        if line.startswith(label):
+            parts = line.split()
+            if "N=" in parts and i + 1 < len(lines):
+                value = lines[i + 1].strip()
+                return value or None
+            tail = line[len(label) :].strip()
+            return tail or None
+    return None
+
+
+def _normalize_point_group_label(label: str | None) -> str | None:
+    if label is None:
+        return None
+    text = label.strip()
+    if not text:
+        return None
+    up = text.upper()
+    if up == "C*V":
+        return "Cinfv"
+    if up == "D*H":
+        return "Dinfh"
+    if up == "CINFV":
+        return "Cinfv"
+    if up == "DINFH":
+        return "Dinfh"
+    m = re.match(r"^([CDSOTI])(\d+)([A-Z].*)?$", text, re.IGNORECASE)
+    if not m:
+        return text
+    head = m.group(1).upper()
+    order = m.group(2)
+    tail = (m.group(3) or "")
+    tail = tail.replace("INF", "inf")
+    if tail:
+        tail = tail[0].lower() + tail[1:]
+    return f"{head}{order}{tail}"
 
 
 def parse_gaussian_harmonic_data(path: str | Path) -> GaussianHarmonicData:
@@ -851,9 +1276,20 @@ def parse_gaussian_quartic_benchmark(path: str | Path) -> GaussianQuarticBenchma
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     alpha = parse_gaussian_alpha_data(path)
     tau_cm, tau_mhz = _find_tau_prime(lines)
-    kappa, delta, sigma = _find_asymmetry(lines)
     didq = _find_didq_block(lines)
     axes_guess = _find_spectroscopic_axes(lines)
+    linear_rotdist = parse_gaussian_linear_rotdist_constants(path)
+
+    is_linear = (
+        linear_rotdist.d_mhz is not None
+        and list(tau_cm.keys()) == ["cccc"]
+    )
+    if is_linear:
+        kappa = 0.0
+        delta = 0.0
+        sigma = 0.0
+    else:
+        kappa, delta, sigma = _find_asymmetry(lines)
 
     a_mhz = {}
     a_pairs = [("DELTA", "J"), ("DELTA", "K"), ("DELTA", "JK"), ("delta", "J"), ("delta", "K")]
@@ -887,7 +1323,10 @@ def parse_gaussian_quartic_benchmark(path: str | Path) -> GaussianQuarticBenchma
                 j += 1
             break
 
-    axes = _infer_spectroscopic_axes_from_quartic_data(tau_cm, s_mhz, sigma, fallback=axes_guess)
+    if is_linear:
+        axes = axes_guess if axes_guess is not None else {"a": 0, "b": 1, "c": 2}
+    else:
+        axes = _infer_spectroscopic_axes_from_quartic_data(tau_cm, s_mhz, sigma, fallback=axes_guess)
 
     return GaussianQuarticBenchmark(
         alpha_mode_indices=alpha.mode_indices,
@@ -959,14 +1398,49 @@ def parse_gaussian_linear_ltype_constants(path: str | Path) -> GaussianLinearLTy
     return _find_linear_ltype_constants(lines)
 
 
+def parse_gaussian_linear_rotdist_constants(path: str | Path) -> GaussianLinearRotDistConstants:
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    return _find_linear_rotdist_constants(lines)
+
+
 def parse_gaussian_anharmonic_force_data(path: str | Path) -> GaussianAnharmonicForceData:
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     frequencies_cm = _find_quadratic_force_constants(lines)
     phi3_reduced_cm, phi3_raw_au = _find_cubic_force_constants(lines, frequencies_cm.size)
+    phi4_reduced_cm, phi4_raw_au = _find_quartic_force_constants(lines, frequencies_cm.size)
     return GaussianAnharmonicForceData(
         frequencies_cm=frequencies_cm,
         phi3_reduced_cm=phi3_reduced_cm,
         phi3_raw_au=phi3_raw_au,
+        phi4_reduced_cm=phi4_reduced_cm,
+        phi4_raw_au=phi4_raw_au,
+    )
+
+
+def parse_gaussian_anharmonic_analysis(path: str | Path) -> GaussianAnharmonicAnalysis:
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    entries, active_counts = _find_resonance_entries(lines)
+    x_cor = _find_lower_triangular_matrix_after_header(lines, "Coriolis contributions to X Matrix (in cm^-1)")
+    x_3rd = _find_lower_triangular_matrix_after_header(lines, "3rd Deriv. contributions to X Matrix (in cm^-1)")
+    x_4th = _find_lower_triangular_matrix_after_header(lines, "4th Deriv. contributions to X Matrix (in cm^-1)")
+    x_total = _find_lower_triangular_matrix_after_header(lines, "Total Anharmonic X Matrix (in cm^-1)")
+    pt2_model = "unknown"
+    for line in lines:
+        m = re.search(r"PT2 model:\s*(.+?)\s*$", line)
+        if m:
+            pt2_model = m.group(1).strip()
+    return GaussianAnharmonicAnalysis(
+        pt2_model=pt2_model,
+        x_coriolis_cm=x_cor,
+        x_third_derivative_cm=x_3rd,
+        x_fourth_derivative_cm=x_4th,
+        x_total_cm=x_total,
+        resonances=entries,
+        active_resonance_counts=active_counts,
+        variational_overlaps=_find_variational_overlaps(lines),
+        variational_energies=_find_variational_energies(lines),
+        variational_state_definitions=_find_variational_state_definitions(lines),
+        fundamental_bands=_find_final_fundamental_bands(lines),
     )
 
 
@@ -1047,6 +1521,9 @@ def parse_gaussian_fchk_harmonic_data(path: str | Path) -> GaussianFchkHarmonicD
     # Gaussian stores Vib-Modes mode-major in the formatted checkpoint.
     vib_modes = _parse_fchk_array(lines, "Vib-Modes", "R").reshape(n_modes, 3 * n_atoms).T
     hess_tri = _parse_fchk_array(lines, "Cartesian Force Constants", "R")
+    point_group = _parse_fchk_char_value(lines, "Point Group")
+    if point_group is not None:
+        point_group = _normalize_point_group_label(point_group.replace("0", "").strip())
     dim = 3 * n_atoms
     cartesian_force_constants = np.zeros((dim, dim), dtype=float)
     p = 0
@@ -1064,6 +1541,7 @@ def parse_gaussian_fchk_harmonic_data(path: str | Path) -> GaussianFchkHarmonicD
         vib_e2=vib_e2,
         vib_modes=vib_modes,
         cartesian_force_constants=cartesian_force_constants,
+        point_group=point_group,
     )
 
 

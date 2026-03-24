@@ -70,11 +70,21 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
     phi3_reduced_cm: np.ndarray | None = None,
     *,
     excluded_modes: set[int] | None = None,
+    disabled_semidiagonal_pairs: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None = None,
+    effective_frequencies_cm: np.ndarray | None = None,
     resonance_threshold_cm: float = 20.0,
 ) -> dict[str, np.ndarray]:
     """Return Gaussian-style VPT2 alpha contributions in cm^-1."""
     pmom, rot_cm = _representation_axis_values(model)
     freq_cm = np.abs(np.asarray(model.vib_freq_cm, dtype=float))
+    anh_freq_cm = freq_cm.copy()
+    if effective_frequencies_cm is not None:
+        eff = np.asarray(effective_frequencies_cm, dtype=float)
+        if eff.shape != freq_cm.shape:
+            raise ValueError(f"Unexpected effective frequency shape: {eff.shape}, expected {freq_cm.shape}")
+        if np.any(eff <= 1.0e-14):
+            raise ValueError("Effective frequencies must be strictly positive.")
+        anh_freq_cm = eff.copy()
     zeta = _zeta_xyz(model)
     c1 = _c1_from_mu1(model)
     n_modes = freq_cm.size
@@ -150,26 +160,46 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
         phi3 = np.asarray(phi3_reduced_cm, dtype=float)
         if phi3.shape != (n_modes, n_modes, n_modes):
             raise ValueError(f"Unexpected reduced cubic tensor shape: {phi3.shape}, expected {(n_modes, n_modes, n_modes)}")
+        if disabled_semidiagonal_pairs:
+            phi3 = phi3.copy()
+            for pair in disabled_semidiagonal_pairs:
+                if len(pair) != 2:
+                    raise ValueError(f"Invalid disabled semidiagonal pair: {pair}")
+                i, j = int(pair[0]), int(pair[1])
+                if i == j:
+                    continue
+                if not (1 <= i <= n_modes and 1 <= j <= n_modes):
+                    raise ValueError(f"Disabled semidiagonal pair {pair} outside mode range 1..{n_modes}.")
+                ia = i - 1
+                ja = j - 1
+                phi3[ia, ia, ja] = 0.0
+                phi3[ia, ja, ia] = 0.0
+                phi3[ja, ia, ia] = 0.0
+                phi3[ja, ja, ia] = 0.0
+                phi3[ja, ia, ja] = 0.0
+                phi3[ia, ja, ja] = 0.0
         for ix in range(3):
             if linear_skip_axis is not None and ix == linear_skip_axis:
                 continue
             for i in range(n_modes):
                 if not keep[i]:
                     continue
-                frq_i = freq_cm[i]
-                if frq_i <= 1.0e-14:
+                frq_i_harm = freq_cm[i]
+                frq_i_denom = anh_freq_cm[i]
+                if frq_i_harm <= 1.0e-14 or frq_i_denom <= 1.0e-14:
                     continue
-                ai = aa[ix] / frq_i
+                ai = aa[ix] / frq_i_denom
                 acc = 0.0
                 for j in range(n_modes):
                     if not keep[j]:
                         continue
-                    frq_j = freq_cm[j]
-                    if frq_j <= 1.0e-14:
+                    frq_j_harm = freq_cm[j]
+                    frq_j_denom = anh_freq_cm[j]
+                    if frq_j_harm <= 1.0e-14 or frq_j_denom <= 1.0e-14:
                         continue
-                    x_j = math.sqrt((FACTG * frq_j) ** 3)
+                    x_j = math.sqrt((FACTG * frq_j_harm) ** 3)
                     didq_iix_j = 2.0 * pmom[ix] * pmom[ix] * x_j * c1[j, ix, ix]
-                    f3_term = phi3[i, i, j] * frq_i * math.sqrt(frq_j) / (frq_j * frq_j)
+                    f3_term = phi3[i, i, j] * frq_i_harm * math.sqrt(frq_j_harm) / (frq_j_denom * frq_j_denom)
                     acc += didq_iix_j * f3_term
                 alpha_anh[i, ix] = PICH12 * ai * acc
 
@@ -213,6 +243,7 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
         "lsdgnm_like": lsdgnm_like,
         "canonical_pair_data": canonical_pair_data,
         "projection_strategy": projection_strategy,
+        "anharmonic_reference_frequencies_cm": anh_freq_cm.copy(),
     }
     if rotor_limit["is_special_limit"] and canonical_pair_data and special_ctx is not None:
         alpha_total_canonical_cm = _canonicalize_alpha_rows(total, special_ctx)
@@ -241,6 +272,8 @@ def alpha_matrix_from_cubic_two_index_cm(
     two_index_cm: np.ndarray,
     *,
     excluded_modes: set[int] | None = None,
+    disabled_semidiagonal_pairs: tuple[tuple[int, int], ...] | list[tuple[int, int]] | None = None,
+    effective_frequencies_cm: np.ndarray | None = None,
     resonance_threshold_cm: float = 20.0,
 ) -> dict[str, np.ndarray]:
     """Convenience wrapper using the semi-diagonal reduced cubic matrix ``phi_iij``."""
@@ -252,5 +285,7 @@ def alpha_matrix_from_cubic_two_index_cm(
         model,
         phi3_sd,
         excluded_modes=excluded_modes,
+        disabled_semidiagonal_pairs=disabled_semidiagonal_pairs,
+        effective_frequencies_cm=effective_frequencies_cm,
         resonance_threshold_cm=resonance_threshold_cm,
     )
