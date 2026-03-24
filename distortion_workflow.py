@@ -28,6 +28,27 @@ def _representation_axis_values(model) -> tuple[np.ndarray, np.ndarray]:
     return moments_xyz, rot_xyz_cm
 
 
+def _didq_from_model(model) -> np.ndarray:
+    """Replicate Gaussian ``dIdQ`` in the model convention."""
+    n_atoms = model.masses_amu.size
+    modes = model.vib_vecs_mw_pa.reshape(n_atoms, 3, -1)
+    didq = np.zeros((modes.shape[2], 6), dtype=float)
+    ijx = 0
+    for ix in range(3):
+        for jx in range(ix + 1):
+            for mode in range(modes.shape[2]):
+                acc = 0.0
+                for atom in range(n_atoms):
+                    mass = np.sqrt(model.masses_amu[atom])
+                    acc -= mass * model.coords_pa_ang[atom, ix] * modes[atom, jx, mode]
+                    if ix == jx:
+                        for kx in range(3):
+                            acc += mass * model.coords_pa_ang[atom, kx] * modes[atom, kx, mode]
+                didq[mode, ijx] = 2.0 * acc
+            ijx += 1
+    return didq
+
+
 def _linear_gaussian_source_qe_hz(model, pair: tuple[int, int]) -> float:
     """Return the non-resonant Gaussian q^e source formula in Hz.
 
@@ -100,12 +121,13 @@ def _linear_gaussian_source_aux_data(model, gaussian_log_path: str):
 
 def _linear_gaussian_exact_source_blocks(gaussian_log_path: str) -> dict[str, object]:
     from gaussian_vpt_parser import (
+        _resolve_gaussian_path,
         parse_gaussian_alpha_data,
         parse_gaussian_anharmonic_force_data,
         parse_gaussian_linear_ltype_constants,
     )
 
-    lines = Path(gaussian_log_path).read_text(encoding="utf-8").splitlines()
+    lines = _resolve_gaussian_path(gaussian_log_path).read_text(encoding="utf-8").splitlines()
     alpha = parse_gaussian_alpha_data(gaussian_log_path)
     anh = parse_gaussian_anharmonic_force_data(gaussian_log_path)
     qconst = parse_gaussian_linear_ltype_constants(gaussian_log_path)
@@ -436,6 +458,141 @@ def _linear_gaussian_exact_source_qjk_hz(
     }
 
 
+def _linear_gaussian_exact_source_h_hz(
+    model,
+    *,
+    gaussian_source_blocks: dict[str, object],
+    d_hz: float | None,
+    rotor_limit: dict[str, object],
+) -> dict[str, object] | None:
+    """Reconstruct the linear sextic constant from Gaussian source blocks.
+
+    This follows the ``ITop=4`` branch of ``Sextic`` in ``l717.F``:
+    only the transverse diagonal branch survives and
+
+        He = Phi(1,1,1) = X1 - X2 + X3
+
+    with ``X4 = 0`` for linear tops.
+    """
+    if d_hz is None:
+        return None
+    deg_axes = tuple(rotor_limit.get("degenerate_axes", ()))
+    sym_axis = str(rotor_limit.get("symmetry_axis", "a"))
+    if len(deg_axes) != 2:
+        return None
+
+    from gaussian_vpt_parser import frequency_reorder_map
+
+    freq_src = np.asarray(gaussian_source_blocks["freq_cm"], dtype=float)
+    didq_src = np.asarray(gaussian_source_blocks["didq_amu_sqrt_ang"], dtype=float)
+    zeta_src = np.asarray(gaussian_source_blocks["zeta_xyz"], dtype=float)
+    phi3_src = np.asarray(gaussian_source_blocks["phi3_raw_au"], dtype=float)
+
+    # Align Gaussian printed source blocks to the current model convention
+    # through frequency matching and mode-sign search on dIdQ.
+    order = frequency_reorder_map(freq_src, np.abs(np.asarray(model.vib_freq_cm, dtype=float)))
+    freq = freq_src[np.asarray(order, dtype=int)].copy()
+    didq = didq_src[np.asarray(order, dtype=int)].copy()
+    zeta = zeta_src[:, np.asarray(order, dtype=int)][:, :, np.asarray(order, dtype=int)].copy()
+    phi3_raw = phi3_src[np.ix_(np.asarray(order, dtype=int), np.asarray(order, dtype=int), np.asarray(order, dtype=int))].copy()
+
+    model_didq = _didq_from_model(model)
+    sign_vec = np.ones(freq.size, dtype=float)
+    for i in range(freq.size):
+        if np.dot(didq[i], model_didq[i]) < 0.0:
+            sign_vec[i] = -1.0
+    didq *= sign_vec[:, None]
+    zeta *= sign_vec[None, :, None] * sign_vec[None, None, :]
+    phi3_raw *= sign_vec[:, None, None] * sign_vec[None, :, None] * sign_vec[None, None, :]
+
+    moments_xyz, rot_xyz_cm = _representation_axis_values(model)
+    abc_to_xyz = {label: i for i, label in enumerate(model.xyz_to_abc)}
+    sym_xyz = abc_to_xyz.get(sym_axis, 0)
+    perp_xyz = [i for i in range(3) if i != sym_xyz]
+    d_cm = float(d_hz / CMINV_TO_HZ)
+
+    def _idx_tm(a: int, b: int) -> int:
+        pair = (max(a, b), min(a, b))
+        return {(0, 0): 0, (1, 0): 1, (1, 1): 2, (2, 0): 3, (2, 1): 4, (2, 2): 5}[pair]
+
+    n_modes = freq.size
+    c1 = np.zeros((n_modes, 3, 3), dtype=float)
+    for i in range(n_modes):
+        fi = abs(float(freq[i]))
+        if fi <= 1.0e-12:
+            continue
+        x = np.sqrt((FACTG * fi) ** 3)
+        for ix in range(3):
+            for jx in range(3):
+                den = 2.0 * moments_xyz[ix] * moments_xyz[jx] * x
+                c1[i, ix, jx] = 0.0 if abs(den) <= 1.0e-30 else float(didq[i, _idx_tm(ix, jx)] / den)
+
+    c2 = np.zeros((n_modes, 3, 3, 3), dtype=float)
+    for i in range(n_modes):
+        fi = abs(float(freq[i]))
+        if fi <= 1.0e-12:
+            continue
+        for j in range(n_modes):
+            fj = abs(float(freq[j]))
+            if fj <= 1.0e-12:
+                continue
+            kernel = (2.0 / 3.0) * (fi**2 + 2.0 * fj**2) / np.sqrt(abs(fi**5 * fj))
+            for ix in range(3):
+                for jx in range(3):
+                    for kx in range(3):
+                        c2[i, ix, jx, kx] += kernel * (
+                            rot_xyz_cm[ix] * zeta[ix, i, j] * c1[j, jx, kx]
+                            + rot_xyz_cm[jx] * zeta[jx, i, j] * c1[j, kx, ix]
+                            + rot_xyz_cm[kx] * zeta[kx, i, j] * c1[j, ix, jx]
+                        )
+
+    components_hz: dict[str, float] = {}
+    pieces_hz: dict[str, dict[str, float]] = {}
+    xyz_to_abc = {i: label for i, label in enumerate(model.xyz_to_abc)}
+    for ix in perp_xyz:
+        # For linear tops, only the transverse diagonal quartic component survives:
+        # Tau(ix,ix,ix,ix) = 4 D and cross-transverse terms vanish.
+        x1_cm = 3.0 * (4.0 * d_cm) ** 2 / (16.0 * rot_xyz_cm[ix])
+        x2_cm = sum(float(freq[i]) * c2[i, ix, ix, ix] ** 2 for i in range(n_modes)) / 2.0
+        x3_cm = 0.0
+        for i in range(n_modes):
+            fi = abs(float(freq[i]))
+            if fi <= 1.0e-12:
+                continue
+            for j in range(n_modes):
+                fj = abs(float(freq[j]))
+                if fj <= 1.0e-12:
+                    continue
+                for k in range(n_modes):
+                    fk = abs(float(freq[k]))
+                    if fk <= 1.0e-12:
+                        continue
+                    den = np.sqrt(fi * fj * fk)
+                    x3_cm += (
+                        float(phi3_raw[i, j, k]) * FAC3AU / den * c1[i, ix, ix] * c1[j, ix, ix] * c1[k, ix, ix]
+                    )
+        x3_cm /= 6.0
+        key = xyz_to_abc[ix] * 3
+        components_hz[key] = float((x1_cm - x2_cm + x3_cm) * CMINV_TO_HZ)
+        pieces_hz[key] = {
+            "X1": float(x1_cm * CMINV_TO_HZ),
+            "X2": float(x2_cm * CMINV_TO_HZ),
+            "X3": float(x3_cm * CMINV_TO_HZ),
+        }
+
+    first_key = xyz_to_abc[perp_xyz[0]] * 3 if perp_xyz else None
+    vals = list(components_hz.values())
+    return {
+        "H": float(components_hz[first_key]) if first_key is not None else 0.0,
+        "primary_component": first_key,
+        "perpendicular_components_hz": components_hz,
+        "pieces_hz": pieces_hz,
+        "spread_hz": float(max(vals) - min(vals)) if len(vals) >= 2 else 0.0,
+        "source": "gaussian_sextic_exact_reconstructed",
+        "formula": "He = Phi(1,1,1) = X1 - X2 + X3 from the dedicated linear-top branch of L717/Sextic",
+    }
+
+
 def _watson_dict_to_float(watson: dict[str, sp.Expr]) -> dict[str, float]:
     return {key: float(EH_TO_MHZ * sp.N(value)) for key, value in watson.items()}
 
@@ -523,7 +680,7 @@ def classify_rotor_limit(abc: Iterable[float], moments: Iterable[float]) -> dict
 
 
 def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaussian_log_path: str | None = None):
-    """Return a minimal pairwise l-type effective model for linear molecules.
+    """Return an experimental minimal pairwise l-type model for linear molecules.
 
     The present implementation adopts a circular-doublet basis as the
     primary convention for each near-degenerate bending pair ``(i,j)``
@@ -540,7 +697,9 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
     basis built from the same doublet, the same splitting is reported as
     ``O_t = |u><u| - |v><v|``. This remains a minimal pairwise model, not yet the
     full effective Hamiltonian for all linear-molecule l-type
-    interactions.
+    interactions, and should be treated as an experimental beyond-paper
+    extension layered on top of the paper-aligned linear pure-rotational
+    sector.
     """
     rotor_limit = classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
     if rotor_limit["kind"] != "linear":
@@ -548,10 +707,13 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
 
     gaussian_linear = None
     gaussian_source_blocks = None
+    gaussian_rotdist = None
+    gaussian_source_sextic = None
     if gaussian_log_path:
-        from gaussian_vpt_parser import parse_gaussian_linear_ltype_constants
+        from gaussian_vpt_parser import parse_gaussian_linear_ltype_constants, parse_gaussian_linear_rotdist_constants
 
         gaussian_linear = parse_gaussian_linear_ltype_constants(gaussian_log_path)
+        gaussian_rotdist = parse_gaussian_linear_rotdist_constants(gaussian_log_path)
         gaussian_source_blocks = _linear_gaussian_exact_source_blocks(gaussian_log_path)
 
     pair_meta = _degenerate_mode_metadata(model, rotor_limit)
@@ -575,6 +737,18 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
         smap = sextic_special.get("sextic_hz", {})
         if "H" in smap:
             h_hz = float(smap["H"])
+    if gaussian_source_blocks is not None:
+        gaussian_source_sextic = _linear_gaussian_exact_source_h_hz(
+            model,
+            gaussian_source_blocks=gaussian_source_blocks,
+            d_hz=d_hz,
+            rotor_limit=rotor_limit,
+        )
+    h_exact_hz = None
+    if gaussian_rotdist is not None and gaussian_rotdist.h_mhz is not None:
+        h_exact_hz = float(gaussian_rotdist.h_mhz * 1.0e6)
+    h_source_hz = None if gaussian_source_sextic is None else float(gaussian_source_sextic["H"])
+    h_feed_hz = h_source_hz if h_source_hz is not None else (h_exact_hz if h_exact_hz is not None else h_hz)
 
     full_basis_real = [
         {"operator": "I_t", "matrix": [[1.0, 0.0], [0.0, 1.0]]},
@@ -595,7 +769,7 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
         zeta_parallel = float(meta.get("dominant_coriolis_abs", 0.0))
         freq_cm = float(meta["freq_cm"])
         q_tj = None if d_hz is None else abs(zeta_parallel) * abs(d_hz)
-        q_th = None if h_hz is None else abs(zeta_parallel) * abs(h_hz)
+        q_th = None if h_feed_hz is None else abs(zeta_parallel) * abs(h_feed_hz)
         q_l_leading_hz = 0.0
         q_l_watson_hz = 0.0
         q_e_source_hz = _linear_gaussian_source_qe_hz(model, tuple(int(x) for x in meta["pair"]))
@@ -697,6 +871,29 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
                 "q_H_pair": q_th_val,
             },
         }
+        item["conventional_linear_model_hz"] = {
+            "status": "partial_internal_mapping",
+            "source": "internal_nonresonant_pairwise",
+            "model": "q_i = q_i^e + (q_i^J) J(J+1) + (q_i^K) K(K±1)^2",
+            "constants_hz": {
+                "q_e": q_e_source_hz,
+                "q_J": q_tj_val,
+                "q_K": None,
+            },
+            "available_terms_hz": {
+                "q_e": q_e_source_hz,
+                "q_J_pair": q_tj_val,
+                "q_H_pair": q_th_val,
+            },
+            "note": "Internal non-resonant mapping currently closes q_e and a first q_J-like pair feed. A distinct internal q_K mapping is not derived yet; q_H_pair remains available separately as the higher-order pair feed on the minimal carrier.",
+        }
+        if h_exact_hz is not None:
+            item["gaussian_source_exact_sextic_hz"] = {
+                "H": h_exact_hz,
+                "source": "Gaussian Pickett linear sextic block",
+            }
+        if gaussian_source_sextic is not None:
+            item["gaussian_source_reconstructed_sextic_hz"] = dict(gaussian_source_sextic)
         item["conventional_pair_mapping"] = {
             "status": "minimal_pairwise_ready",
             "active_channel": "X_l",
@@ -820,6 +1017,24 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
                 )
                 if qjk_source_exact is not None:
                     item["gaussian_source_rotational_constants_hz"] = qjk_source_exact
+                    item["conventional_linear_model_hz"] = {
+                        "status": "reconstructed_from_gaussian_source_blocks",
+                        "source": str(qjk_source_exact["source"]),
+                        "model": "q_i = q_i^e + (q_i^J) J(J+1) + (q_i^K) K(K±1)^2",
+                        "constants_hz": {
+                            "q_e": float(qspec["q_e_source"]),
+                            "q_J": float(qjk_source_exact["q_J_source"]),
+                            "q_K": float(qjk_source_exact["q_K_source"]),
+                        },
+                        "available_terms_hz": {
+                            "q_e": float(qspec["q_e_source"]),
+                            "q_J_source": float(qjk_source_exact["q_J_source"]),
+                            "q_K_source": float(qjk_source_exact["q_K_source"]),
+                            "q_J_pair": float(item["effective_linear_model_hz"]["constants_hz"]["q_J_pair"]),
+                            "q_H_pair": float(item["effective_linear_model_hz"]["constants_hz"]["q_H_pair"]),
+                        },
+                        "note": "This conventional-like mapping uses the internal q_e source term together with q_J/q_K reconstructed from Gaussian alpha/cubic source blocks, without relying on the printed RotL2x q^J/q^K constants.",
+                    }
             item["gaussian_source_exact_constants_hz"] = {
                 "q_e": float(gaussian_linear.q_e_mhz[qidx] * 1.0e6),
                 "q_J": float(qj_items.get(qidx, 0.0) * 1.0e6),
@@ -839,6 +1054,15 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
                 "active_dd_22_count": gaussian_linear.active_dd_22_count,
                 "note": "This is the exact Gaussian RotL2x source block as printed in the log, before the later resonance-analysis section.",
             }
+            item["conventional_linear_model_exact_hz"] = {
+                "status": "exact_printed_rotl2x",
+                "source": "gaussian_rotl2x_exact",
+                "model": item["effective_linear_model_gaussian_hz"]["model"],
+                "constants_hz": dict(item["effective_linear_model_gaussian_hz"]["constants_hz"]),
+                "Q_index": qidx,
+                "active_dd_22_count": gaussian_linear.active_dd_22_count,
+                "note": "Exact conventional linear-model constants taken directly from the printed Gaussian RotL2x block.",
+            }
             item["effective_linear_model_final_hz"] = {
                 "source": "gaussian_rotl2x_exact",
                 "model": item["effective_linear_model_gaussian_hz"]["model"],
@@ -848,33 +1072,44 @@ def linear_ltype_terms(model, *, quartic_special=None, sextic_special=None, gaus
             }
     pure_rotational_branch = {
         "kind": "linear_pure_rotational",
+        "scope_status": "paper_aligned",
         "quartic_special": quartic_special,
         "sextic_special": sextic_special,
         "scalars": {
             "D_mhz": float(d_hz / 1.0e6) if d_hz is not None else None,
-            "H_hz": float(h_hz) if h_hz is not None else None,
+            "H_hz": float(h_feed_hz) if h_feed_hz is not None else None,
         },
     }
+    if gaussian_source_sextic is not None:
+        pure_rotational_branch["gaussian_source_reconstructed_sextic_hz"] = dict(gaussian_source_sextic)
+    if h_exact_hz is not None:
+        pure_rotational_branch["gaussian_pickett_sextic_hz"] = {
+            "H": float(h_exact_hz),
+            "source": "Gaussian Pickett linear sextic block",
+        }
     pairwise_ltype_branch = {
         "kind": "linear_pairwise_ltype",
+        "scope_status": "experimental_beyond_paper",
         "pair_count": len(pairs),
         "active_operator_channel": "X_l",
         "inactive_operator_channels": ["I_l", "Z_l", "Y_l"],
         "driving_scalars": {
             "D_mhz": float(d_hz / 1.0e6) if d_hz is not None else None,
-            "H_hz": float(h_hz) if h_hz is not None else None,
+            "H_hz": float(h_feed_hz) if h_feed_hz is not None else None,
         },
         "rotational_feeds": {
             "quartic_feed_operator": "J^2 X_l",
             "sextic_feed_operator": "(J^2)^2 X_l",
             "quartic_feed_present": bool(d_hz is not None),
-            "sextic_feed_present": bool(h_hz is not None),
+            "sextic_feed_present": bool(h_feed_hz is not None),
         },
     }
     return {
         "B_linear_cm": b_linear_cm,
         "pairs": pairs,
         "kind": "linear",
+        "paper_scope": "pure_rotational_only",
+        "implementation_scope": "pure_rotational_plus_experimental_pairwise_ltype",
         "literature_convention": {
             "name": "circular_vibrational_angular_momentum_basis",
             "basis": ["I_l", "Z_l", "X_l", "Y_l"],

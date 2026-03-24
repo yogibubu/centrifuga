@@ -34,10 +34,12 @@ def test_default_representation_policy() -> None:
 def test_cubic_alignment_is_frequency_only() -> None:
     model, _meta = _build("h2o")
     anh = parse_gaussian_anharmonic_force_data(Path("h2o.log"))
-    phi3_raw_au, check = align_cubic_to_harmonic_model(anh, model.vib_freq_cm)
+    cubic = align_cubic_to_harmonic_model(anh, model.vib_freq_cm)
 
-    assert phi3_raw_au.shape[0] == model.vib_freq_cm.size
-    assert len(check.mapping) == model.vib_freq_cm.size
-    assert not check.is_identity
-    assert np.isfinite(check.max_abs_freq_delta_cm)
-    assert check.max_abs_freq_delta_cm <= 5.0
+    assert cubic.raw_au.shape[0] == model.vib_freq_cm.size
+    assert cubic.reduced_cm.shape[0] == model.vib_freq_cm.size
+    assert len(cubic.check.source_to_target) == model.vib_freq_cm.size
+    assert len(cubic.check.target_to_source) == model.vib_freq_cm.size
+    assert not cubic.check.is_identity
+    assert np.isfinite(cubic.check.max_abs_freq_delta_cm)
+    assert cubic.check.max_abs_freq_delta_cm <= 5.0

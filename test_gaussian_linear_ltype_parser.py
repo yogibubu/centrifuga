@@ -1,4 +1,4 @@
-from gaussian_vpt_parser import parse_gaussian_linear_ltype_constants
+from gaussian_vpt_parser import parse_gaussian_linear_ltype_constants, parse_gaussian_linear_rotdist_constants
 
 
 def test_parse_gaussian_linear_ltype_constants_hccd() -> None:
@@ -10,3 +10,9 @@ def test_parse_gaussian_linear_ltype_constants_hccd() -> None:
     assert abs(vals.q_k_mhz[5] + 0.005076692972587601) < 1.0e-12
     assert abs(vals.q_k_mhz[7] - 0.004956682199317115) < 1.0e-12
     assert vals.active_dd_22_count == 13
+
+
+def test_parse_gaussian_linear_rotdist_constants_hccd() -> None:
+    vals = parse_gaussian_linear_rotdist_constants("hccd.log")
+    assert abs(float(vals.d_mhz) - 0.030190776) < 1.0e-12
+    assert abs(float(vals.h_mhz) - 0.2175593934e-07) < 1.0e-18

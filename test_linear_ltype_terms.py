@@ -3,8 +3,9 @@ from types import SimpleNamespace
 import numpy as np
 
 from ceditt_gui import _build_harmonic_model_from_inputs
+from compare_gaussian_sextic import sextic_linear_source_formula_hz
 from distortion_workflow import compute_order2_quartic, linear_ltype_terms
-from gaussian_vpt_parser import parse_gaussian_linear_ltype_constants
+from gaussian_vpt_parser import parse_gaussian_anharmonic_force_data, parse_gaussian_linear_ltype_constants
 
 
 def test_linear_ltype_terms_reports_degenerate_pair_diagnostics() -> None:
@@ -68,6 +69,7 @@ def test_linear_ltype_terms_reports_degenerate_pair_diagnostics() -> None:
     qlitw = pair["literature_watson_estimate_hz"]
     qspec = pair["spectroscopic_linear_constants_hz"]
     qeff = pair["effective_linear_model_hz"]
+    qconv_model = pair["conventional_linear_model_hz"]
     conv_map = pair["conventional_pair_mapping"]
     coeffs_real = pair["pair_basis_coefficients_real_hz"]
     coeffs_alt = pair["pair_basis_coefficients_alt_hz"]
@@ -98,6 +100,11 @@ def test_linear_ltype_terms_reports_degenerate_pair_diagnostics() -> None:
     assert abs(qeff["constants_hz"]["q_e_source"] - qspec["q_e_source"]) < 1.0e-12
     assert abs(qeff["constants_hz"]["q_J_pair"] - 9600.0) < 1.0e-9
     assert abs(qeff["constants_hz"]["q_H_pair"] - 20.0) < 1.0e-9
+    assert qconv_model["status"] == "partial_internal_mapping"
+    assert qconv_model["source"] == "internal_nonresonant_pairwise"
+    assert abs(qconv_model["constants_hz"]["q_e"] - qspec["q_e_source"]) < 1.0e-12
+    assert abs(qconv_model["constants_hz"]["q_J"] - 9600.0) < 1.0e-9
+    assert qconv_model["constants_hz"]["q_K"] is None
     qfinal = pair["effective_linear_model_final_hz"]
     assert qfinal["source"] == "internal_nonresonant_minimal"
     assert abs(qfinal["constants_hz"]["q_e"] - qspec["q_e_source"]) < 1.0e-12
@@ -165,6 +172,10 @@ def test_linear_gaussian_source_qe_matches_hccd_log_and_benchmark_mapping() -> N
     assert low_src["q_K_source"] > 0.0
     high_bench = high["gaussian_log_benchmark"]
     low_bench = low["gaussian_log_benchmark"]
+    high_conv = high["conventional_linear_model_hz"]
+    low_conv = low["conventional_linear_model_hz"]
+    high_exact_model = high["conventional_linear_model_exact_hz"]
+    low_exact_model = low["conventional_linear_model_exact_hz"]
     assert high_bench["Q_index"] == 5
     assert low_bench["Q_index"] == 7
     assert abs(high_bench["q_e_mhz"] - g.q_e_mhz[5]) < 1.0e-12
@@ -174,6 +185,16 @@ def test_linear_gaussian_source_qe_matches_hccd_log_and_benchmark_mapping() -> N
     low_res = low["gaussian_source_exact_constants_hz"]
     assert high["effective_linear_model_final_hz"]["source"] == "gaussian_rotl2x_exact"
     assert low["effective_linear_model_final_hz"]["source"] == "gaussian_rotl2x_exact"
+    assert high_conv["status"] == "reconstructed_from_gaussian_source_blocks"
+    assert low_conv["status"] == "reconstructed_from_gaussian_source_blocks"
+    assert abs(high_conv["constants_hz"]["q_e"] - high["spectroscopic_linear_constants_hz"]["q_e_source"]) < 1.0e-12
+    assert abs(low_conv["constants_hz"]["q_e"] - low["spectroscopic_linear_constants_hz"]["q_e_source"]) < 1.0e-12
+    assert abs(high_conv["constants_hz"]["q_J"] - high_src["q_J_source"]) < 1.0e-12
+    assert abs(high_conv["constants_hz"]["q_K"] - high_src["q_K_source"]) < 1.0e-12
+    assert abs(low_conv["constants_hz"]["q_J"] - low_src["q_J_source"]) < 1.0e-12
+    assert abs(low_conv["constants_hz"]["q_K"] - low_src["q_K_source"]) < 1.0e-12
+    assert high_exact_model["source"] == "gaussian_rotl2x_exact"
+    assert low_exact_model["source"] == "gaussian_rotl2x_exact"
     assert abs(high_res["q_e"] / 1.0e6 - g.q_e_mhz[5]) < 1.0e-12
     assert abs(low_res["q_e"] / 1.0e6 - g.q_e_mhz[7]) < 1.0e-12
     assert abs(high_res["q_J"] / 1.0e6 - g.q_j_mhz[5]) < 1.0e-12
@@ -182,6 +203,13 @@ def test_linear_gaussian_source_qe_matches_hccd_log_and_benchmark_mapping() -> N
     assert abs(high_src["q_K_source"] / 1.0e6 - g.q_k_mhz[5]) < 5.0e-4
     assert abs(low_src["q_J_source"] / 1.0e6 - g.q_j_mhz[7]) < 2.0e-3
     assert abs(low_src["q_K_source"] / 1.0e6 - g.q_k_mhz[7]) < 2.0e-3
+    assert out["linear_ltype_terms"]["pure_rotational_branch"]["scalars"]["H_hz"] is not None
+    assert abs(out["linear_ltype_terms"]["pure_rotational_branch"]["scalars"]["H_hz"] - 0.02175593934) < 1.0e-6
+    assert abs(high["gaussian_source_exact_sextic_hz"]["H"] - 0.02175593934) < 1.0e-12
+    recon_h = out["linear_ltype_terms"]["pure_rotational_branch"]["gaussian_source_reconstructed_sextic_hz"]
+    assert recon_h["source"] == "gaussian_sextic_exact_reconstructed"
+    assert recon_h["primary_component"] == "bbb"
+    assert abs(recon_h["H"] - 0.02175593934) < 1.0e-6
 
 
 def test_compute_order2_quartic_passes_linear_special_projection_into_ltype_layer() -> None:
@@ -207,3 +235,13 @@ def test_compute_order2_quartic_passes_linear_special_projection_into_ltype_laye
     assert out["special_quartic_projection"] is not None
     pair = out["linear_ltype_terms"]["pairs"][0]
     assert pair["q_tJ_diagnostic_hz"] > 0.0
+
+
+def test_linear_sextic_source_formula_returns_stable_transverse_scalar() -> None:
+    for fchk_path, log_path in (("c2h2.fchk", "c2h2.log"), ("hccd.fchk", "hccd.log")):
+        model, _ = _build_harmonic_model_from_inputs("I", fchk_path=fchk_path)
+        anh = parse_gaussian_anharmonic_force_data(log_path)
+        out = sextic_linear_source_formula_hz(model, anh.phi3_reduced_cm)
+        assert out["H"] > 0.0
+        assert set(out["perpendicular_components_hz"]) == {"bbb", "ccc"}
+        assert out["spread_hz"] < 1.0e-9

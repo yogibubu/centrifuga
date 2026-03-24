@@ -20,6 +20,27 @@ def _to_float(token: str) -> float:
     return float(_DNUM_RE.sub("E", token))
 
 
+def _resolve_gaussian_path(path: str | Path) -> Path:
+    """Resolve Gaussian benchmark data with ``gaussian/`` as canonical location.
+
+    Historical tests and scripts often pass bare names such as ``h2o.log`` from
+    the repository root. The canonical benchmark location is now ``gaussian/``.
+    This helper preserves backward compatibility while making the canonical
+    directory explicit.
+    """
+
+    p = Path(path)
+    if p.exists():
+        return p
+    if p.is_absolute() or p.parent != Path("."):
+        return p
+    repo_root = Path(__file__).resolve().parent
+    alt = repo_root / "gaussian" / p.name
+    if alt.exists():
+        return alt
+    return p
+
+
 @dataclass
 class GaussianHarmonicData:
     atomic_numbers: np.ndarray
@@ -1233,7 +1254,7 @@ def _normalize_point_group_label(label: str | None) -> str | None:
 
 
 def parse_gaussian_harmonic_data(path: str | Path) -> GaussianHarmonicData:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    lines = _resolve_gaussian_path(path).read_text(encoding="utf-8").splitlines()
     atomic_numbers, coords = _find_last_standard_orientation(lines)
     masses = _find_thermochemistry_masses(lines, len(atomic_numbers))
     moments, principal_axes, rot_ghz = _find_principal_axes(lines)
@@ -1257,7 +1278,8 @@ def parse_gaussian_harmonic_data(path: str | Path) -> GaussianHarmonicData:
 
 
 def parse_gaussian_alpha_data(path: str | Path) -> GaussianAlphaData:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    resolved = _resolve_gaussian_path(path)
+    lines = resolved.read_text(encoding="utf-8").splitlines()
     alpha_idx_cm, alpha_cm, axis_labels_cm = _find_alpha_matrix(lines, "cm^-1")
     alpha_idx_mhz, alpha_mhz, axis_labels_mhz = _find_alpha_matrix(lines, "MHz")
     if alpha_idx_cm.shape != alpha_idx_mhz.shape or not np.array_equal(alpha_idx_cm, alpha_idx_mhz):
@@ -1273,12 +1295,13 @@ def parse_gaussian_alpha_data(path: str | Path) -> GaussianAlphaData:
 
 
 def parse_gaussian_quartic_benchmark(path: str | Path) -> GaussianQuarticBenchmark:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
-    alpha = parse_gaussian_alpha_data(path)
+    resolved = _resolve_gaussian_path(path)
+    lines = resolved.read_text(encoding="utf-8").splitlines()
+    alpha = parse_gaussian_alpha_data(resolved)
     tau_cm, tau_mhz = _find_tau_prime(lines)
     didq = _find_didq_block(lines)
     axes_guess = _find_spectroscopic_axes(lines)
-    linear_rotdist = parse_gaussian_linear_rotdist_constants(path)
+    linear_rotdist = parse_gaussian_linear_rotdist_constants(resolved)
 
     is_linear = (
         linear_rotdist.d_mhz is not None
@@ -1346,9 +1369,10 @@ def parse_gaussian_quartic_benchmark(path: str | Path) -> GaussianQuarticBenchma
 
 
 def parse_gaussian_sextic_benchmark(path: str | Path) -> GaussianSexticBenchmark:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    resolved = _resolve_gaussian_path(path)
+    lines = resolved.read_text(encoding="utf-8").splitlines()
     phi_cart_cm, phi_cart_hz = _find_sextic_cartesian(lines)
-    harmonic = parse_gaussian_harmonic_data(path)
+    harmonic = parse_gaussian_harmonic_data(resolved)
     sextic_start = _find_last_section_index(lines, "Dump from SEXTIC")
     tau_start = _find_last_section_index(lines, "Quartic Centrifugal Distortion Constants Tau (in cm^-1)")
     c1_start = _find_last_section_index(lines, "Dimensionless C_i^ab Matrix")
@@ -1394,17 +1418,17 @@ def parse_gaussian_sextic_benchmark(path: str | Path) -> GaussianSexticBenchmark
 
 
 def parse_gaussian_linear_ltype_constants(path: str | Path) -> GaussianLinearLTypeConstants:
-    lines = Path(path).read_text().splitlines()
+    lines = _resolve_gaussian_path(path).read_text().splitlines()
     return _find_linear_ltype_constants(lines)
 
 
 def parse_gaussian_linear_rotdist_constants(path: str | Path) -> GaussianLinearRotDistConstants:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    lines = _resolve_gaussian_path(path).read_text(encoding="utf-8").splitlines()
     return _find_linear_rotdist_constants(lines)
 
 
 def parse_gaussian_anharmonic_force_data(path: str | Path) -> GaussianAnharmonicForceData:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    lines = _resolve_gaussian_path(path).read_text(encoding="utf-8").splitlines()
     frequencies_cm = _find_quadratic_force_constants(lines)
     phi3_reduced_cm, phi3_raw_au = _find_cubic_force_constants(lines, frequencies_cm.size)
     phi4_reduced_cm, phi4_raw_au = _find_quartic_force_constants(lines, frequencies_cm.size)
@@ -1418,7 +1442,7 @@ def parse_gaussian_anharmonic_force_data(path: str | Path) -> GaussianAnharmonic
 
 
 def parse_gaussian_anharmonic_analysis(path: str | Path) -> GaussianAnharmonicAnalysis:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    lines = _resolve_gaussian_path(path).read_text(encoding="utf-8").splitlines()
     entries, active_counts = _find_resonance_entries(lines)
     x_cor = _find_lower_triangular_matrix_after_header(lines, "Coriolis contributions to X Matrix (in cm^-1)")
     x_3rd = _find_lower_triangular_matrix_after_header(lines, "3rd Deriv. contributions to X Matrix (in cm^-1)")
@@ -1510,7 +1534,7 @@ def apply_mode_signs_to_cubic_force_constants(phi3: np.ndarray, mode_signs: np.n
 
 
 def parse_gaussian_fchk_harmonic_data(path: str | Path) -> GaussianFchkHarmonicData:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    lines = _resolve_gaussian_path(path).read_text(encoding="utf-8").splitlines()
     n_atoms = int(_parse_fchk_scalar(lines, "Number of atoms", "I"))
     n_modes = int(_parse_fchk_scalar(lines, "Number of Normal Modes", "I"))
     atomic_numbers = _parse_fchk_array(lines, "Atomic numbers", "I").astype(int)
