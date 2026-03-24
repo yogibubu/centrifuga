@@ -41,6 +41,7 @@ from gaussian_vpt_parser import (
     reorder_cubic_force_constants,
 )
 from compare_gaussian_sextic import FAC3AU, sextic_cubic_hierarchy_hz, sextic_h22_linear_candidate_hz
+from compare_gaussian_sextic import sextic_linear_source_formula_hz
 from compare_gaussian_sextic import split_cubic_force_constants
 from vibrot_alpha import (
     alpha_matrix_from_cubic_two_index_cm,
@@ -617,6 +618,7 @@ def _h22_from_fchk(fchk_path: str, representation: str, reduction: str) -> dict[
         fchk.cartesian_force_constants,
         representation=rep,
         symbols=symbols_from_atomic_numbers(fchk.atomic_numbers),
+        point_group=fchk.point_group,
     )
     omega_au = tuple(sp.Float(abs(x) / AU_FREQ_TO_CMINV) for x in model.vib_freq_cm)
     n_modes = model.dInv_au.shape[2]
@@ -703,6 +705,7 @@ def _build_harmonic_model_from_inputs(
             fchk.cartesian_force_constants,
             representation=rep,
             symbols=symbols_from_atomic_numbers(fchk.atomic_numbers),
+            point_group=fchk.point_group,
         )
         source = fchk_path
     else:
@@ -943,6 +946,14 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
     if not pairs:
         return
     widget.insert(tk.END, f"{title}\n")
+    paper_scope = ltype.get("paper_scope")
+    impl_scope = ltype.get("implementation_scope")
+    if paper_scope or impl_scope:
+        widget.insert(
+            tk.END,
+            "  scope: "
+            f"paper={paper_scope}, implementation={impl_scope}\n",
+        )
     b_lin = ltype.get("B_linear_cm")
     if b_lin is not None:
         widget.insert(tk.END, f"  B_linear={float(b_lin):.8g} cm^-1\n")
@@ -960,7 +971,8 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
         widget.insert(
             tk.END,
             "  pure rotational branch: "
-            f"D={scalars.get('D_mhz')} MHz, H={scalars.get('H_hz')} Hz\n",
+            f"D={scalars.get('D_mhz')} MHz, H={scalars.get('H_hz')} Hz "
+            f"[{pure_branch.get('scope_status', 'paper_aligned')}]\n",
         )
     pair_branch = ltype.get("pairwise_ltype_branch")
     if pair_branch:
@@ -969,7 +981,8 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
             tk.END,
             "  pairwise l-type branch: "
             f"{int(pair_branch.get('pair_count', 0))} pair(s), "
-            f"active channel={pair_branch.get('active_operator_channel')}\n",
+            f"active channel={pair_branch.get('active_operator_channel')} "
+            f"[{pair_branch.get('scope_status', 'experimental_beyond_paper')}]\n",
         )
         widget.insert(
             tk.END,
@@ -1071,6 +1084,20 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
                 f"q_J^(pair)={float(c['q_J_pair']):.6g} Hz, "
                 f"q_H^(pair)={float(c['q_H_pair']):.6g} Hz\n",
             )
+        qconv_model = pair.get("conventional_linear_model_hz")
+        if qconv_model:
+            c = qconv_model["constants_hz"]
+            qk = c.get("q_K")
+            qk_text = "---" if qk is None else f"{float(qk):.6g} Hz"
+            widget.insert(
+                tk.END,
+                "    conventional linear model candidate: "
+                f"status={qconv_model['status']}, "
+                f"source={qconv_model['source']}, "
+                f"q_e={float(c['q_e']):.6g} Hz, "
+                f"q_J={float(c['q_J']):.6g} Hz, "
+                f"q_K={qk_text}\n",
+            )
         gsrc = pair.get("gaussian_source_rotational_constants_hz")
         if gsrc:
             widget.insert(
@@ -1099,6 +1126,16 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
                 f"q^J={float(gres['q_J']):.6g} Hz, "
                 f"q^K={float(gres['q_K']):.6g} Hz "
                 f"[Q({int(gres['Q_index'])}), active DD(2-2)={gres['active_dd_22_count']}]\n",
+            )
+        gexact = pair.get("conventional_linear_model_exact_hz")
+        if gexact:
+            widget.insert(
+                tk.END,
+                "    exact conventional linear model: "
+                f"source={gexact['source']}, "
+                f"q_e={float(gexact['constants_hz']['q_e']):.6g} Hz, "
+                f"q_J={float(gexact['constants_hz']['q_J']):.6g} Hz, "
+                f"q_K={float(gexact['constants_hz']['q_K']):.6g} Hz\n",
             )
         gfinal = pair.get("effective_linear_model_final_hz")
         if gfinal:
@@ -1162,7 +1199,8 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
             )
     widget.insert(
         tk.END,
-        "  Interpretation: these coefficients define the current minimal pairwise l-type effective Hamiltonian, reported in equivalent real- and circular-doublet bases.\n",
+        "  Interpretation: the pure rotational D/H layer is aligned with the current manuscript; "
+        "the pairwise l-type layer is an experimental beyond-paper extension, reported in equivalent real- and circular-doublet bases.\n",
     )
 
 
@@ -1460,7 +1498,7 @@ class App(tk.Tk):
             label="Open guide",
             command=lambda: messagebox.showinfo(
                 "Guide location",
-                "See README_CeDiTT.txt or GUI_APP_GUIDE.md in the project folder for usage instructions.",
+                "See docs/gui/GUI_APP_GUIDE.md in the project folder or the distribution readme for usage instructions.",
             ),
         )
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -1487,17 +1525,33 @@ class App(tk.Tk):
         ttk.Entry(top, width=15, textvariable=self._sv("C", "")).grid(row=0, column=5, padx=4)
 
         ttk.Label(top, text="Required for manual transforms only; harmonic-input paths compute them internally.").grid(row=0, column=6, padx=(10, 0), sticky="w")
+        ttk.Label(top, text="Shared vibro-rotational input").grid(row=1, column=0, sticky="w", pady=(10, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_fchk", "")).grid(row=1, column=1, columnspan=2, padx=4, sticky="we", pady=(10, 0))
+        ttk.Button(top, text="FCHK", command=self._browse_vr_shared_fchk).grid(row=1, column=3, padx=(4, 0), pady=(10, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_xyz", "")).grid(row=1, column=4, columnspan=2, padx=4, sticky="we", pady=(10, 0))
+        ttk.Button(top, text="XYZ", command=self._browse_vr_shared_xyz).grid(row=1, column=6, padx=(4, 0), pady=(10, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_hessian", "")).grid(row=2, column=1, columnspan=2, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(top, text="Hessian", command=self._browse_vr_shared_hessian).grid(row=2, column=3, padx=(4, 0), pady=(4, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_anh_log", "")).grid(row=2, column=4, columnspan=2, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(top, text="Anharm log", command=self._browse_vr_shared_anh_log).grid(row=2, column=6, padx=(4, 0), pady=(4, 0))
+        ttk.Label(
+            top,
+            text="These shared paths define the default vibro-rotational dataset used by quartic, sextic, and alpha modules whenever local fields are left empty.",
+        ).grid(row=3, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         notebook = ttk.Notebook(root)
         notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
 
+        vr_tab = self._make_scrollable_tab(notebook)
         q_tab = self._make_scrollable_tab(notebook)
         s_tab = self._make_scrollable_tab(notebook)
+        notebook.add(vr_tab["container"], text="Vibro-Rotational")
         notebook.add(q_tab["container"], text="Quartic")
         notebook.add(s_tab["container"], text="Sextic")
 
         self._build_quartic_tab(q_tab["content"], q_tab["report_host"])
         self._build_sextic_tab(s_tab["content"], s_tab["report_host"])
+        self._build_integrated_tab(vr_tab["content"], vr_tab["report_host"])
 
     def _make_scrollable_tab(self, notebook: ttk.Notebook) -> dict[str, tk.Widget]:
         container = ttk.Frame(notebook)
@@ -1785,6 +1839,59 @@ class App(tk.Tk):
         self.vars["s_red_out"].trace_add("write", self._refresh_sextic_labels)
         self._refresh_sextic_labels()
 
+    def _build_integrated_tab(self, parent: ttk.Frame, report_parent: ttk.Frame) -> None:
+        intro = ttk.LabelFrame(parent, text="Shared Vibro-Rotational Dataset", padding=8)
+        intro.pack(fill=tk.X)
+        ttk.Label(
+            intro,
+            text=(
+                "This integrated workspace treats quartic, sextic, and alpha diagnostics as different projections of the same "
+                "vibro-rotational input. Shared paths from the top bar are used by default; local quartic/sextic/alpha fields "
+                "still override them when you need a specialized route."
+            ),
+        ).grid(row=0, column=0, columnspan=4, sticky="w")
+        ttk.Label(intro, text="Quartic/alpha rep").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        ttk.Combobox(intro, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self.vars["q_rep_in"]).grid(
+            row=1, column=1, padx=4, pady=(8, 0), sticky="w"
+        )
+        ttk.Label(intro, text="Quartic reduction").grid(row=1, column=2, sticky="w", pady=(8, 0))
+        ttk.Combobox(intro, width=8, state="readonly", values=REDUCTIONS, textvariable=self.vars["q_red"]).grid(
+            row=1, column=3, padx=4, pady=(8, 0), sticky="w"
+        )
+        ttk.Label(intro, text="Sextic rep").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ttk.Combobox(intro, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self.vars["s_rep_in"]).grid(
+            row=2, column=1, padx=4, pady=(4, 0), sticky="w"
+        )
+        ttk.Label(intro, text="Sextic A/S").grid(row=2, column=2, sticky="w", pady=(4, 0))
+        ttk.Combobox(intro, width=8, state="readonly", values=REDUCTIONS, textvariable=self.vars["s_red_in"]).grid(
+            row=2, column=3, padx=4, pady=(4, 0), sticky="w"
+        )
+
+        extras = ttk.LabelFrame(parent, text="Shared Auxiliary Inputs", padding=8)
+        extras.pack(fill=tk.X, pady=(10, 0))
+        ttk.Label(extras, text="Alpha excluded modes").grid(row=0, column=0, sticky="w")
+        ttk.Entry(extras, width=24, textvariable=self.vars["q_alpha_excluded"]).grid(row=0, column=1, padx=4, sticky="w")
+        ttk.Label(extras, text="Alpha cubic 2-index").grid(row=0, column=2, sticky="w")
+        ttk.Entry(extras, width=48, textvariable=self.vars["q_alpha_cubic_2idx"]).grid(row=0, column=3, padx=4, sticky="we")
+        ttk.Button(extras, text="Browse", command=self._browse_q_alpha_cubic_2idx).grid(row=0, column=4, padx=(4, 0))
+        ttk.Label(extras, text="Sextic cubic 2-index").grid(row=1, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(extras, width=48, textvariable=self.vars["s_cubic_2idx"]).grid(row=1, column=1, columnspan=3, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(extras, text="Browse", command=self._browse_s_cubic_2idx).grid(row=1, column=4, padx=(4, 0), pady=(4, 0))
+        ttk.Label(extras, text="Sextic cubic-mode fchk").grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ttk.Entry(extras, width=48, textvariable=self.vars["s_cubic_fchk"]).grid(row=2, column=1, columnspan=3, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(extras, text="Browse", command=self._browse_s_cubic_fchk).grid(row=2, column=4, padx=(4, 0), pady=(4, 0))
+        extras.columnconfigure(3, weight=1)
+
+        actions = ttk.LabelFrame(parent, text="Integrated Actions", padding=8)
+        actions.pack(fill=tk.X, pady=(10, 0))
+        ttk.Button(actions, text="Run Integrated Analysis", command=self._run_vr_integrated_analysis).pack(side=tk.LEFT)
+        ttk.Button(actions, text="Quartic Summary", command=self._run_vr_quartic_summary).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="Alpha Summary", command=self._run_vr_alpha_summary).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(actions, text="Sextic Summary", command=self._run_vr_sextic_summary).pack(side=tk.LEFT, padx=(8, 0))
+
+        self.vr_report = scrolledtext.ScrolledText(report_parent, height=12, wrap="word")
+        self.vr_report.pack(fill=tk.BOTH, expand=True)
+
     def _refresh_quartic_labels(self, *_: object) -> None:
         names = QUARTIC_A_NAMES if _norm_reduction(self.vars["q_red"].get()) == "A" else QUARTIC_S_NAMES
         for lbl, nm in zip(self.q_in_labels, names):
@@ -1810,6 +1917,91 @@ class App(tk.Tk):
         self.vars["s_red_in"].set(red)
         self.vars["s_red_out"].set(red)
 
+    def _shared_path(self, local_key: str, shared_key: str) -> str:
+        local = self.vars[local_key].get().strip()
+        if local:
+            return local
+        return self.vars[shared_key].get().strip()
+
+    def _shared_harmonic_inputs(self, fchk_key: str, xyz_key: str, hessian_key: str) -> tuple[str, str, str]:
+        return (
+            self._shared_path(fchk_key, "vr_shared_fchk"),
+            self._shared_path(xyz_key, "vr_shared_xyz"),
+            self._shared_path(hessian_key, "vr_shared_hessian"),
+        )
+
+    def _append_vr_report_header(self, title: str) -> None:
+        self.vr_report.insert(tk.END, f"\n{title}\n")
+        self.vr_report.insert(
+            tk.END,
+            "shared dataset: "
+            f"fchk={self.vars['vr_shared_fchk'].get().strip() or '(none)'}; "
+            f"xyz={self.vars['vr_shared_xyz'].get().strip() or '(none)'}; "
+            f"hessian={self.vars['vr_shared_hessian'].get().strip() or '(none)'}; "
+            f"anh_log={self.vars['vr_shared_anh_log'].get().strip() or '(none)'}\n",
+        )
+
+    def _capture_report(self, widget: scrolledtext.ScrolledText, callback) -> str:
+        widget.delete("1.0", tk.END)
+        callback()
+        return widget.get("1.0", tk.END).strip()
+
+    def _run_vr_quartic_summary(self) -> None:
+        self.vr_report.delete("1.0", tk.END)
+        self._append_vr_report_header("Integrated Quartic Summary")
+        text1 = self._capture_report(self.q_report, self._load_quartics_from_harmonic_input)
+        if text1:
+            self.vr_report.insert(tk.END, "\n[Standard Quartics]\n" + text1 + "\n")
+        text2 = self._capture_report(self.q_report, self._run_h22_from_fchk)
+        if text2:
+            self.vr_report.insert(tk.END, "\n[Validated Quartic H22]\n" + text2 + "\n")
+
+    def _run_vr_alpha_summary(self) -> None:
+        self.vr_report.delete("1.0", tk.END)
+        self._append_vr_report_header("Integrated Alpha / Delta_vib Summary")
+        if self.vars["q_alpha_log"].get().strip() or self.vars["vr_shared_anh_log"].get().strip():
+            text1 = self._capture_report(self.q_report, self._run_alpha_parser)
+            if text1:
+                self.vr_report.insert(tk.END, "\n[Gaussian Alpha Parser]\n" + text1 + "\n")
+        if self.vars["q_alpha_cubic_2idx"].get().strip():
+            text2 = self._capture_report(self.q_report, self._prepare_alpha_inputs)
+            if text2:
+                self.vr_report.insert(tk.END, "\n[Alpha From Harmonic + Cubic]\n" + text2 + "\n")
+
+    def _run_vr_sextic_summary(self) -> None:
+        self.vr_report.delete("1.0", tk.END)
+        self._append_vr_report_header("Integrated Sextic Summary")
+        text1 = self._capture_report(self.s_report, self._run_sextic_h22_from_fchk)
+        if text1:
+            self.vr_report.insert(tk.END, "\n[Sextic H22 Linear Diagnostic]\n" + text1 + "\n")
+        text2 = self._capture_report(self.s_report, self._run_sextic_hierarchy)
+        if text2:
+            self.vr_report.insert(tk.END, "\n[Harmonic/Cubic Sextic Hierarchy]\n" + text2 + "\n")
+
+    def _run_vr_integrated_analysis(self) -> None:
+        self.vr_report.delete("1.0", tk.END)
+        self._append_vr_report_header("Integrated Vibro-Rotational Analysis")
+        quartic_text = self._capture_report(self.q_report, self._load_quartics_from_harmonic_input)
+        if quartic_text:
+            self.vr_report.insert(tk.END, "\n[Standard Quartics]\n" + quartic_text + "\n")
+        h22_text = self._capture_report(self.q_report, self._run_h22_from_fchk)
+        if h22_text:
+            self.vr_report.insert(tk.END, "\n[Validated Quartic H22]\n" + h22_text + "\n")
+        if self.vars["q_alpha_log"].get().strip() or self.vars["vr_shared_anh_log"].get().strip():
+            alpha_parse_text = self._capture_report(self.q_report, self._run_alpha_parser)
+            if alpha_parse_text:
+                self.vr_report.insert(tk.END, "\n[Gaussian Alpha Parser]\n" + alpha_parse_text + "\n")
+        if self.vars["q_alpha_cubic_2idx"].get().strip():
+            alpha_text = self._capture_report(self.q_report, self._prepare_alpha_inputs)
+            if alpha_text:
+                self.vr_report.insert(tk.END, "\n[Alpha From Harmonic + Cubic]\n" + alpha_text + "\n")
+        sextic_h22_text = self._capture_report(self.s_report, self._run_sextic_h22_from_fchk)
+        if sextic_h22_text:
+            self.vr_report.insert(tk.END, "\n[Sextic H22 Linear Diagnostic]\n" + sextic_h22_text + "\n")
+        sextic_text = self._capture_report(self.s_report, self._run_sextic_hierarchy)
+        if sextic_text:
+            self.vr_report.insert(tk.END, "\n[Harmonic/Cubic Sextic Hierarchy]\n" + sextic_text + "\n")
+
     def _browse_h22_fchk(self) -> None:
         pth = filedialog.askopenfilename(
             title="Select formatted checkpoint for validated H22 quartic path",
@@ -1823,6 +2015,26 @@ class App(tk.Tk):
         if pth:
             self.vars["q_symm_xyz"].set(pth)
             self._set_symmetry_status_from_entry("q_symm_xyz")
+
+    def _browse_vr_shared_fchk(self) -> None:
+        pth = filedialog.askopenfilename(title="Select shared formatted checkpoint", filetypes=[("Gaussian fchk", "*.fchk"), ("All files", "*.*")])
+        if pth:
+            self.vars["vr_shared_fchk"].set(pth)
+
+    def _browse_vr_shared_xyz(self) -> None:
+        pth = filedialog.askopenfilename(title="Select shared XYZ geometry", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
+        if pth:
+            self.vars["vr_shared_xyz"].set(pth)
+
+    def _browse_vr_shared_hessian(self) -> None:
+        pth = filedialog.askopenfilename(title="Select shared Cartesian Hessian", filetypes=[("Text", "*.txt *.dat *.hess"), ("All files", "*.*")])
+        if pth:
+            self.vars["vr_shared_hessian"].set(pth)
+
+    def _browse_vr_shared_anh_log(self) -> None:
+        pth = filedialog.askopenfilename(title="Select shared Gaussian anharmonic log", filetypes=[("Gaussian log", "*.log *.out"), ("All files", "*.*")])
+        if pth:
+            self.vars["vr_shared_anh_log"].set(pth)
 
     def _browse_h22_xyz(self) -> None:
         pth = filedialog.askopenfilename(title="Select XYZ geometry for validated H22 quartic path", filetypes=[("XYZ", "*.xyz"), ("All files", "*.*")])
@@ -2382,14 +2594,15 @@ class App(tk.Tk):
         try:
             rep = _norm_rep(self.vars["q_rep_in"].get())
             red = _norm_reduction(self.vars["q_red"].get())
+            h_fchk, h_xyz, h_hessian = self._shared_harmonic_inputs("q_h22_fchk", "q_h22_xyz", "q_h22_hessian")
             model, source = _build_harmonic_model_from_inputs(
                 rep,
-                fchk_path=self.vars["q_h22_fchk"].get().strip(),
-                xyz_path=self.vars["q_h22_xyz"].get().strip(),
-                hessian_path=self.vars["q_h22_hessian"].get().strip(),
+                fchk_path=h_fchk,
+                xyz_path=h_xyz,
+                hessian_path=h_hessian,
             )
             from_path = source
-            fchk_tmp = self.vars["q_h22_fchk"].get().strip()
+            fchk_tmp = h_fchk
             if fchk_tmp:
                 res = _h22_from_fchk(fchk_tmp, rep, red)
             else:
@@ -2519,7 +2732,7 @@ class App(tk.Tk):
                         _append_linear_ltype_report(
                             self.q_report,
                             ltype,
-                            title="Linear-molecule l-type doubling from H22 quartic projection",
+                            title="Experimental linear l-type branch from H22 quartic projection",
                         )
                 else:
                     self.q_report.insert(tk.END, "Direct special-limit H22 projection is available from the geometry+Hessian branch.\n")
@@ -2548,6 +2761,8 @@ class App(tk.Tk):
     def _run_alpha_parser(self) -> None:
         try:
             log_path = self.vars["q_alpha_log"].get().strip()
+            if not log_path:
+                log_path = self.vars["vr_shared_anh_log"].get().strip()
             if not log_path:
                 raise ValueError("Select a Gaussian anharmonic log first.")
             bench = parse_gaussian_alpha_data(log_path)
@@ -2648,11 +2863,12 @@ class App(tk.Tk):
             cubic_2idx = self.vars["q_alpha_cubic_2idx"].get().strip()
             if not cubic_2idx:
                 raise ValueError("Provide the semi-diagonal cubic 2-index matrix for alpha.")
+            h_fchk, h_xyz, h_hessian = self._shared_harmonic_inputs("q_alpha_fchk", "q_alpha_xyz", "q_alpha_hessian")
             model, source = _build_harmonic_model_from_inputs(
                 rep,
-                fchk_path=self.vars["q_alpha_fchk"].get().strip(),
-                xyz_path=self.vars["q_alpha_xyz"].get().strip(),
-                hessian_path=self.vars["q_alpha_hessian"].get().strip(),
+                fchk_path=h_fchk,
+                xyz_path=h_xyz,
+                hessian_path=h_hessian,
             )
             n_modes = int(np.abs(model.vib_freq_cm).size)
             mat = read_cubic_two_index_matrix(cubic_2idx, n_modes)
@@ -2669,6 +2885,8 @@ class App(tk.Tk):
             sum_cor_cm = np.sum(np.asarray(alpha["alpha_coriolis_cm_abc"], dtype=float), axis=0)
             sum_inertia_cm = np.sum(np.asarray(alpha["alpha_inertia_cm_abc"], dtype=float), axis=0)
             sum_anh_cm = np.sum(np.asarray(alpha["alpha_anharmonic_cm_abc"], dtype=float), axis=0)
+            sum_anh_diag_cm = np.sum(np.asarray(alpha["alpha_anharmonic_diagonal_cm_abc"], dtype=float), axis=0)
+            sum_anh_sd_cm = np.sum(np.asarray(alpha["alpha_anharmonic_semidiagonal_cm_abc"], dtype=float), axis=0)
 
             self.q_report.insert(tk.END, "\nAlpha from harmonic input + semi-diagonal cubic data\n")
             self.q_report.insert(tk.END, f"source={source}\n")
@@ -2751,7 +2969,9 @@ class App(tk.Tk):
             self.q_report.insert(
                 tk.END,
                 "This alpha route is the low-cost companion of the standard sextic semi-diagonal sector: "
-                "it uses the same harmonic ingredients plus only iii/iij cubic information, with no genuine three-index ijk cubic block.\n",
+                "it uses the same harmonic ingredients plus only iii/iij cubic information, with no genuine three-index ijk cubic block.\n"
+                "Interpretation: Coriolis and Inertia come from the harmonic model alone, whereas Anharm is the cubic-force contribution split into "
+                "diagonal anharmonicity (phi_iii) and semi-diagonal mode-coupling terms (phi_iij).\n",
             )
             self.q_report.insert(
                 tk.END,
@@ -2779,6 +2999,11 @@ class App(tk.Tk):
                 f"inertia=({sum_inertia_cm[0]:.6f}, {sum_inertia_cm[1]:.6f}, {sum_inertia_cm[2]:.6f}), "
                 f"anharmonic=({sum_anh_cm[0]:.6f}, {sum_anh_cm[1]:.6f}, {sum_anh_cm[2]:.6f})\n",
             )
+            self.q_report.insert(
+                tk.END,
+                f"anharmonic split (cm^-1): diag(phi_iii)=({sum_anh_diag_cm[0]:.6f}, {sum_anh_diag_cm[1]:.6f}, {sum_anh_diag_cm[2]:.6f}), "
+                f"semi-diag(phi_iij)=({sum_anh_sd_cm[0]:.6f}, {sum_anh_sd_cm[1]:.6f}, {sum_anh_sd_cm[2]:.6f})\n",
+            )
             if rotor_limit is not None and rotor_limit["is_special_limit"]:
                 if rotor_limit["kind"] == "linear" and "alpha_linear_cm" in alpha:
                     alpha_lin_mhz = np.asarray(alpha["alpha_linear_cm"], dtype=float) * CMINV_TO_MHZ
@@ -2794,12 +3019,20 @@ class App(tk.Tk):
                         tk.END,
                         f"sum symmetry-adapted alpha_parallel/perpendicular (MHz)=({float(np.sum(par_mhz)):.6f}, {float(np.sum(perp_mhz)):.6f})\n",
                     )
-            self.q_report.insert(tk.END, "\nMode-resolved alpha contributions from harmonic+cubic route (MHz)\n")
+            self.q_report.insert(
+                tk.END,
+                "\nMode-resolved alpha contributions from harmonic+cubic route (MHz)\n"
+                "Columns: total alpha plus the harmonic-only Coriolis/Inertia pieces and the anharmonic split into phi_iii and phi_iij sectors.\n",
+            )
             axis_labels = ("A", "B", "C")
             for i in range(n_modes):
                 freq_text = f"{float(model.vib_freq_cm[i]):.3f}"
                 status = "excluded" if (i + 1) in excluded else "kept"
                 row = total_mhz[i]
+                cor_row = np.asarray(alpha["alpha_coriolis_cm_abc"], dtype=float)[i] * CMINV_TO_MHZ
+                inertia_row = np.asarray(alpha["alpha_inertia_cm_abc"], dtype=float)[i] * CMINV_TO_MHZ
+                anh_diag_row = np.asarray(alpha["alpha_anharmonic_diagonal_cm_abc"], dtype=float)[i] * CMINV_TO_MHZ
+                anh_sd_row = np.asarray(alpha["alpha_anharmonic_semidiagonal_cm_abc"], dtype=float)[i] * CMINV_TO_MHZ
                 self.q_report.insert(
                     tk.END,
                     f"Q({i + 1:>3d})  w={freq_text:>10} cm^-1  "
@@ -2807,8 +3040,20 @@ class App(tk.Tk):
                     f"{axis_labels[1]}={row[1]:>12.5f}  "
                     f"{axis_labels[2]}={row[2]:>12.5f}  [{status}]\n",
                 )
+                self.q_report.insert(
+                    tk.END,
+                    f"          Cor=({cor_row[0]:>10.5f}, {cor_row[1]:>10.5f}, {cor_row[2]:>10.5f})  "
+                    f"In=({inertia_row[0]:>10.5f}, {inertia_row[1]:>10.5f}, {inertia_row[2]:>10.5f})\n",
+                )
+                self.q_report.insert(
+                    tk.END,
+                    f"          Anh[phi_iii]=({anh_diag_row[0]:>10.5f}, {anh_diag_row[1]:>10.5f}, {anh_diag_row[2]:>10.5f})  "
+                    f"Anh[phi_iij]=({anh_sd_row[0]:>10.5f}, {anh_sd_row[1]:>10.5f}, {anh_sd_row[2]:>10.5f})\n",
+                )
 
             log_path = self.vars["q_alpha_log"].get().strip()
+            if not log_path:
+                log_path = self.vars["vr_shared_anh_log"].get().strip()
             if log_path:
                 try:
                     bench = parse_gaussian_alpha_data(log_path)
@@ -2834,11 +3079,12 @@ class App(tk.Tk):
         try:
             rep = _norm_rep(self.vars["q_rep_in"].get())
             red = _norm_reduction(self.vars["q_red"].get())
+            h_fchk, h_xyz, h_hessian = self._shared_harmonic_inputs("q_h22_fchk", "q_h22_xyz", "q_h22_hessian")
             model, source = _build_harmonic_model_from_inputs(
                 rep,
-                fchk_path=self.vars["q_h22_fchk"].get().strip(),
-                xyz_path=self.vars["q_h22_xyz"].get().strip(),
-                hessian_path=self.vars["q_h22_hessian"].get().strip(),
+                fchk_path=h_fchk,
+                xyz_path=h_xyz,
+                hessian_path=h_hessian,
             )
             q2 = compute_order2_quartic(model)
             abc = [float(x) for x in model.abc_mhz]
@@ -3071,11 +3317,12 @@ class App(tk.Tk):
     def _run_sextic_h22_from_fchk(self) -> None:
         try:
             rep = _norm_rep(self.vars["s_rep_in"].get())
+            h_fchk, h_xyz, h_hessian = self._shared_harmonic_inputs("s_h22_fchk", "s_h22_xyz", "s_h22_hessian")
             model, source = _build_harmonic_model_from_inputs(
                 rep,
-                fchk_path=self.vars["s_h22_fchk"].get().strip(),
-                xyz_path=self.vars["s_h22_xyz"].get().strip(),
-                hessian_path=self.vars["s_h22_hessian"].get().strip(),
+                fchk_path=h_fchk,
+                xyz_path=h_xyz,
+                hessian_path=h_hessian,
             )
             axes = {"a": 0, "b": 1, "c": 2}
             cand = sextic_h22_linear_candidate_hz(model, axes)
@@ -3162,7 +3409,7 @@ class App(tk.Tk):
                     _append_linear_ltype_report(
                         self.s_report,
                         ltype,
-                        title="Linear-molecule l-type doubling from H22-linear sextic response",
+                        title="Experimental linear l-type branch from H22-linear sextic response",
                     )
             self.s_report.insert(
                 tk.END,
@@ -3175,15 +3422,17 @@ class App(tk.Tk):
     def _run_sextic_hierarchy(self) -> None:
         try:
             rep = _norm_rep(self.vars["s_rep_in"].get())
-            omega_fchk = self.vars["s_h22_fchk"].get().strip()
+            omega_fchk = self._shared_path("s_h22_fchk", "vr_shared_fchk")
             model, source = _build_harmonic_model_from_inputs(
                 rep,
                 fchk_path=omega_fchk,
-                xyz_path=self.vars["s_h22_xyz"].get().strip(),
-                hessian_path=self.vars["s_h22_hessian"].get().strip(),
+                xyz_path=self._shared_path("s_h22_xyz", "vr_shared_xyz"),
+                hessian_path=self._shared_path("s_h22_hessian", "vr_shared_hessian"),
             )
             axes = {"a": 0, "b": 1, "c": 2}
             cubic_log = self.vars["s_cubic_log"].get().strip()
+            if not cubic_log:
+                cubic_log = self.vars["vr_shared_anh_log"].get().strip()
             cubic_fchk = self.vars["s_cubic_fchk"].get().strip()
             cubic_2idx = self.vars["s_cubic_2idx"].get().strip()
             phi3 = None
@@ -3330,6 +3579,21 @@ class App(tk.Tk):
                         "  full: " + ", ".join(f"{nm}={val:.6g} Hz" for nm, val in full_special["sextic_hz"].items()) + "\n",
                     )
                 if rotor_limit["kind"] == "linear":
+                    if phi3 is not None:
+                        linear_src = sextic_linear_source_formula_hz(model, phi3)
+                        self.s_report.insert(
+                            tk.END,
+                            "  linear source formula: "
+                            + f"H={linear_src['H']:.6g} Hz"
+                            + (
+                                ", "
+                                + ", ".join(
+                                    f"{nm}={val:.6g} Hz"
+                                    for nm, val in linear_src["perpendicular_components_hz"].items()
+                                )
+                            )
+                            + f", spread={linear_src['spread_hz']:.3g} Hz\n",
+                        )
                     q2 = compute_order2_quartic(model)
                     ltype = linear_ltype_terms(
                         model,
@@ -3339,7 +3603,7 @@ class App(tk.Tk):
                     _append_linear_ltype_report(
                         self.s_report,
                         ltype,
-                        title="Linear-molecule l-type doubling",
+                        title="Experimental linear l-type branch",
                     )
             self.s_report.insert(
                 tk.END,

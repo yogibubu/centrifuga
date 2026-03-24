@@ -19,6 +19,11 @@ from pathlib import Path
 
 import numpy as np
 
+from anharmonic_partition import (
+    build_anharmonic_filter_plan,
+    classify_three_classes_cartesian,
+    effective_frequencies_from_three_class_report,
+)
 from compare_gaussian_sextic import (
     FACTG,
     AMU_KG,
@@ -32,6 +37,13 @@ from compare_gaussian_sextic import (
     _canonicalize_alpha_rows,
     _zeta_xyz,
 )
+from gaussian_vpt_parser import (
+    parse_gaussian_anharmonic_analysis,
+    parse_gaussian_anharmonic_force_data,
+    parse_gaussian_fchk_harmonic_data,
+)
+from harmonic_convention import align_cubic_to_harmonic_model, build_default_harmonic_model
+from rovib_distortion import ANGSTROM_TO_BOHR
 
 
 PICH12 = math.pi * math.sqrt(CLIGHT_CM * AMU_KG / PLANCK / (1.0e10**2))
@@ -96,6 +108,8 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
     alpha_cor = np.zeros((n_modes, 3), dtype=float)
     alpha_inertia = np.zeros((n_modes, 3), dtype=float)
     alpha_anh = np.zeros((n_modes, 3), dtype=float)
+    alpha_anh_diag = np.zeros((n_modes, 3), dtype=float)
+    alpha_anh_semidiag = np.zeros((n_modes, 3), dtype=float)
     axis_map = {label: i for i, label in enumerate(model.xyz_to_abc)}
     linear_skip_axis = None
     if rotor_limit["kind"] == "linear":
@@ -189,7 +203,8 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
                 if frq_i_harm <= 1.0e-14 or frq_i_denom <= 1.0e-14:
                     continue
                 ai = aa[ix] / frq_i_denom
-                acc = 0.0
+                acc_diag = 0.0
+                acc_semidiag = 0.0
                 for j in range(n_modes):
                     if not keep[j]:
                         continue
@@ -200,12 +215,20 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
                     x_j = math.sqrt((FACTG * frq_j_harm) ** 3)
                     didq_iix_j = 2.0 * pmom[ix] * pmom[ix] * x_j * c1[j, ix, ix]
                     f3_term = phi3[i, i, j] * frq_i_harm * math.sqrt(frq_j_harm) / (frq_j_denom * frq_j_denom)
-                    acc += didq_iix_j * f3_term
-                alpha_anh[i, ix] = PICH12 * ai * acc
+                    contrib = didq_iix_j * f3_term
+                    if i == j:
+                        acc_diag += contrib
+                    else:
+                        acc_semidiag += contrib
+                alpha_anh_diag[i, ix] = PICH12 * ai * acc_diag
+                alpha_anh_semidiag[i, ix] = PICH12 * ai * acc_semidiag
+                alpha_anh[i, ix] = alpha_anh_diag[i, ix] + alpha_anh_semidiag[i, ix]
 
     alpha_cor = -alpha_cor
     alpha_inertia = -alpha_inertia
     alpha_anh = -alpha_anh
+    alpha_anh_diag = -alpha_anh_diag
+    alpha_anh_semidiag = -alpha_anh_semidiag
 
     deg_pairs: list[tuple[int, int]] = []
     deg_meta: list[dict[str, object]] = []
@@ -231,10 +254,14 @@ def alpha_matrix_from_harmonic_and_cubic_cm(
         "alpha_coriolis_cm": alpha_cor,
         "alpha_inertia_cm": alpha_inertia,
         "alpha_anharmonic_cm": alpha_anh,
+        "alpha_anharmonic_diagonal_cm": alpha_anh_diag,
+        "alpha_anharmonic_semidiagonal_cm": alpha_anh_semidiag,
         "alpha_total_cm_abc": total[:, abc_order],
         "alpha_coriolis_cm_abc": alpha_cor[:, abc_order],
         "alpha_inertia_cm_abc": alpha_inertia[:, abc_order],
         "alpha_anharmonic_cm_abc": alpha_anh[:, abc_order],
+        "alpha_anharmonic_diagonal_cm_abc": alpha_anh_diag[:, abc_order],
+        "alpha_anharmonic_semidiagonal_cm_abc": alpha_anh_semidiag[:, abc_order],
         "abc_order_from_xyz": abc_order,
         "kept_mask": keep,
         "rotor_limit": rotor_limit,
@@ -289,3 +316,170 @@ def alpha_matrix_from_cubic_two_index_cm(
         effective_frequencies_cm=effective_frequencies_cm,
         resonance_threshold_cm=resonance_threshold_cm,
     )
+
+
+def alpha_matrix_from_harmonic_and_cubic_with_report(
+    model,
+    phi3_reduced_cm: np.ndarray,
+    report,
+    *,
+    excluded_modes: set[int] | None = None,
+    resonance_threshold_cm: float = 20.0,
+) -> dict[str, np.ndarray]:
+    """Apply the current PDF-driven quasiparticle filter plan before evaluating alpha.
+
+    The operational mapping is:
+
+    - Class II modes -> replace harmonic denominators in the anharmonic channel
+      with ``omega_GVPT2``;
+    - Class III resonant-mixing pairs -> remove the corresponding semi-diagonal
+      ``phi_iij`` / ``phi_jji`` couplings.
+    """
+
+    eff = effective_frequencies_from_three_class_report(np.abs(np.asarray(model.vib_freq_cm, dtype=float)), report)
+    plan = build_anharmonic_filter_plan(report)
+    out = alpha_matrix_from_harmonic_and_cubic_cm(
+        model,
+        phi3_reduced_cm,
+        excluded_modes=excluded_modes,
+        disabled_semidiagonal_pairs=plan.disable_semidiagonal_pairs,
+        effective_frequencies_cm=eff,
+        resonance_threshold_cm=resonance_threshold_cm,
+    )
+    out["anharmonic_filter_plan"] = plan
+    return out
+
+
+def alpha_matrix_from_cubic_two_index_with_report(
+    model,
+    two_index_cm: np.ndarray,
+    report,
+    *,
+    excluded_modes: set[int] | None = None,
+    resonance_threshold_cm: float = 20.0,
+) -> dict[str, np.ndarray]:
+    """Convenience wrapper applying the report-driven filter plan to ``phi_iij`` input."""
+
+    mat = np.asarray(two_index_cm, dtype=float)
+    if mat.ndim != 2 or mat.shape[0] != mat.shape[1]:
+        raise ValueError(f"Expected square 2-index cubic matrix, got {mat.shape}")
+    phi3_sd = expand_cubic_two_index_matrix(mat)
+    return alpha_matrix_from_harmonic_and_cubic_with_report(
+        model,
+        phi3_sd,
+        report,
+        excluded_modes=excluded_modes,
+        resonance_threshold_cm=resonance_threshold_cm,
+    )
+
+
+def alpha_matrix_from_gaussian_quasiparticle_model(
+    fchk_path: str | Path,
+    log_path: str | Path,
+    *,
+    excluded_modes: set[int] | None = None,
+    resonance_threshold_cm: float = 20.0,
+    classify_kwargs: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Run the current PDF workflow starting from Gaussian harmonic/anharmonic files.
+
+    This is the practical end-to-end bridge described in ``alpha_resonances``:
+
+    1. parse harmonic, DVPT2, and GVPT2 data from Gaussian outputs;
+    2. classify modes through the current three-class diagnostic;
+    3. build the quasiparticle filter plan;
+    4. recompute ``alpha`` with effective frequencies and selective
+       semi-diagonal filtering.
+    """
+
+    fchk = parse_gaussian_fchk_harmonic_data(fchk_path)
+    force = parse_gaussian_anharmonic_force_data(log_path)
+    analysis = parse_gaussian_anharmonic_analysis(log_path)
+    model, convention = build_default_harmonic_model(
+        fchk.masses_amu,
+        fchk.coords_bohr * (1.0 / ANGSTROM_TO_BOHR),
+        fchk.cartesian_force_constants,
+    )
+    cubic = align_cubic_to_harmonic_model(force, model.vib_freq_cm)
+    report = classify_three_classes_cartesian(force, analysis, **({} if classify_kwargs is None else classify_kwargs))
+    alpha = alpha_matrix_from_harmonic_and_cubic_with_report(
+        model,
+        cubic.reduced_cm,
+        report,
+        excluded_modes=excluded_modes,
+        resonance_threshold_cm=resonance_threshold_cm,
+    )
+    return {
+        "model": model,
+        "harmonic_convention": convention,
+        "force_data": force,
+        "analysis": analysis,
+        "report": report,
+        "alpha": alpha,
+        "aligned_cubic": cubic,
+    }
+
+
+def alpha_matrix_from_mixed_gaussian_sources(
+    harmonic_fchk_path: str | Path,
+    anharmonic_log_path: str | Path,
+    *,
+    analysis_log_path: str | Path | None = None,
+    excluded_modes: set[int] | None = None,
+    resonance_threshold_cm: float = 20.0,
+    classify_kwargs: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Build alpha using a harmonic model from one source and cubic data from another.
+
+    This supports the common mixed-level workflow:
+
+    - ``Inertia`` and ``Coriolis`` from the harmonic model defined by
+      ``harmonic_fchk_path``;
+    - ``Anharm`` from cubic data parsed from ``anharmonic_log_path`` and
+      aligned to that harmonic model;
+    - optional GVPT2/DVPT2 diagnostics from ``analysis_log_path`` when the
+      resonance/quasiparticle filter must be evaluated on a distinct log file.
+    """
+
+    fchk = parse_gaussian_fchk_harmonic_data(harmonic_fchk_path)
+    force = parse_gaussian_anharmonic_force_data(anharmonic_log_path)
+    model, convention = build_default_harmonic_model(
+        fchk.masses_amu,
+        fchk.coords_bohr * (1.0 / ANGSTROM_TO_BOHR),
+        fchk.cartesian_force_constants,
+    )
+    cubic = align_cubic_to_harmonic_model(force, model.vib_freq_cm)
+
+    out: dict[str, object] = {
+        "model": model,
+        "harmonic_convention": convention,
+        "force_data": force,
+        "aligned_cubic": cubic,
+        "harmonic_fchk_path": Path(harmonic_fchk_path),
+        "anharmonic_log_path": Path(anharmonic_log_path),
+    }
+
+    if analysis_log_path is None:
+        alpha = alpha_matrix_from_harmonic_and_cubic_cm(
+            model,
+            cubic.reduced_cm,
+            excluded_modes=excluded_modes,
+            resonance_threshold_cm=resonance_threshold_cm,
+        )
+        out["alpha"] = alpha
+        return out
+
+    analysis = parse_gaussian_anharmonic_analysis(analysis_log_path)
+    report = classify_three_classes_cartesian(force, analysis, **({} if classify_kwargs is None else classify_kwargs))
+    alpha = alpha_matrix_from_harmonic_and_cubic_with_report(
+        model,
+        cubic.reduced_cm,
+        report,
+        excluded_modes=excluded_modes,
+        resonance_threshold_cm=resonance_threshold_cm,
+    )
+    out["analysis"] = analysis
+    out["report"] = report
+    out["alpha"] = alpha
+    out["analysis_log_path"] = Path(analysis_log_path)
+    return out
