@@ -1,6 +1,14 @@
 # Active Projects (2026-03-24)
 
-The active project set is intentionally narrow.
+This file describes the active project set relevant to `centrifugal`.
+
+The general umbrella container is external to this repo:
+
+- `/Users/vincenzobarone/research/chem-research-brain`
+
+So `CeDiTT`, `alpha_resonances`, and `VPT4 quartics` should be read here as
+the active project lines intersecting this repository, not as the full global
+project taxonomy.
 
 ## 1. CeDiTT
 

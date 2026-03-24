@@ -13,7 +13,8 @@ organized around a shared vibro-rotational dataset:
 
 ## Active Projects
 
-Only three project lines are currently active in or alongside this repository:
+Within the broader `brain` container, three project lines are currently active
+in or alongside this repository:
 
 - `CeDiTT`
   - integrated GUI and backend for vibro-rotational properties
@@ -26,6 +27,10 @@ Only three project lines are currently active in or alongside this repository:
 
 Everything else should be treated as inactive unless it directly supports one
 of these three lines.
+
+The general umbrella container is external to this repository:
+
+- `/Users/vincenzobarone/research/chem-research-brain`
 
 ## Active Manuscripts
 
