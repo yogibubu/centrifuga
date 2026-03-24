@@ -1,4 +1,4 @@
-# CentrifugalTransform - Documentazione
+# CeDiTT1.0 / CentrifugalTransform - Documentazione
 
 ## 1. Scopo
 `CentrifugalTransform` e un programma Python con GUI per trasformare costanti di distorsione centrifuga tra rappresentazioni assiali di Watson (`I`, `II`, `III`) e riduzioni (`A`, `S`).
@@ -6,13 +6,20 @@
 Il progetto include:
 - trasformazioni quartiche (riferimento Yamada e metodo tensoriale)
 - trasformazioni sestiche (metodo tensoriale)
+- workspace vibro-rotazionale integrato per quartico, alpha e sestico
 - diagnostica numerica di stabilita (condition numbers)
 - build in applicazione macOS (`.app`)
+
+Progetti attivi collegati a questo repository:
+- `CeDiTT`
+- `alpha_resonances` (sorgente esterna al repo)
+- `VPT4 quartiche`, inclusa la sistemazione non ancora conclusa delle molecole lineari
 
 ## 2. File principali
 - `ceditt_gui.py`: programma principale con interfaccia grafica
 - `build_app.sh`: script di build dell'app macOS
-- `CentrifugalTransform.app`: app compilata
+- `dist/CeDiTT1.0.app`: app compilata corrente
+- `manuscripts/active/paper2.tex`: manoscritto attivo per il filone quartico VPT4
 - `test_tensor_algorithm.py`: test quartico (tensoriale vs riferimento)
 - `test_tensor_sextic_algorithm.py`: test sestico (round-trip)
 
@@ -29,9 +36,24 @@ python3 ceditt_gui.py
 ```
 
 ## 5. Struttura GUI
-La GUI ha 2 tab:
+La GUI ha 3 tab principali:
 
-### 5.1 Tab Quartic
+### 5.1 Tab Vibro-Rotational
+Input condivisi:
+- `.fchk`
+- `XYZ`
+- `Hessian`
+- `anharmonic log`
+
+Questo workspace usa un dataset vibro-rotazionale comune e coordina:
+- quartico
+- alpha / Delta_vib
+- sestico
+
+### 5.2 Tab Quartic
+
+La tab quartica continua a ospitare i tool specialistici, ma ora puo usare i
+path condivisi se i campi locali sono vuoti.
 Input:
 - costanti rotazionali `A, B, C` (MHz)
 - rappresentazione input (`I/II/III`)
@@ -52,7 +74,7 @@ Diagnostica mostrata:
 - `cond2 * eps`
 - gap rotazionali: `A-B`, `B-C`, `A-C`
 
-### 5.2 Tab Sextic
+### 5.3 Tab Sextic
 Input:
 - `A, B, C` (MHz)
 - rappresentazione input (`I/II/III`)
@@ -95,10 +117,12 @@ bash build_app.sh
 
 Output:
 - `/Users/vincenzobarone/centrifugal/CentrifugalTransform.app`
+Output corrente:
+- `/Users/vincenzobarone/centrifugal/dist/CeDiTT1.0.app`
 
 ## 9. Aggiornare l'app sul Desktop
 ```bash
-cp -R /Users/vincenzobarone/centrifugal/CentrifugalTransform.app /Users/vincenzobarone/Desktop/CentrifugalTransform.app
+cp -R /Users/vincenzobarone/centrifugal/dist/CeDiTT1.0.app /Users/vincenzobarone/Desktop/CeDiTT1.0_Distribuzione/CeDiTT1.0.app
 ```
 
 ## 10. Validazione raccomandata

@@ -1,6 +1,0 @@
-tau_xxxx = -A**2*C**2*hbar/153600
-tau_yyyy = -A**2*C**2*hbar/34560000
-tau_zzzz = -A**2*C**2*hbar/86400
-tau_xxyy = -2699*A**2*C**2*hbar/62208000
-tau_xxzz = -827*A**2*C**2*hbar/46080000
-tau_yyzz = -613*A**2*C**2*hbar/6912000

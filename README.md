@@ -4,42 +4,52 @@ This repository contains the current production and benchmark workflow for
 quartic and sextic centrifugal distortion constants derived from geometry,
 Cartesian Hessians, and optional Gaussian/GDV anharmonic data.
 
-## Manuscript Safety
+The repository also contains the current `CeDiTT1.0` app code. The GUI is now
+organized around a shared vibro-rotational dataset:
 
-`paper2.tex` in this repository is the canonical copy that should be tracked in
-git. Do not use the Desktop copy as the only source of truth.
+- one common harmonic/anharmonic input block,
+- quartic, alpha, and sextic properties derived from that same dataset,
+- coordinated reporting of harmonic-only and anharmonic contributions.
 
-Safe workflow:
+## Active Projects
 
-1. edit `paper2.tex` in the repo
-2. run `scripts/sync_paper2.sh push` when you want a Desktop copy
-3. if you edited the Desktop copy, run `scripts/sync_paper2.sh pull` before any
-   other changes
-4. run `scripts/sync_paper2.sh snapshot` before major rewrites
+Only three project lines are currently active in or alongside this repository:
 
-The script creates timestamped backups under `manuscript_backups/` and
-`Desktop_sync_backups/` so an accidental overwrite does not silently destroy the
-latest text.
+- `CeDiTT`
+  - integrated GUI and backend for vibro-rotational properties
+- `alpha_resonances`
+  - active, but maintained outside this repo at
+    `/Users/vincenzobarone/alpha_resonances_project/alpha_resonances.tex`
+- `VPT4 quartics`
+  - active production/manuscript work on quartic channels, including the
+    unfinished treatment of linear molecules
 
-## Source File Safety
+Everything else should be treated as inactive unless it directly supports one
+of these three lines.
 
-The same protection now extends to tracked source files, especially `.py`.
+## Active Manuscripts
 
-- `scripts/snapshot_tracked_sources.sh changed`
-  - saves timestamped backups of changed tracked source files
-- `scripts/snapshot_tracked_sources.sh staged`
-  - saves timestamped backups of staged source files
-- `scripts/snapshot_tracked_sources.sh all`
-  - saves timestamped backups of all tracked source files
-- `scripts/install_git_safety_hooks.sh`
-  - installs a `pre-commit` hook that snapshots staged source files automatically
+The only manuscript kept active inside this repo is:
 
-Snapshots are written under `source_snapshots/`, which is ignored by git.
+- `manuscripts/active/paper2.tex`
+- `manuscripts/active/paper2.bib`
+
+`paper2` remains active because it is the manuscript base for the ongoing
+quartic VPT4 extension, including `H03H03`, `H21H03`, and the unresolved
+linear-molecule case.
+
+`alpha_resonances` is active but external to this repository:
+
+- `/Users/vincenzobarone/alpha_resonances_project/alpha_resonances.tex`
+- `/Users/vincenzobarone/Desktop/alpha_resonances.pdf`
+
+Older CeDiTT/quartic/sextic manuscript files in the root should be considered
+retired from the active repo workflow and are not required to be preserved here.
 
 ## Scope
 
-This repository currently contains material for two distinct but related lines
-of work.
+This repository currently contains two code-facing lines of work, coordinated
+through the active project set above.
 
 ### Work 1: H12H12 structure and representation transforms
 
@@ -49,12 +59,16 @@ This is the CeDiTT/app side:
 - quartic representation transforms
 - sextic representation transforms of the analogous tensorial type
 - tensor/pseudoinverse transformation algorithms
+- integrated GUI workspace for vibro-rotational properties
+- mode-resolved `alpha` / `Delta_vib` diagnostics
 
 This is the natural home for questions such as:
 
 - spatial-vs-gauge structure of the standard quartic tensor
 - invariant content under representation changes
 - app-oriented transformation workflows
+- coordination between quartic, alpha, and sextic diagnostics on the same
+  input dataset
 
 ### Work 2: full quartic VPT4 workflow
 
@@ -94,6 +108,11 @@ Inputs can be provided either as:
 
 - `--xyz` + `--hessian`
 - `--input-fchk`
+
+Canonical benchmark data should now be considered the `gaussian/` directory.
+Some `.log` / `.fchk` files are still mirrored in the repository root for
+backward compatibility with older tests and scripts, but new tooling should
+prefer `gaussian/` as the reference location.
 
 The `.fchk` path is only a convenience bridge to the same geometry+Hessian
 backend. It is not a separate theoretical route.

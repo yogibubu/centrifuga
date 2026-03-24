@@ -6,6 +6,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.quartic_channels_cache/
 
 .venv/
 .venv_*/
@@ -17,6 +18,8 @@ dmg_stage/
 .pyinstaller/
 
 tmp_merge/
+tmp/
+output/
 
 *.aux
 *.bbl

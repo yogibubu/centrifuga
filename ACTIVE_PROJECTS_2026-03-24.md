@@ -1,0 +1,45 @@
+# Active Projects (2026-03-24)
+
+The active project set is intentionally narrow.
+
+## 1. CeDiTT
+
+This includes:
+
+- the integrated GUI
+- quartic / alpha / sextic vibro-rotational workflows
+- shared-input app behavior
+- release packaging for `CeDiTT1.0`
+
+## 2. alpha_resonances
+
+This project is active but external to `centrifugal`.
+
+Working sources:
+
+- `/Users/vincenzobarone/alpha_resonances_project/alpha_resonances.tex`
+- `/Users/vincenzobarone/Desktop/alpha_resonances.pdf`
+
+Inside `centrifugal`, only the related code support is active:
+
+- `vibrot_alpha.py`
+- `scripts/alpha_channel_audit.py`
+- the corresponding GUI/report integration
+
+## 3. VPT4 quartics
+
+This includes the ongoing quartic-channel development program, especially:
+
+- `H03H03`
+- `H21H03`
+- the unfinished treatment of linear molecules
+
+The active manuscript anchor for this line is:
+
+- `manuscripts/active/paper2.tex`
+- `manuscripts/active/paper2.bib`
+
+## Not considered active
+
+Unless they directly support one of the three items above, older CeDiTT,
+quartic, sextic, and manuscript materials should be treated as inactive.
