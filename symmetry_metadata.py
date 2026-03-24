@@ -125,6 +125,41 @@ def _reflection_matrix_from_normal(normal: tuple[float, float, float]) -> np.nda
     return np.eye(3) - 2.0 * np.outer(nvec, nvec)
 
 
+def _geometry_vertical_reflections(coords: np.ndarray) -> list[tuple[str, np.ndarray]]:
+    """Return candidate vertical-reflection planes inferred from the xy geometry.
+
+    This supplements the canonical ``sigma_v_{n,k}`` family for cases where the
+    oriented structure is rotated by an arbitrary in-plane offset relative to the
+    hard-coded angular grid. Candidate planes are generated both through atomic
+    directions and through bisectors between projected directions.
+    """
+    xy = np.asarray(coords, dtype=float)[:, :2]
+    radii = np.linalg.norm(xy, axis=1)
+    angles = [float(np.mod(np.arctan2(v[1], v[0]), np.pi)) for v, r in zip(xy, radii) if r > 1.0e-6]
+    if not angles:
+        return []
+    plane_angles = set()
+    for a in angles:
+        plane_angles.add(a)
+    n_ang = len(angles)
+    for i in range(n_ang):
+        for j in range(i + 1, n_ang):
+            a = angles[i]
+            b = angles[j]
+            da = ((b - a + np.pi / 2.0) % np.pi) - np.pi / 2.0
+            plane_angles.add(float(np.mod(a + 0.5 * da, np.pi)))
+    out: list[tuple[str, np.ndarray]] = []
+    for idx, beta in enumerate(sorted(plane_angles)):
+        normal_angle = beta + np.pi / 2.0
+        out.append(
+            (
+                f"sigma_v_geom_{idx}",
+                _reflection_matrix_from_normal((float(np.cos(normal_angle)), float(np.sin(normal_angle)), 0.0)),
+            )
+        )
+    return out
+
+
 @lru_cache(maxsize=16)
 def _candidate_ops(max_n: int = 6) -> list[tuple[str, np.ndarray]]:
     ops: list[tuple[str, np.ndarray]] = []
@@ -146,6 +181,10 @@ def _candidate_ops(max_n: int = 6) -> list[tuple[str, np.ndarray]]:
         for k in range(n):
             theta = np.pi * k / n
             ops.append((f"sigma_v_{n}_{k}", _reflection_matrix_from_normal((np.cos(theta), np.sin(theta), 0.0))))
+            # Some oriented geometries place the vertical planes halfway between
+            # the canonical angles above; include the shifted family as well.
+            theta_shift = np.pi * (k + 0.5) / n
+            ops.append((f"sigma_vh_{n}_{k}", _reflection_matrix_from_normal((np.cos(theta_shift), np.sin(theta_shift), 0.0))))
     for n in range(2, max_n + 1):
         for k in range(n):
             theta = np.pi * k / n
@@ -321,7 +360,9 @@ def symmetry_elements_from_geometry(
     coords = np.asarray(coords_oriented, dtype=float)
     elements: list[tuple[str, np.ndarray]] = []
     permutations: list[list[int]] = []
-    for label, r in _candidate_ops(max_n=max_n):
+    candidate_ops = list(_candidate_ops(max_n=max_n))
+    candidate_ops.extend(_geometry_vertical_reflections(coords))
+    for label, r in candidate_ops:
         mapping = _match_with_map(symbols, coords, coords @ r.T, tol)
         if mapping is not None:
             elements.append((label, r))
@@ -378,10 +419,17 @@ def point_group_metadata_from_model(model: Any, *, tol: float = 1.0e-3) -> dict[
         np.asarray(model.abc_mhz, dtype=float),
         np.asarray(model.moments_amu_a2, dtype=float),
     )
-    sigma, point_group = point_group_from_geometry(symbols, np.asarray(model.coords_pa_ang, dtype=float), rotor_type, tol=tol)
+    explicit_pg = getattr(model, "point_group", None)
+    sigma_geom, point_group_geom = point_group_from_geometry(symbols, np.asarray(model.coords_pa_ang, dtype=float), rotor_type, tol=tol)
     elements, classes, permutations = symmetry_elements_from_geometry(symbols, np.asarray(model.coords_pa_ang, dtype=float), tol=tol)
+    if explicit_pg and rotational_symmetry_number(explicit_pg) > 1:
+        point_group = explicit_pg
+    else:
+        point_group = point_group_geom
+    sigma = rotational_symmetry_number(point_group)
     return {
         "point_group": point_group,
+        "point_group_geometry": point_group_geom,
         "rotational_symmetry_number": int(sigma),
         "rotor_type_for_symmetry": rotor_type,
         "n_symmetry_operations": len(elements),
@@ -491,14 +539,53 @@ def _nonabelian_operation_keys(point_group: str, labels: list[str]) -> tuple[str
         sigma_v = next((lab for lab in labels if lab.startswith("sigma_v")), None)
         need = ("E", "C3z^1", sigma_v) if sigma_v is not None else None
         return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "C4v":
+        sigma_v = next((lab for lab in labels if lab in {"sigma_xz", "sigma_yz"}), None)
+        need = ("E", "C4z^1", sigma_v) if sigma_v is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "C5v":
+        sigma_v = next((lab for lab in labels if lab in {"sigma_xz", "sigma_yz"} or lab.startswith("sigma_v")), None)
+        need = ("E", "C5z^1", sigma_v) if sigma_v is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "C6v":
+        sigma_v = next((lab for lab in labels if lab in {"sigma_xz", "sigma_yz"} or lab.startswith("sigma_v")), None)
+        need = ("E", "C6z^1", sigma_v) if sigma_v is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
     if point_group == "D3":
         c2_perp = next((lab for lab in labels if lab.startswith("C2_xy")), None)
         need = ("E", "C3z^1", c2_perp) if c2_perp is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D4":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy") or lab in {"C2x^1", "C2y^1"}), None)
+        need = ("E", "C4z^1", c2_perp) if c2_perp is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D5":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy") or lab in {"C2x^1", "C2y^1"}), None)
+        need = ("E", "C5z^1", c2_perp) if c2_perp is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D6":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy") or lab in {"C2x^1", "C2y^1"}), None)
+        need = ("E", "C6z^1", c2_perp) if c2_perp is not None else None
         return need if need is not None and all(lab in labels for lab in need) else None
     if point_group == "D3h":
         c2_perp = next((lab for lab in labels if lab.startswith("C2_xy")), None)
         sigma_v = next((lab for lab in labels if lab.startswith("sigma_v")), None)
         need = ("E", "C3z^1", c2_perp, "sigma_xy", "S3", sigma_v) if c2_perp is not None and sigma_v is not None else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D4h":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy") or lab in {"C2x^1", "C2y^1"}), None)
+        sigma_v = next((lab for lab in labels if lab in {"sigma_xz", "sigma_yz"} or lab.startswith("sigma_v")), None)
+        need = ("E", "C4z^1", c2_perp, "i", "S4", sigma_v) if c2_perp is not None and sigma_v is not None and "i" in labels and "S4" in labels else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D5h":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy") or lab in {"C2x^1", "C2y^1"}), None)
+        sigma_v = next((lab for lab in labels if lab in {"sigma_xz", "sigma_yz"} or lab.startswith("sigma_v")), None)
+        need = ("E", "C5z^1", c2_perp, "sigma_xy", sigma_v) if c2_perp is not None and sigma_v is not None and "sigma_xy" in labels else None
+        return need if need is not None and all(lab in labels for lab in need) else None
+    if point_group == "D6h":
+        c2_perp = next((lab for lab in labels if lab.startswith("C2_xy") or lab in {"C2x^1", "C2y^1"}), None)
+        sigma_v = next((lab for lab in labels if lab in {"sigma_xz", "sigma_yz"} or lab.startswith("sigma_v")), None)
+        need = ("E", "C6z^1", c2_perp, "i", "S6", sigma_v) if c2_perp is not None and sigma_v is not None and "i" in labels and "S6" in labels else None
         return need if need is not None and all(lab in labels for lab in need) else None
     return None
 
@@ -510,11 +597,59 @@ def _nonabelian_character_table(point_group: str, labels: tuple[str, ...]) -> di
             "A2": (1, 1, -1),
             "E": (2, -1, 0),
         }
+    if point_group == "C4v":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "B1": (1, -1, 1),
+            "B2": (1, -1, -1),
+            "E": (2, 0, 0),
+        }
+    if point_group == "C5v":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "E1": (2, 2 * np.cos(2.0 * np.pi / 5.0), 0),
+            "E2": (2, 2 * np.cos(4.0 * np.pi / 5.0), 0),
+        }
+    if point_group == "C6v":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "B1": (1, -1, 1),
+            "B2": (1, -1, -1),
+            "E1": (2, 1, 0),
+            "E2": (2, -1, 0),
+        }
     if point_group == "D3":
         return {
             "A1": (1, 1, 1),
             "A2": (1, 1, -1),
             "E": (2, -1, 0),
+        }
+    if point_group == "D4":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "B1": (1, -1, 1),
+            "B2": (1, -1, -1),
+            "E": (2, 0, 0),
+        }
+    if point_group == "D5":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "E1": (2, 2 * np.cos(2.0 * np.pi / 5.0), 0),
+            "E2": (2, 2 * np.cos(4.0 * np.pi / 5.0), 0),
+        }
+    if point_group == "D6":
+        return {
+            "A1": (1, 1, 1),
+            "A2": (1, 1, -1),
+            "B1": (1, -1, 1),
+            "B2": (1, -1, -1),
+            "E1": (2, 1, 0),
+            "E2": (2, -1, 0),
         }
     if point_group == "D3h":
         return {
@@ -525,10 +660,51 @@ def _nonabelian_character_table(point_group: str, labels: tuple[str, ...]) -> di
             'A2"': (1, 1, -1, -1, -1, 1),
             'E"': (2, -1, 0, -2, 1, 0),
         }
+    if point_group == "D4h":
+        return {
+            "A1g": (1, 1, 1, 1, 1, 1),
+            "A2g": (1, 1, -1, 1, 1, -1),
+            "B1g": (1, -1, 1, 1, -1, 1),
+            "B2g": (1, -1, -1, 1, -1, -1),
+            "Eg": (2, 0, 0, 2, 0, 0),
+            "A1u": (1, 1, 1, -1, -1, -1),
+            "A2u": (1, 1, -1, -1, -1, 1),
+            "B1u": (1, -1, 1, -1, 1, -1),
+            "B2u": (1, -1, -1, -1, 1, 1),
+            "Eu": (2, 0, 0, -2, 0, 0),
+        }
+    if point_group == "D5h":
+        c1 = 2 * np.cos(2.0 * np.pi / 5.0)
+        c2 = 2 * np.cos(4.0 * np.pi / 5.0)
+        return {
+            "A1'": (1, 1, 1, 1, 1),
+            "A2'": (1, 1, -1, 1, -1),
+            "E1'": (2, c1, 0, 2, 0),
+            "E2'": (2, c2, 0, 2, 0),
+            'A1"': (1, 1, 1, -1, -1),
+            'A2"': (1, 1, -1, -1, 1),
+            'E1"': (2, c1, 0, -2, 0),
+            'E2"': (2, c2, 0, -2, 0),
+        }
+    if point_group == "D6h":
+        return {
+            "A1g": (1, 1, 1, 1, 1, 1),
+            "A2g": (1, 1, -1, 1, 1, -1),
+            "B1g": (1, -1, 1, 1, -1, 1),
+            "B2g": (1, -1, -1, 1, -1, -1),
+            "E1g": (2, 1, 0, 2, 1, 0),
+            "E2g": (2, -1, 0, 2, -1, 0),
+            "A1u": (1, 1, 1, -1, -1, -1),
+            "A2u": (1, 1, -1, -1, -1, 1),
+            "B1u": (1, -1, 1, -1, 1, -1),
+            "B2u": (1, -1, -1, -1, 1, 1),
+            "E1u": (2, 1, 0, -2, -1, 0),
+            "E2u": (2, -1, 0, -2, 1, 0),
+        }
     return None
 
 
-def _frequency_blocks(freq_cm: np.ndarray, *, tol: float = 1.0e-3) -> list[list[int]]:
+def _frequency_blocks(freq_cm: np.ndarray, *, tol: float = 2.0e-3) -> list[list[int]]:
     vals = np.asarray(freq_cm, dtype=float).reshape(-1)
     if vals.size == 0:
         return []
@@ -539,6 +715,82 @@ def _frequency_blocks(freq_cm: np.ndarray, *, tol: float = 1.0e-3) -> list[list[
         else:
             blocks.append([idx])
     return blocks
+
+
+def _nonabelian_mode_irreps(
+    point_group: str,
+    chart: dict[str, tuple[int, ...]],
+    keys: tuple[str, ...],
+    op_map: dict[str, tuple[np.ndarray, list[int]]],
+    vib_arr: np.ndarray,
+    freq_cm: np.ndarray,
+    n_atoms: int,
+    *,
+    one_dim_char_tol: float = 2.0e-1,
+    two_dim_sum_tol: float = 2.0e-1,
+    pair_freq_tol: float = 2.5e-1,
+) -> list[str]:
+    n_modes = vib_arr.shape[1]
+    per_mode_chars: list[tuple[float, ...]] = []
+    for mode_idx in range(n_modes):
+        vec = vib_arr[:, mode_idx]
+        chars: list[float] = []
+        for key in keys:
+            rot, perm = op_map[key]
+            op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
+            chars.append(float(vec @ (op @ vec)))
+        per_mode_chars.append(tuple(chars))
+
+    out = ["?"] * n_modes
+    one_dim_rows = {name: row for name, row in chart.items() if int(round(float(row[0]))) == 1}
+    two_dim_rows = {name: row for name, row in chart.items() if int(round(float(row[0]))) == 2}
+
+    for mode_idx, sig in enumerate(per_mode_chars):
+        match = next(
+            (
+                name
+                for name, row in one_dim_rows.items()
+                if len(row) == len(sig) and all(abs(float(a) - float(b)) <= one_dim_char_tol for a, b in zip(sig, row))
+            ),
+            None,
+        )
+        if match is not None:
+            out[mode_idx] = match
+
+    for irrep_name, row in two_dim_rows.items():
+        target = tuple(float(x) for x in row)
+        pending = [idx for idx, label in enumerate(out) if label == "?"]
+        consumed: set[int] = set()
+        for i in pending:
+            if i in consumed:
+                continue
+            if out[i] != "?":
+                continue
+            best_j: int | None = None
+            best_gap = None
+            for j in pending:
+                if j == i or j in consumed:
+                    continue
+                if out[j] != "?":
+                    continue
+                if abs(float(freq_cm[j]) - float(freq_cm[i])) > pair_freq_tol:
+                    continue
+                summed = tuple(float(a) + float(b) for a, b in zip(per_mode_chars[i], per_mode_chars[j]))
+                if len(summed) != len(target):
+                    continue
+                if not all(abs(a - b) <= two_dim_sum_tol for a, b in zip(summed, target)):
+                    continue
+                gap = abs(float(freq_cm[j]) - float(freq_cm[i]))
+                if best_gap is None or gap < best_gap:
+                    best_gap = gap
+                    best_j = j
+            if best_j is not None:
+                out[i] = irrep_name
+                out[best_j] = irrep_name
+                consumed.add(i)
+                consumed.add(best_j)
+
+    return out
 
 
 def _linear_sigma_v_label(axis_label: str, labels: list[str]) -> str | None:
@@ -601,7 +853,12 @@ def assign_normal_mode_irreps(model: Any, *, tol: float = 1.0e-5) -> list[str] |
         return None
 
     rotor_type = rotor_type_for_symmetry(np.asarray(abc, dtype=float), np.asarray(moments, dtype=float))
-    sigma, point_group = point_group_from_geometry(symbols, np.asarray(coords, dtype=float), rotor_type, tol=1.0e-3)
+    explicit_pg = getattr(model, "point_group", None)
+    _sigma, point_group_geom = point_group_from_geometry(symbols, np.asarray(coords, dtype=float), rotor_type, tol=1.0e-3)
+    if explicit_pg and rotational_symmetry_number(explicit_pg) > 1:
+        point_group = explicit_pg
+    else:
+        point_group = point_group_geom
     elements, _classes, permutations = symmetry_elements_from_geometry(symbols, np.asarray(coords, dtype=float), tol=1.0e-3)
     op_map = {label: (rot, perm) for (label, rot), perm in zip(elements, permutations)}
     labels = [label for label, _rot in elements]
@@ -649,19 +906,4 @@ def assign_normal_mode_irreps(model: Any, *, tol: float = 1.0e-5) -> list[str] |
     if chart is None:
         return None
 
-    out: list[str] = []
-    for block in _frequency_blocks(freq_cm):
-        V = vib_arr[:, block]
-        chars: list[int] = []
-        supported = True
-        for key in keys:
-            rot, perm = op_map[key]
-            op = _operation_matrix_from_mapping(np.asarray(rot, dtype=float), list(perm), n_atoms)
-            chars.append(int(round(float(np.trace(V.T @ (op @ V))))))
-        if not supported:
-            out.extend("?" for _ in block)
-            continue
-        sig = tuple(chars)
-        match = next((name for name, row in chart.items() if tuple(row) == sig), "?")
-        out.extend(match for _ in block)
-    return out
+    return _nonabelian_mode_irreps(point_group, chart, keys, op_map, vib_arr, freq_cm, n_atoms)

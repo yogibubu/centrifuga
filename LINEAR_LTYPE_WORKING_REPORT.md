@@ -1,5 +1,37 @@
 # Linear l-Type Working Report
 
+## Status after manuscript alignment
+
+The final manuscript sources are now the reference for the paper-aligned
+linear sector:
+
+- [CeDiTT4.tex](/Users/vincenzobarone/Downloads/CeDiTT4.tex)
+- [ceditt4_sextic_partition_appendix.tex](/Users/vincenzobarone/Downloads/ceditt4_sextic_partition_appendix.tex)
+
+These sources fix the boundary unambiguously:
+
+- the manuscript includes linear molecules only in the pure rotational
+  sector;
+- the paper-aligned linear constants are the symmetry-adapted scalars
+  `D` and `H`;
+- degenerate-bending `l`-type interactions require additional tensorial
+  objects and are outside the scope of the present paper.
+
+Accordingly, the current implementation should be read as two separate
+layers:
+
+- `linear pure rotational`
+  - paper-aligned
+  - built from the transverse-subspace projection
+  - returns the special-limit scalars `D` and `H`
+- `LINEAR_LTYPE`
+  - experimental beyond-paper extension
+  - built on top of the paper-aligned `D/H` layer
+  - used for diagnostics, operator bookkeeping, and Gaussian benchmark
+    comparison on degenerate bending pairs
+
+Everything below in this note refers to that second layer.
+
 ## Scope fixed
 
 The current working scope is intentionally minimal:
@@ -19,8 +51,9 @@ The current working scope is intentionally minimal:
   - `q_v` (reserved for the future state-specific correction)
 
 This is **not** yet a full effective Hamiltonian for all linear-molecule
-l-type interactions. It is, however, now a minimal pairwise effective
-Hamiltonian compatible with the current CeDiTT tensor workflow.
+l-type interactions. It is an experimental minimal pairwise effective
+Hamiltonian layered on top of the paper-aligned linear pure-rotational
+CeDiTT workflow.
 
 ## Operator basis adopted
 
@@ -74,7 +107,9 @@ Implemented in [distortion_workflow.py](/Users/vincenzobarone/centrifugal/distor
 - `B_linear_cm`
 - explicit branch decomposition:
   - `pure_rotational_branch`
+    - `scope_status = paper_aligned`
   - `pairwise_ltype_branch`
+    - `scope_status = experimental_beyond_paper`
     - including explicit quartic/sextic rotational feeds into the active
       pairwise channel
   - `literature_convention`
@@ -116,6 +151,18 @@ For backward compatibility the backend still reports the legacy aliases
 
 but these now simply mirror the primary circular-basis constants.
 
+The backend now also exposes an explicit conventional-model ladder for
+the same pair:
+
+- `conventional_linear_model_hz`
+  - partial internal mapping when only the minimal CeDiTT branch is
+    available,
+  - reconstructed conventional mapping when Gaussian source blocks are
+    available,
+- `conventional_linear_model_exact_hz`
+  - exact RotL2x constants when the printed Gaussian linear block is
+    available.
+
 In addition, the backend now reports the leading-order harmonic
 literature estimate
 
@@ -141,11 +188,12 @@ derived explicitly.
 
 In addition, the backend now builds the minimal closed effective model
 
-- `H_eff^(lin) = q_e^(W) X_l + q_J^(pair) J^2 X_l + q_H^(pair) (J^2)^2 X_l`
+- `H_eff^(lin) = q_e X_l + q_J^(pair) J^2 X_l + q_H^(pair) (J^2)^2 X_l`
 
 where:
 
-- `q_e^(W)` is the standard spectroscopic leading term,
+- `q_e` is currently either the internal non-resonant source estimate
+  or the exact Gaussian RotL2x value when available,
 - `q_J^(pair)` and `q_H^(pair)` are imported from the tensorial
   pairwise branch.
 
@@ -164,9 +212,9 @@ circular convention
 
 - `H_diag^(l)(ij) = q_l X_l + q_l^J J^2 X_l + q_l^H (J^2)^2 X_l`
 
-This should be read as the current minimal pairwise l-type Hamiltonian
-activated by a near-degenerate bending pair, not as a completed derivation of
-all l-doubling terms.
+This should be read as the current minimal experimental pairwise
+l-type Hamiltonian activated by a near-degenerate bending pair, not as
+a completed derivation of all l-doubling terms.
 In the equivalent real basis this same model is reported as
 
 - `H_diag^(l)(ij) = q_l O_t + q_l^J J^2 O_t + q_l^H (J^2)^2 O_t`.
@@ -191,10 +239,23 @@ The backend now also makes this statement explicit as:
 This is the form that should be used for the future conventional
 constant mapping.
 
+At the current stage, the closure hierarchy is therefore:
+
+- minimal carrier model:
+  - `q_l`, `q_l^J`, `q_l^H`
+- internal effective model:
+  - `q_e^(src)`, `q_J^(pair)`, `q_H^(pair)`
+- conventional-model candidate:
+  - `q_e`, `q_J`, `q_K`
+  - partial if no Gaussian source reconstruction is available
+  - reconstructed if Gaussian source blocks are available
+  - exact if the RotL2x block is printed in the Gaussian log
+
 ## What is already coherent
 
 - the pure rotational linear-limit sector is already projected onto scalar
   `D` and `H`;
+- that `D/H` layer is the part aligned with the final manuscript;
 - near-degenerate pairs are already detected from the same mode metadata used
   by the `alpha` branch;
 - the GUI already has a compatible reporting structure for pairwise l-type
@@ -300,8 +361,9 @@ So the present closure is now precise enough to say:
 ## Files touched in the current step
 
 - [distortion_workflow.py](/Users/vincenzobarone/centrifugal/distortion_workflow.py)
-- [ceditt4_linear_ltype_appendix.tex](/Users/vincenzobarone/centrifugal/ceditt4_linear_ltype_appendix.tex)
 - [test_linear_ltype_terms.py](/Users/vincenzobarone/centrifugal/test_linear_ltype_terms.py)
+- [gaussian_vpt_parser.py](/Users/vincenzobarone/centrifugal/gaussian_vpt_parser.py)
+- [ceditt_gui.py](/Users/vincenzobarone/centrifugal/ceditt_gui.py)
 
 ## Recommended next step
 

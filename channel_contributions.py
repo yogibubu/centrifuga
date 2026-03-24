@@ -3,9 +3,8 @@
 
 The channel builders operate on the same internal frequency convention used by
 the harmonic order-2 workflow, namely vibrational frequencies in atomic units.
-The order-4 mixed and cubic-cubic channels still rely on placeholder formulas
-in ``quartic_channels.py``; their output is therefore diagnostic only until
-the full Paper 2 implementation is restored.
+``H12H30`` is currently an explicit scaffold reconstruction, while ``H30H30``
+remains diagnostic only until the full Paper 2 implementation is restored.
 """
 
 from __future__ import annotations
@@ -34,10 +33,15 @@ from rovib_distortion import (
 from quartic_channels import (
     channel_h12h12,
     channel_h12h30,
+    channel_h12h30_decomposed,
     channel_h22,
     channel_h30h30,
 )
-from h30h30_resonance import enumerate_current_h30h30_terms, summarize_terms_by_metric
+from h30h30_resonance import (
+    current_h30h30_factor_diagnostics,
+    enumerate_current_h30h30_terms,
+    summarize_terms_by_metric,
+)
 from derive_watson_quartic_vanvleck import (
     gaussian_asymmetric_a_from_t,
     gaussian_symmetric_from_t,
@@ -71,7 +75,8 @@ def parse_model(fchk: Path, log: Path):
     meta = {
         "harmonic_representation": convention["representation"],
         "harmonic_kappa": convention["kappa"],
-        "cubic_mode_mapping": cubic.check.mapping,
+        "cubic_source_to_target": cubic.check.source_to_target,
+        "cubic_target_to_source": cubic.check.target_to_source,
         "cubic_mode_order_identity": cubic.check.is_identity,
         "cubic_max_abs_freq_delta_cm": cubic.check.max_abs_freq_delta_cm,
         "phi3_reduced_cm": phi3_reduced_cm,
@@ -165,12 +170,14 @@ def print_table(results: Iterable[ChannelResult]):
 
 
 def print_convention_summary(species: str, meta: dict[str, object]) -> None:
-    mapping = tuple(int(x) for x in meta["cubic_mode_mapping"])
+    source_to_target = tuple(int(x) for x in meta["cubic_source_to_target"])
+    target_to_source = tuple(int(x) for x in meta["cubic_target_to_source"])
     print(
         f"{species}: harmonic={meta['harmonic_representation']} "
         f"kappa={float(meta['harmonic_kappa']):+.6f} "
         f"cubic_order_identity={bool(meta['cubic_mode_order_identity'])} "
-        f"cubic_mapping={mapping} "
+        f"cubic_source_to_target={source_to_target} "
+        f"cubic_target_to_source={target_to_source} "
         f"max_dnu={float(meta['cubic_max_abs_freq_delta_cm']):.3e} cm^-1"
     )
 
@@ -205,11 +212,59 @@ def print_h30h30_diagnostic(model, phi3, *, top_terms: int, wilson_factor_cm_per
                 f"coupling_cm={term.coupling_cm: .6e} denominator_cm={term.denominator_cm: .6e} "
                 f"Martin={term.martin_ratio: .6e}"
             )
+    factor_diag = current_h30h30_factor_diagnostics(model.vib_freq_cm)
+    print("\nScaffold denominator-factor readiness")
+    print("NOTE: Martin/2x2 should only be applied once signed near-zero factors are restored.")
+    for item in factor_diag[: min(len(factor_diag), top_terms)]:
+        modes_1based = tuple(idx + 1 for idx in item.modes)
+        factors = ", ".join(f"{x: .6e}" for x in item.factors_cm)
+        print(
+            f"  {item.scaffold:>26}  modes={modes_1based!s:<10} "
+            f"smallest_abs_factor_cm={item.smallest_abs_factor_cm: .6e} "
+            f"martin_ready={item.martin_ready} factors=[{factors}]"
+        )
+
+
+def print_h12h30_diagnostic(model, phi3_reduced_cm, *, spectroscopic_axes: dict[str, int] | None) -> None:
+    mu1 = sp.MutableDenseNDimArray(model.dInv_au.tolist())
+    mu2 = sp.MutableDenseNDimArray(model.d2Inv_au.tolist())
+    omega = tuple(abs(float(x)) / AU_FREQ_TO_CMINV for x in model.vib_freq_cm)
+    pieces = channel_h12h30_decomposed(
+        mu1,
+        mu2,
+        phi3_reduced_cm,
+        omega,
+        hbar=sp.Float(1.0),
+    )
+    order = (
+        ("S1", "S1"),
+        ("S2", "S2"),
+        ("S3", "S3"),
+        ("S2_effective", "S2_eff"),
+        ("S2_split", "S2_split"),
+        ("S3_effective", "S3_eff"),
+        ("S3_addition", "S3_add"),
+        ("S3_split", "S3_split"),
+        ("total", "total"),
+    )
+    print("\nH12H30 sector diagnostic")
+    for key, label in order:
+        watson = to_watson_khz(
+            pieces[key],
+            abc_mhz=model.abc_mhz,
+            reduction="S",
+            spectroscopic_axes=spectroscopic_axes,
+        )
+        print(
+            f"  {label:>5}  "
+            + " ".join(f"{name}={watson[name]: .6e}" for name in ("DJ", "DJK", "DK", "d1", "d2"))
+        )
 
 
 def main():
     ap = argparse.ArgumentParser(description="Compute channel-resolved quartic contributions.")
     ap.add_argument("--species", nargs=2, action="append", metavar=("NAME", "BASE"), help="Provide species name and base filename (without extension).", required=True)
+    ap.add_argument("--show-h12h30-diagnostic", action="store_true", help="Print the current H12H30 diagonal/semi-diagonal/three-index decomposition.")
     ap.add_argument("--show-h30h30-diagnostic", action="store_true", help="Print the current H30H30 Martin/denominator diagnostic.")
     ap.add_argument("--h30h30-top-terms", type=int, default=10, help="How many H30H30 terms to print in the diagnostic.")
     ap.add_argument(
@@ -234,6 +289,14 @@ def main():
         for channel, tau in taus.items():
             if channel == "H22":
                 watson = project_h22_ceditt3_reference_path(fchk, log)
+            elif channel == "H30H30":
+                watson = to_watson_khz(
+                    tau,
+                    abc_mhz=model.abc_mhz,
+                    reduction="S",
+                    spectroscopic_axes=axes,
+                    tau_cm_scale=1.0,
+                )
             else:
                 watson = to_watson_khz(
                     tau,
@@ -249,6 +312,13 @@ def main():
                 phi3,
                 top_terms=args.h30h30_top_terms,
                 wilson_factor_cm_per_au=args.h30h30_wilson_factor_cm_per_au,
+            )
+        if args.show_h12h30_diagnostic:
+            print(f"\n=== {name} ===")
+            print_h12h30_diagnostic(
+                model,
+                meta["phi3_reduced_cm"],
+                spectroscopic_axes=axes,
             )
 
     print_table(results)

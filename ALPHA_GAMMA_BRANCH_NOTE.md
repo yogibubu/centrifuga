@@ -137,6 +137,24 @@ This should be interpreted broadly. The desired controls are:
 - comparison between full and reduced `alpha` sums;
 - propagation of the same logic later to `gamma`.
 
+## Temporary benchmark exclusion
+
+For the current local benchmark set, `PH3` must be excluded from the `alpha`
+analysis path until a clean Gaussian job is regenerated.
+
+Current status of `/Users/vincenzobarone/centrifugal/gaussian/ph3.log`:
+
+- the harmonic section reports **three imaginary frequencies**;
+- the file therefore does not represent a stable harmonic minimum;
+- it is not a valid benchmark for mode-resolved `alpha` analysis, nor for any
+  source-to-harmonic cubic alignment sanity check.
+
+Operational rule for the current repository state:
+
+- do not use `ph3.log` in `alpha` benchmark or anomaly-audit runs;
+- keep `PH3` out of any benchmark species list until the calculation is
+  repeated and all harmonic frequencies are real.
+
 ## Suggested project split
 
 The current three-work structure should be read as follows.

@@ -261,6 +261,7 @@ class HarmonicInertiaModel:
     d2Inv_intrinsic_au: np.ndarray
     d2Inv_au: np.ndarray
     symbols: list[str] | None = None
+    point_group: str | None = None
 
 
 def _norm_rep(rep: str) -> str:
@@ -784,6 +785,7 @@ def harmonic_inertia_model_from_geometry_hessian(
     linear: bool | None = None,
     representation: str = "I",
     symbols: list[str] | None = None,
+    point_group: str | None = None,
 ) -> HarmonicInertiaModel:
     """Build the canonical harmonic model from geometry + Cartesian Hessian.
 
@@ -863,6 +865,7 @@ def harmonic_inertia_model_from_geometry_hessian(
         d2Inv_intrinsic_au=d2Inv_intrinsic_au,
         d2Inv_au=d2Inv_au,
         symbols=None if symbols is None else list(symbols),
+        point_group=point_group,
     )
 
 

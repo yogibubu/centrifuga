@@ -79,33 +79,49 @@ def build_default_harmonic_model(
 
 @dataclass(frozen=True)
 class CubicAlignmentCheck:
-    mapping: tuple[int, ...]
+    source_to_target: tuple[int, ...]
+    target_to_source: tuple[int, ...]
     max_abs_freq_delta_cm: float
 
     @property
     def is_identity(self) -> bool:
-        return self.mapping == tuple(range(len(self.mapping)))
+        return self.source_to_target == tuple(range(len(self.source_to_target)))
+
+
+@dataclass(frozen=True)
+class AlignedCubicData:
+    raw_au: np.ndarray
+    reduced_cm: np.ndarray
+    check: CubicAlignmentCheck
 
 
 def align_cubic_to_harmonic_model(
     anh: GaussianAnharmonicForceData,
     target_freq_cm: np.ndarray,
-) -> tuple[np.ndarray, CubicAlignmentCheck]:
+) -> AlignedCubicData:
     """Return cubic constants reordered onto the harmonic convention.
 
     The check is intentionally limited to the normal-mode labelling:
     cubic force constants are reordered by frequency only. No axis selection and
     no mode-sign fitting are performed here.
     """
-    mapping, _phi3_reduced_cm, phi3_raw_au = align_gaussian_cubic_force_constants(
+    mapping, phi3_reduced_cm, phi3_raw_au = align_gaussian_cubic_force_constants(
         anh,
         np.abs(np.asarray(target_freq_cm, dtype=float)),
     )
     source = np.abs(np.asarray(anh.frequencies_cm, dtype=float))
     target = np.abs(np.asarray(target_freq_cm, dtype=float))
-    aligned_source = source[np.asarray(mapping, dtype=int)]
+    target_to_source = np.empty_like(mapping)
+    target_to_source[np.asarray(mapping, dtype=int)] = np.arange(mapping.size, dtype=int)
+    aligned_source = source[target_to_source]
     max_delta = float(np.max(np.abs(aligned_source - target))) if target.size else 0.0
-    return phi3_raw_au, CubicAlignmentCheck(
-        mapping=tuple(int(x) for x in np.asarray(mapping, dtype=int).tolist()),
+    check = CubicAlignmentCheck(
+        source_to_target=tuple(int(x) for x in np.asarray(mapping, dtype=int).tolist()),
+        target_to_source=tuple(int(x) for x in np.asarray(target_to_source, dtype=int).tolist()),
         max_abs_freq_delta_cm=max_delta,
+    )
+    return AlignedCubicData(
+        raw_au=np.asarray(phi3_raw_au, dtype=float),
+        reduced_cm=np.asarray(phi3_reduced_cm, dtype=float),
+        check=check,
     )

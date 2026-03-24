@@ -402,6 +402,7 @@ def build_hprime_collapsed(
     diag_rot_only: bool = False,
     phi4_reduced: bool = False,
     rot_pairs: set[tuple[int, int]] | None = None,
+    symbolic_omega: bool = False,
 ) -> tuple[
     Dict[Key, sp.Expr],
     Dict[Key, sp.Expr],
@@ -419,7 +420,10 @@ def build_hprime_collapsed(
     """
     rng = random.Random(seed)
     hbar = sp.symbols("hbar", positive=True)
-    omega = tuple(sp.Rational(i + 2, 1) for i in range(n_modes))
+    if symbolic_omega:
+        omega = tuple(sp.symbols(f"omega0:{n_modes}", positive=True))
+    else:
+        omega = tuple(sp.Rational(i + 2, 1) for i in range(n_modes))
     A, B, C, D = sp.symbols("A B C D", real=True)
 
     def rr():
@@ -881,6 +885,11 @@ def main() -> None:
     ap.add_argument("--n-modes", type=int, default=1, help="Number of vibrational modes in explicit symbolic expansion.")
     ap.add_argument("--collapsed-couplings", action="store_true", help="Use random numeric couplings times class symbols A,B,C,D.")
     ap.add_argument("--seed", type=int, default=7, help="Random seed for collapsed-coupling probe.")
+    ap.add_argument(
+        "--symbolic-omega",
+        action="store_true",
+        help="Keep omega_i symbolic in collapsed-coupling mode.",
+    )
     ap.add_argument("--max-vib-word", type=int, default=4, help="Pruning cap for vibrational word length.")
     ap.add_argument("--max-j-word", type=int, default=4, help="Pruning cap for rotational word length.")
     ap.add_argument("--channel-aware", action="store_true", help="Filter generator channels to low-J off-diagonal sectors.")
@@ -933,6 +942,7 @@ def main() -> None:
             diag_rot_only=args.diag_rot_only,
             phi4_reduced=args.phi4_reduced,
             rot_pairs=rot_pairs,
+            symbolic_omega=args.symbolic_omega,
         )
     else:
         _, hrv1, hrv2, v3, v4, omega, hbar = build_hprime(

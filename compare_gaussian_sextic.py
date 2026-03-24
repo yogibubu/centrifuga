@@ -895,6 +895,69 @@ def sextic_phi_cartesian_cm(model, phi3_reduced_cm: np.ndarray, axes: dict[str, 
     }
 
 
+def sextic_linear_source_formula_hz(
+    model,
+    phi3_reduced_cm: np.ndarray,
+) -> dict[str, object]:
+    """Replicate the dedicated linear-top ``Sextic`` source branch.
+
+    In ``l717.F`` the linear case does not use the generic non-linear-top
+    ``Phi^aab`` / ``Phi^abc`` scaffolds.  Instead, only the perpendicular
+    diagonal branch survives and the final constant is
+
+        He = Phi(1,1,1),
+
+    where ``1`` labels one of the two transverse axes of the linear rotor.
+    Numerically the two transverse components should coincide in the exact
+    linear limit, so we report both and their average.
+    """
+    freq_cm = np.abs(model.vib_freq_cm)
+    pmom, rot_cm = _representation_axis_values(model)
+    didq = _didq_from_model(model)
+    tau, _ = _quartic_tau_from_model(model)
+    zeta = _zeta_xyz(model)
+    c1 = _c1_matrix(didq, freq_cm, pmom)
+    c2 = _c2_tensor(c1, zeta, freq_cm, rot_cm)
+
+    abc_to_xyz = {label: i for i, label in enumerate(model.xyz_to_abc)}
+    sym_idx = abc_to_xyz.get("a", 0)
+    perp = [i for i in range(3) if i != sym_idx]
+    idx_to_abc = {i: label for label, i in abc_to_xyz.items()}
+
+    comp_hz: dict[str, float] = {}
+    for ix in perp:
+        x1 = 0.0
+        for jx in perp:
+            x1 += tau[ix, ix, ix, jx] ** 2 / rot_cm[jx]
+        x1 *= 3.0 / 16.0
+
+        x2 = 0.0
+        x3 = 0.0
+        for i in range(freq_cm.size):
+            x2 += freq_cm[i] * c2[i, ix, ix, ix] ** 2
+            for j in range(freq_cm.size):
+                for k in range(freq_cm.size):
+                    x3 += (
+                        phi3_reduced_cm[i, j, k]
+                        * c1[i, ix, ix]
+                        * c1[j, ix, ix]
+                        * c1[k, ix, ix]
+                    )
+        x2 /= 2.0
+        x3 /= 6.0
+        comp_hz[idx_to_abc[ix] * 3] = (x1 - x2 + x3) * CMINV_TO_HZ
+
+    values = list(comp_hz.values())
+    h_hz = float(np.mean(values)) if values else 0.0
+    spread_hz = float(max(values) - min(values)) if len(values) >= 2 else 0.0
+    return {
+        "H": h_hz,
+        "perpendicular_components_hz": comp_hz,
+        "spread_hz": spread_hz,
+        "formula": "He = Phi(1,1,1) from the dedicated linear-top branch of L717/Sextic",
+    }
+
+
 def sextic_breakdown_hz(model, phi3_reduced_cm: np.ndarray, axes: dict[str, int]) -> dict[str, dict[str, float]]:
     """Return selected sextic-term breakdowns in Hz for debugging."""
     freq_cm = np.abs(model.vib_freq_cm)
