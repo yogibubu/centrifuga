@@ -87,7 +87,7 @@ def main() -> int:
         default="principal_direction",
         choices=("principal_direction", "norm", "maxabs", "pair_offdiag", "pair_diag", "component_ta", "component_tb", "component_ua", "component_ub"),
     )
-    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source", "formula"))
+    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source",))
     args = ap.parse_args()
     print(
         run_compare(

@@ -44,7 +44,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fchk", default="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk")
     ap.add_argument("--log", default="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log")
-    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source", "formula"))
+    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source",))
     args = ap.parse_args()
 
     print("=== Small-Branch Residual Audit ===")

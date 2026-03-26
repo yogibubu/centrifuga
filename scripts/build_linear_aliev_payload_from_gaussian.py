@@ -13,6 +13,11 @@ Future scope:
 Current normalization policy:
 - Gaussian-derived quantities are converted once into an Aliev-side input layer
 - downstream code consumes only Aliev-normalized inputs
+
+Important physical separation:
+- Gaussian Coriolis tensors are kept as Coriolis objects
+- they are not identified with the Aliev rotational-derivative zeta object
+- the bending seed therefore defaults to an explicit non-Aliev bridge from Gaussian q^e
 """
 
 from __future__ import annotations
@@ -79,11 +84,11 @@ def _representative_perpendicular_pairs(pair_meta: list[dict[str, object]]) -> l
     return [tuple(int(x) for x in meta["pair"]) for meta in pair_meta]
 
 
-def _build_zeta_nt(model, pair_meta: list[dict[str, object]], parallel_indices: list[int]) -> list[list[float]]:
+def _build_coriolis_projection_nt(model, pair_meta: list[dict[str, object]], parallel_indices: list[int]) -> list[list[float]]:
     return _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction="principal_direction")
 
 
-def _build_zeta_pair_blocks(
+def _build_coriolis_pair_blocks(
     model,
     pair_meta: list[dict[str, object]],
     parallel_indices: list[int],
@@ -403,8 +408,11 @@ def build_payload(
     if rotdist.d_mhz is None:
         raise ValueError("Gaussian log does not expose a linear D constant.")
     pair_seed_src = str(pair_seed_source).strip().lower()
-    if pair_seed_src not in {"gaussian_qe_source", "formula"}:
-        raise ValueError("pair_seed_source must be 'gaussian_qe_source' or 'formula'.")
+    if pair_seed_src != "gaussian_qe_source":
+        raise ValueError(
+            "pair_seed_source='formula' is disabled: the Gaussian Coriolis tensor is not treated as the physical "
+            "rotational-derivative zeta object required for the Aliev bending seed."
+        )
     fc_source = str(force_constant_source).strip().lower()
     if fc_source not in {"reduced", "raw_au_reconverted"}:
         raise ValueError("force_constant_source must be 'reduced' or 'raw_au_reconverted'.")
@@ -446,8 +454,10 @@ def build_payload(
         "D_J": float(rotdist.d_mhz / CMINV_TO_MHZ),
         "omega_parallel": [float(abs(model.vib_freq_cm[i])) for i in parallel_indices],
         "omega_perpendicular": [float(meta["freq_cm"]) for meta in pair_meta],
+        "coriolis_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
+        "coriolis_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
         "zeta_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
-        "zeta_pair_blocks": _build_zeta_pair_blocks(model, pair_meta, parallel_indices),
+        "zeta_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
         "bxx_parallel": [float(x) for x in bxx_parallel],
         "pair_seed_perpendicular": None if pair_seed_perpendicular is None else [float(x) for x in pair_seed_perpendicular],
         "k3_parallel": _build_k3_parallel(phi3_for_bootstrap, parallel_indices),
@@ -459,9 +469,12 @@ def build_payload(
             "coordinate_normalization": "aliev",
             "unit_audit_status": "representation_consistent_but_not_yet_quantitatively_validated",
             "force_constant_source": fc_source,
+            "coriolis_tensor_status": "physical_operator_tensor",
+            "coriolis_projection_mode": zeta_reduction,
+            "coriolis_scalar_status": "non_physical_projection_for_operator_terms_only",
             "zeta_reduction": zeta_reduction,
             "pair_seed_source": pair_seed_src,
-            "pair_seed_status": "non_physical_bridge" if pair_seed_src == "gaussian_qe_source" else "diagnostic_formula_path",
+            "pair_seed_status": "non_physical_bridge",
             "pair_seed_physical_role": "pairwise_l_type_J0_driver_proxy" if pair_seed_src == "gaussian_qe_source" else "diagnostic_aliev_formula_seed",
             "bending_comparison_status": "qualitative_proxy_only" if pair_seed_src == "gaussian_qe_source" else "diagnostic_only",
             "pair_seed_invariant": "frobenius_dot_of_full_2x2_degenerate_coriolis_blocks",
@@ -474,7 +487,8 @@ def build_payload(
             "cn_source": cn_source,
             "cn_recommended_source": "alpha_perp_with_Bxx_equals_minus_alpha_perp",
             "cn_rationale": "Primary bootstrap treats the Gaussian-side B_n^(xx) estimate as a Gaussian-normal-coordinate quantity and converts it once to Aliev form through B_n^(xx)(Aliev)=B_n^(xx)(Gaussian)/sqrt(omega_n). Alternative sources remain diagnostic only.",
-            "zeta_rationale": "Scalar zeta_nt remains a diagnostic bridge for the non-quadratic Aliev terms. It is not treated as the physical object required for the bending seed.",
+            "coriolis_rationale": "Scalar coriolis_nt is a projected Coriolis operator proxy used only in Coriolis-dependent terms such as X/F/U/V. It is not treated as the physical Aliev zeta object.",
+            "zeta_rationale": "No physical Aliev zeta builder is currently available. Any scalar built from Gaussian Coriolis data is treated as a Coriolis proxy, not as zeta_nt.",
             "known_unit_risks": [
                 "Gaussian Coriolis tensors are not assumed equivalent to the physical zeta objects required by the Aliev bending seed.",
                 "B_n^(xx) is now normalized to Aliev coordinates, but the Gaussian-side source used to estimate B_n^(xx)(Gaussian) still needs analytic validation.",
@@ -516,9 +530,9 @@ def main() -> int:
     )
     ap.add_argument(
         "--pair-seed-source",
-        choices=("gaussian_qe_source", "formula"),
+        choices=("gaussian_qe_source",),
         default="gaussian_qe_source",
-        help="Default is a non-physical Gaussian q^e bridge; use 'formula' only for diagnostic comparison.",
+        help="Non-physical Gaussian q^e bridge used until a rotational-derivative zeta builder exists.",
     )
     args = ap.parse_args()
 

@@ -89,7 +89,7 @@ def main() -> int:
             "didq_linear_v_iscr",
         ),
     )
-    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source", "formula"))
+    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source",))
     args = ap.parse_args()
 
     tb = _collect("component_tb", args.fchk, args.log, args.cn_source, args.pair_seed_source)

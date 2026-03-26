@@ -104,12 +104,12 @@ class LinearAlievExplicitInputs:
     D_J: sp.Expr
     omega_parallel: tuple[sp.Expr, ...]
     omega_perpendicular: tuple[sp.Expr, ...]
-    zeta_nt: tuple[tuple[sp.Expr, ...], ...]
+    coriolis_nt: tuple[tuple[sp.Expr, ...], ...]
     bxx_parallel: tuple[sp.Expr, ...]
     k3_parallel: tuple[tuple[tuple[sp.Expr, ...], ...], ...]
     k3_perp_pair: tuple[tuple[tuple[sp.Expr, ...], ...], ...]
     pair_seed_perpendicular: tuple[sp.Expr, ...] | None = None
-    zeta_pair_blocks: tuple[tuple[tuple[tuple[sp.Expr, ...], ...], ...], ...] | None = None
+    coriolis_pair_blocks: tuple[tuple[tuple[tuple[sp.Expr, ...], ...], ...], ...] | None = None
     k4_reduced: tuple[tuple[tuple[sp.Expr, ...], ...], ...] | None = None
     k4_parallel: tuple[tuple[tuple[tuple[sp.Expr, ...], ...], ...], ...] | None = None
 
@@ -201,26 +201,9 @@ def _pair_seed_formula(
     *,
     t: int,
 ) -> sp.Expr:
-    B = inputs.B
-    omega_n = inputs.omega_parallel
-    omega_t = inputs.omega_perpendicular
-    if inputs.zeta_pair_blocks is not None:
-        return B * sum(
-            sp.sqrt(omega_t[t] ** 2 / (omega_n[n] * omega_n[np_]))
-            * sum(
-                inputs.zeta_pair_blocks[n][t][a][b] * inputs.zeta_pair_blocks[np_][t][a][b]
-                for a in range(2)
-                for b in range(2)
-            )
-            for n in range(len(omega_n))
-            for np_ in range(len(omega_n))
-        )
-    return B * sum(
-        sp.sqrt(omega_t[t] ** 2 / (omega_n[n] * omega_n[np_]))
-        * inputs.zeta_nt[n][t]
-        * inputs.zeta_nt[np_][t]
-        for n in range(len(omega_n))
-        for np_ in range(len(omega_n))
+    raise ValueError(
+        "Pure Aliev bending seed evaluation is disabled: the Gaussian Coriolis tensor is not treated as the physical "
+        "rotational-derivative zeta object required for P_t. Supply pair_seed_perpendicular explicitly."
     )
 
 
@@ -346,8 +329,10 @@ def make_linear_aliev_explicit_inputs(
     D_J: object,
     omega_parallel: Sequence[object],
     omega_perpendicular: Sequence[object],
-    zeta_nt: Sequence[Sequence[object]],
+    zeta_nt: Sequence[Sequence[object]] | None = None,
+    coriolis_nt: Sequence[Sequence[object]] | None = None,
     zeta_pair_blocks: Sequence[Sequence[Sequence[Sequence[object]]]] | None = None,
+    coriolis_pair_blocks: Sequence[Sequence[Sequence[Sequence[object]]]] | None = None,
     bxx_parallel: Sequence[object],
     pair_seed_perpendicular: Sequence[object] | None = None,
     k3_parallel: Sequence[Sequence[Sequence[object]]],
@@ -357,19 +342,28 @@ def make_linear_aliev_explicit_inputs(
 ) -> LinearAlievExplicitInputs:
     """Normalize explicit readable inputs to SymPy expressions."""
 
+    if coriolis_nt is None and zeta_nt is None:
+        raise ValueError("Need coriolis_nt input.")
+    if coriolis_nt is not None and zeta_nt is not None:
+        raise ValueError("Pass only one of coriolis_nt or zeta_nt.")
+    if coriolis_pair_blocks is not None and zeta_pair_blocks is not None:
+        raise ValueError("Pass only one of coriolis_pair_blocks or zeta_pair_blocks.")
+    coriolis_nt_data = coriolis_nt if coriolis_nt is not None else zeta_nt
+    coriolis_pair_block_data = coriolis_pair_blocks if coriolis_pair_blocks is not None else zeta_pair_blocks
+
     return LinearAlievExplicitInputs(
         B=sp.sympify(B),
         D_J=sp.sympify(D_J),
         omega_parallel=tuple(sp.sympify(x) for x in omega_parallel),
         omega_perpendicular=tuple(sp.sympify(x) for x in omega_perpendicular),
-        zeta_nt=_tupleize_expr_grid_2(zeta_nt),
+        coriolis_nt=_tupleize_expr_grid_2(coriolis_nt_data),
         bxx_parallel=tuple(sp.sympify(x) for x in bxx_parallel),
         pair_seed_perpendicular=None
         if pair_seed_perpendicular is None
         else tuple(sp.sympify(x) for x in pair_seed_perpendicular),
         k3_parallel=_tupleize_expr_grid_3(k3_parallel),
         k3_perp_pair=_tupleize_expr_grid_3(k3_perp_pair),
-        zeta_pair_blocks=None if zeta_pair_blocks is None else _tupleize_expr_grid_4(zeta_pair_blocks),
+        coriolis_pair_blocks=None if coriolis_pair_block_data is None else _tupleize_expr_grid_4(coriolis_pair_block_data),
         k4_reduced=None if k4_reduced is None else _tupleize_expr_grid_3(k4_reduced),
         k4_parallel=None if k4_parallel is None else _tupleize_expr_grid_4(k4_parallel),
     )
@@ -392,8 +386,8 @@ def make_linear_aliev_explicit_inputs_from_mapping(
         D_J=payload["D_J"],
         omega_parallel=payload["omega_parallel"],
         omega_perpendicular=payload["omega_perpendicular"],
-        zeta_nt=payload["zeta_nt"],
-        zeta_pair_blocks=payload.get("zeta_pair_blocks"),
+        coriolis_nt=payload.get("coriolis_nt", payload.get("zeta_nt")),
+        coriolis_pair_blocks=payload.get("coriolis_pair_blocks", payload.get("zeta_pair_blocks")),
         bxx_parallel=payload["bxx_parallel"],
         pair_seed_perpendicular=payload.get("pair_seed_perpendicular"),
         k3_parallel=payload["k3_parallel"],
@@ -410,11 +404,11 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
     D_J = inputs.D_J
     omega_n = inputs.omega_parallel
     omega_t = inputs.omega_perpendicular
-    zeta = inputs.zeta_nt
+    coriolis = inputs.coriolis_nt
     n_parallel = len(omega_n)
     n_perp = len(omega_t)
-    if len(zeta) != n_parallel or any(len(row) != n_perp for row in zeta):
-        raise ValueError("zeta_nt shape must be (n_parallel, n_perpendicular).")
+    if len(coriolis) != n_parallel or any(len(row) != n_perp for row in coriolis):
+        raise ValueError("coriolis_nt shape must be (n_parallel, n_perpendicular).")
     if len(inputs.bxx_parallel) != n_parallel:
         raise ValueError("bxx_parallel length must match omega_parallel.")
 
@@ -426,7 +420,7 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
         for t in range(n_perp):
             wn = omega_n[n]
             wt = omega_t[t]
-            z = zeta[n][t]
+            z = coriolis[n][t]
             denom = wn**2 - wt**2
             X_upper_nt[(n, t)] = sp.simplify(2 * B * z * sp.sqrt(wn * wt) / denom)
             X_lower_nt[(n, t)] = sp.simplify(B * z * (wn**2 + wt**2) / (sp.sqrt(wn * wt) * denom))
@@ -464,7 +458,7 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
             acc_lower = sp.Integer(0)
             for t in range(n_perp):
                 wt = omega_t[t]
-                zprod = zeta[n][t] * zeta[np_][t]
+                zprod = coriolis[n][t] * coriolis[np_][t]
                 acc_upper += zprod * sp.sqrt(wn * wnp) * (wn**2 + wnp**2 - 2 * wt**2) / (
                     (wn**2 - wt**2) * (wnp**2 - wt**2)
                 )
@@ -484,7 +478,7 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
             v_sum = sp.Integer(0)
             for t in range(n_perp):
                 wt = omega_t[t]
-                zprod = zeta[n][t] * zeta[np_][t]
+                zprod = coriolis[n][t] * coriolis[np_][t]
                 common = zprod / (wt * sp.sqrt(wn * wnp))
                 u_num = (wn + wt) ** 2 * (wnp - wt) ** 2 + (wn - wt) ** 2 * (wnp + wt) ** 2
                 u_den = (wn**2 - wt**2) * (wnp**2 - wt**2)
@@ -516,7 +510,7 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
             v_sum = sp.Integer(0)
             for n in range(n_parallel):
                 wn = omega_n[n]
-                zprod = zeta[n][t] * zeta[n][tp]
+                zprod = coriolis[n][t] * coriolis[n][tp]
                 common = zprod / (wn * sp.sqrt(wt * wtp))
                 u_num = (wt + wn) ** 2 * (wtp - wn) ** 2 + (wt - wn) ** 2 * (wtp + wn) ** 2
                 u_den = (wt**2 - wn**2) * (wtp**2 - wn**2)
@@ -612,12 +606,12 @@ def build_explicit_aliev_betas(inputs: LinearAlievExplicitInputs) -> LinearAliev
         )
         mixed_prefactor_block = -4 * B * sum(
             fam.C_n[np_]
-            * inputs.zeta_nt[np_][t]
+            * inputs.coriolis_nt[np_][t]
             * (
                 (3 * omega_n[n] ** 2 + omega_t[t] ** 2)
                 * omega_n[n] ** sp.Rational(3, 2)
                 * fam.C_n[n]
-                * inputs.zeta_nt[n][t]
+                * inputs.coriolis_nt[n][t]
                 + (omega_n[n] ** 2 + omega_t[t] ** 2)
                 * omega_n[n] ** sp.Rational(3, 2)
                 * fam.C_n[n]
@@ -662,13 +656,13 @@ def build_explicit_aliev_betas(inputs: LinearAlievExplicitInputs) -> LinearAliev
         )
         mixed_prefactor_block = -4 * B * sum(
             fam.C_n[n]
-            * inputs.zeta_nt[n][t]
+            * inputs.coriolis_nt[n][t]
             * (
                 2
                 * omega_t[t] ** 2
                 * omega_n[np_] ** sp.Rational(3, 2)
                 * fam.C_n[np_]
-                * inputs.zeta_nt[np_][t]
+                * inputs.coriolis_nt[np_][t]
                 + (3 * omega_t[t] ** 2 + omega_n[np_] ** 2)
                 * omega_n[np_] ** sp.Rational(3, 2)
                 * fam.C_n[np_]
@@ -730,12 +724,12 @@ def build_explicit_aliev_beta_breakdown(
         )
         mixed_prefactor_block = -4 * B * sum(
             fam.C_n[np_]
-            * inputs.zeta_nt[np_][t]
+            * inputs.coriolis_nt[np_][t]
             * (
                 (3 * omega_n[n] ** 2 + omega_t[t] ** 2)
                 * omega_n[n] ** sp.Rational(3, 2)
                 * fam.C_n[n]
-                * inputs.zeta_nt[n][t]
+                * inputs.coriolis_nt[n][t]
                 + (omega_n[n] ** 2 + omega_t[t] ** 2)
                 * omega_n[n] ** sp.Rational(3, 2)
                 * fam.C_n[n]
@@ -790,13 +784,13 @@ def build_explicit_aliev_beta_breakdown(
         )
         mixed_prefactor_block = -4 * B * sum(
             fam.C_n[n]
-            * inputs.zeta_nt[n][t]
+            * inputs.coriolis_nt[n][t]
             * (
                 2
                 * omega_t[t] ** 2
                 * omega_n[np_] ** sp.Rational(3, 2)
                 * fam.C_n[np_]
-                * inputs.zeta_nt[np_][t]
+                * inputs.coriolis_nt[np_][t]
                 + (3 * omega_t[t] ** 2 + omega_n[np_] ** 2)
                 * omega_n[np_] ** sp.Rational(3, 2)
                 * fam.C_n[np_]

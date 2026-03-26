@@ -33,6 +33,11 @@ def test_c2h2_gaussian_bootstrap_builds_reduced_payload() -> None:
     assert payload["metadata"]["perpendicular_pairs_0based"] == [(0, 1), (2, 3)]
     assert len(payload["omega_parallel"]) == 3
     assert len(payload["omega_perpendicular"]) == 2
+    assert len(payload["coriolis_nt"]) == 3
+    assert len(payload["coriolis_nt"][0]) == 2
+    assert len(payload["coriolis_pair_blocks"]) == 3
+    assert len(payload["coriolis_pair_blocks"][0]) == 2
+    assert np.asarray(payload["coriolis_pair_blocks"], dtype=float).shape == (3, 2, 2, 2)
     assert len(payload["zeta_nt"]) == 3
     assert len(payload["zeta_nt"][0]) == 2
     assert len(payload["zeta_pair_blocks"]) == 3
@@ -41,6 +46,7 @@ def test_c2h2_gaussian_bootstrap_builds_reduced_payload() -> None:
     assert len(payload["k4_reduced"]) == 3
     assert payload["metadata"]["coordinate_normalization"] == "aliev"
     assert payload["metadata"]["zeta_reduction"] == "principal_direction"
+    assert payload["metadata"]["coriolis_projection_mode"] == "principal_direction"
 
 
 def test_c2h2_gaussian_bootstrap_feeds_linear_aliev_models() -> None:
@@ -199,14 +205,17 @@ def test_c2h2_gaussian_bootstrap_defaults_to_gaussian_qe_bridge_seed() -> None:
     assert all(np.isfinite(np.asarray(payload["pair_seed_perpendicular"], dtype=float)))
 
 
-def test_c2h2_gaussian_bootstrap_supports_formula_pair_seed_path() -> None:
-    payload = build_payload(
-        fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
-        log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
-        pair_seed_source="formula",
-    )
-    assert payload["metadata"]["pair_seed_source"] == "formula"
-    assert payload["pair_seed_perpendicular"] is None
+def test_c2h2_gaussian_bootstrap_rejects_formula_pair_seed_path() -> None:
+    try:
+        build_payload(
+            fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
+            log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
+            pair_seed_source="formula",
+        )
+    except ValueError as exc:
+        assert "disabled" in str(exc)
+    else:
+        raise AssertionError("Expected formula pair-seed path to be disabled.")
 
 
 def test_gaussian_raw_force_constant_reconversions_match_reduced_printout() -> None:

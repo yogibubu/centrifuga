@@ -148,6 +148,7 @@ def test_explicit_aliev_betas_include_readable_blocks_and_named_kernels() -> Non
                 [sp.Symbol("ktt110", real=True), sp.Symbol("ktt111", real=True)],
             ],
         ],
+        pair_seed_perpendicular=[sp.Symbol("pt0", real=True), sp.Symbol("pt1", real=True)],
     )
 
     betas = build_explicit_aliev_betas(inputs)
@@ -185,6 +186,7 @@ def test_explicit_aliev_beta_breakdown_sums_to_total() -> None:
             [[0.03, 0.02], [0.01, 0.04]],
             [[0.02, 0.01], [0.05, 0.03]],
         ],
+        pair_seed_perpendicular=[0.0, 0.0],
         k4_parallel=[
             [[[0.01, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]]],
             [[[0.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.02]]],
@@ -215,6 +217,7 @@ def test_explicit_aliev_uv_breakdown_sums_to_uv_block() -> None:
             [[0.03, 0.02], [0.01, 0.04]],
             [[0.02, 0.01], [0.05, 0.03]],
         ],
+        pair_seed_perpendicular=[0.0, 0.0],
     )
     beta = build_explicit_aliev_beta_breakdown(inputs)
     uv = build_explicit_aliev_uv_breakdown(inputs)
@@ -276,6 +279,7 @@ def test_explicit_aliev_dv_model_uses_aliev_state_factors() -> None:
                 [sp.Symbol("ktt110", real=True), sp.Symbol("ktt111", real=True)],
             ],
         ],
+        pair_seed_perpendicular=[sp.Symbol("pt0", real=True), sp.Symbol("pt1", real=True)],
     )
 
     model = build_explicit_aliev_dv_model(inputs)
@@ -320,6 +324,7 @@ def test_explicit_aliev_L_model_exposes_optical_constant() -> None:
                 [sp.Symbol("ktt110", real=True), sp.Symbol("ktt111", real=True)],
             ],
         ],
+        pair_seed_perpendicular=[sp.Symbol("pt0", real=True), sp.Symbol("pt1", real=True)],
         k4_parallel=[
             [
                 [
@@ -408,6 +413,7 @@ def test_reduced_three_index_quartics_are_accepted_for_betas_and_L() -> None:
         k3_perp_pair=[
             [[0, 0, 0]],
         ],
+        pair_seed_perpendicular=[0],
         k4_reduced=[
             [
                 [sp.Symbol("kred_000", real=True), sp.Symbol("kred_001", real=True), sp.Symbol("kred_002", real=True)],

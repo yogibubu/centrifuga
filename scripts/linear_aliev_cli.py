@@ -7,7 +7,7 @@ The input is a JSON file with the explicit linear-molecule data:
 - `D_J`
 - `omega_parallel`
 - `omega_perpendicular`
-- `zeta_nt`
+- `coriolis_nt` (or legacy alias `zeta_nt`)
 - `bxx_parallel`
 - `k3_parallel`
 - `k3_perp_pair`
