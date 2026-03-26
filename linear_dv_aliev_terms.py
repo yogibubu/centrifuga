@@ -127,6 +127,8 @@ class LinearAlievExplicitFamilies:
     r_tt: dict[tuple[int, int], sp.Expr]
     F_upper_nn: dict[tuple[int, int], sp.Expr]
     F_lower_nn: dict[tuple[int, int], sp.Expr]
+    F_upper_tt: dict[tuple[int, int], sp.Expr]
+    F_lower_tt: dict[tuple[int, int], sp.Expr]
     U_nn: dict[tuple[int, int], sp.Expr]
     V_nn: dict[tuple[int, int], sp.Expr]
     U_tt: dict[tuple[int, int], sp.Expr]
@@ -467,10 +469,30 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
                     (wn**2 - wt**2) * (wnp**2 - wt**2)
                 )
                 acc_lower += zprod * (wn**2 * wnp**2 - wt**4) / (
-                    wt * sp.sqrt(wn * wnp) * (wn**2 - wt**2) * (wnp**2 - wt**2)
+                    sp.sqrt(wn * wnp) * (wn**2 - wt**2) * (wnp**2 - wt**2)
                 )
             F_upper_nn[(n, np_)] = sp.simplify(B**2 * acc_upper)
             F_lower_nn[(n, np_)] = sp.simplify(r_nn[(n, np_)] + B**2 * acc_lower)
+
+    F_upper_tt: dict[tuple[int, int], sp.Expr] = {}
+    F_lower_tt: dict[tuple[int, int], sp.Expr] = {}
+    for t in range(n_perp):
+        for tp in range(n_perp):
+            wt = omega_t[t]
+            wtp = omega_t[tp]
+            acc_upper = sp.Integer(0)
+            acc_lower = sp.Integer(0)
+            for n in range(n_parallel):
+                wn = omega_n[n]
+                zprod = coriolis[n][t] * coriolis[n][tp]
+                acc_upper += zprod * sp.sqrt(wt * wtp) * (wt**2 + wtp**2 - 2 * wn**2) / (
+                    (wt**2 - wn**2) * (wtp**2 - wn**2)
+                )
+                acc_lower += zprod * (wt**2 * wtp**2 - wn**4) / (
+                    sp.sqrt(wt * wtp) * (wt**2 - wn**2) * (wtp**2 - wn**2)
+                )
+            F_upper_tt[(t, tp)] = sp.simplify(B**2 * acc_upper)
+            F_lower_tt[(t, tp)] = sp.simplify(r_tt[(t, tp)] + B**2 * acc_lower)
 
     U_nn: dict[tuple[int, int], sp.Expr] = {}
     V_nn: dict[tuple[int, int], sp.Expr] = {}
@@ -565,6 +587,8 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
         r_tt=r_tt,
         F_upper_nn=F_upper_nn,
         F_lower_nn=F_lower_nn,
+        F_upper_tt=F_upper_tt,
+        F_lower_tt=F_lower_tt,
         U_nn=U_nn,
         V_nn=V_nn,
         U_tt=U_tt,
@@ -680,10 +704,10 @@ def build_explicit_aliev_betas(inputs: LinearAlievExplicitInputs) -> LinearAliev
             for np_ in range(n_parallel)
         )
         cross_block_raw = -4 * sum(
-            fam.X_lower_nt[(n, t)] * fam.X_upper_nt[(np_, t)] * fam.F_lower_nn[(n, np_)]
-            + fam.X_upper_nt[(n, t)] * fam.X_lower_nt[(np_, t)] * fam.F_upper_nn[(n, np_)]
+            fam.X_lower_nt[(n, t)] * fam.X_upper_nt[(n, tp)] * fam.F_lower_tt[(tp, t)]
+            + fam.X_upper_nt[(n, t)] * fam.X_lower_nt[(n, tp)] * fam.F_upper_tt[(t, tp)]
             for n in range(n_parallel)
-            for np_ in range(n_parallel)
+            for tp in range(n_perp)
         )
         xf_block = sp.simplify(xf_cross_sign * xf_block_raw)
         cross_block = sp.simplify(xf_cross_sign * cross_block_raw)
@@ -807,10 +831,10 @@ def build_explicit_aliev_beta_breakdown(
             for np_ in range(n_parallel)
         )
         cross_block_raw = -4 * sum(
-            fam.X_lower_nt[(n, t)] * fam.X_upper_nt[(np_, t)] * fam.F_lower_nn[(n, np_)]
-            + fam.X_upper_nt[(n, t)] * fam.X_lower_nt[(np_, t)] * fam.F_upper_nn[(n, np_)]
+            fam.X_lower_nt[(n, t)] * fam.X_upper_nt[(n, tp)] * fam.F_lower_tt[(tp, t)]
+            + fam.X_upper_nt[(n, t)] * fam.X_lower_nt[(n, tp)] * fam.F_upper_tt[(t, tp)]
             for n in range(n_parallel)
-            for np_ in range(n_parallel)
+            for tp in range(n_perp)
         )
         xf_block = sp.simplify(xf_cross_sign * xf_block_raw)
         cross_block = sp.simplify(xf_cross_sign * cross_block_raw)

@@ -248,14 +248,14 @@ systems now in the repo:
 With this frozen branch:
 
 - `C2H2` gives
-  - `v1_CH ~ -1.815e-09`
-  - `v2_CC ~ -1.398e-10`
-  - `v3_asym ~ -1.231e-09`
-  - `v4_bend ~ +1.955e-09`
-  - `v5_bend ~ +1.231e-09`
+  - `v1_CH ~ -1.530e-09`
+  - `v2_CC ~ -1.199e-10`
+  - `v3_asym ~ -9.539e-10`
+  - `v4_bend ~ +5.970e-09`
+  - `v5_bend ~ +4.728e-09`
 - `HCN` gives
-  - `beta_parallel ~ 5.73e-17, 2.24e-15`
-  - `beta_perpendicular ~ -2.30e-15`
+  - `beta_parallel ~ 4.45e-17, 1.74e-15`
+  - `beta_perpendicular ~ -1.79e-15`
 
 Operational interpretation:
 
@@ -265,5 +265,83 @@ Operational interpretation:
 - the old off-diagonal parallel `uv` contribution behaved as a representation
   artifact and is disabled in the frozen diagnostic branch
 
-So the linear branch is now usable as a **diagnostic benchmark branch**.
+So the linear branch is now usable as a **working benchmark branch**.
 It is still not a literature-validated final implementation.
+
+## Rigorous local conclusion on the remaining two conventions
+
+The current linear branch rests on two conventions that work numerically but are
+not yet proved from the literature:
+
+- `beta_t_xf_cross_sign = -1`
+- `uv_parallel = 0`
+
+These two conventions do not have the same status.
+
+### 1. Perpendicular `xf/cross` sign
+
+For the current `rotder_seed_gram` branch, the bending residual is controlled by
+the full perpendicular `xf + cross` block, not by one subterm alone.
+
+On `C2H2`:
+
+- after correcting the negative branch to use `F_tt` / `F^tt` rather than
+  reusing `F_nn` / `F^nn`, the current insertion still gives `xf + cross > 0`
+- flipping only `xf` gives the wrong magnitude
+- flipping only `cross` gives the wrong magnitude
+- flipping the **common prefactor of the full `xf + cross` insertion** gives the
+  correct sign and keeps the correct order of magnitude
+
+Therefore the current evidence supports only the following strict statement:
+
+- the unresolved issue is a sign/convention problem of the **whole**
+  perpendicular `xf/cross` insertion in `beta_t`
+- it is **not** evidence that only one of the two pieces (`xf` or `cross`) was
+  individually transcribed with the wrong sign
+- there was also a real structural bug in the earlier implementation:
+  the negative `xf/cross` branch of `beta_t` must use the perpendicular
+  families `F_tt` / `F^tt`, not the parallel families `F_nn` / `F^nn`
+
+### 2. Parallel `uv`
+
+For the current `rotder_seed_gram` branch, the parallel discrepancy is dominated
+by the parallel `uv` insertion.
+
+On `C2H2` and `HCN`:
+
+- the diagonal part of parallel `U_{nn}` is already negligible after the earlier
+  correction
+- the large residual comes from the off-diagonal `U_{nn'}` / `V_{nn'}`
+  contribution
+- this residual behaves as an almost mode-independent offset across active
+  parallel modes
+
+When the parallel `uv` insertion is removed:
+
+- `C2H2` parallel coefficients drop from `~10^-3` to `~10^-10 ... 10^-9`
+- `HCN` parallel coefficients drop to `~10^-17 ... 10^-15`
+
+This strongly suggests that the present parallel `uv` insertion is not yet the
+physical object intended by the Aliev formalism under the current
+Gaussian-to-Aliev mapping.
+
+However, this does **not** prove that the true theoretical value is exactly
+zero. It proves only:
+
+- the currently implemented parallel `uv` block is not acceptable as a final
+  physical contribution
+- setting `uv_parallel = 0` is a frozen diagnostic convention, not a derived
+  theorem
+
+### Operational meaning
+
+So the correct rigorous reading of the current linear branch is:
+
+- perpendicular branch:
+  - sign of the full `xf/cross` insertion is fixed operationally at `-1`
+- parallel branch:
+  - `uv_parallel` is fixed operationally at zero because the currently mapped
+    object is not physically acceptable
+
+This closes the implementation as a **working branch**.
+It does not yet close the linear theory as a publishable derivation.

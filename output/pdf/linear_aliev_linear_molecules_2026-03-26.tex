@@ -1,0 +1,328 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.1cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,mathtools,booktabs}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\allowdisplaybreaks
+
+\begin{document}
+
+\begin{center}
+{\LARGE Linear Molecules in the Aliev Framework}\\[0.35em]
+{\large Implemented equations, optical constant $L$, and frozen diagnostic conventions}\\[0.25em]
+2026-03-26
+\end{center}
+
+\section*{1. Scope}
+
+This note is a standalone record of the current linear-molecule implementation in
+\path{/Users/vincenzobarone/centrifugal/linear_dv_aliev_terms.py}
+and of the Gaussian bootstrap in
+\path{/Users/vincenzobarone/centrifugal/scripts/build_linear_aliev_payload_from_gaussian.py}.
+
+The aim is limited and explicit:
+\begin{itemize}
+\item write all implemented linear Aliev equations in a clean form;
+\item include the quartic optical scalar $L$;
+\item separate what is implemented algebraically from what is only frozen as a
+diagnostic convention.
+\end{itemize}
+
+This is not a claim that every remaining convention has been derived from first
+principles. It is the cleanest complete statement of the current linearmolecule
+branch.
+
+\section*{2. Indices and objects}
+
+\begin{itemize}
+\item Parallel modes are indexed by $n,n',n'',\dots$.
+\item Perpendicular degenerate pairs are indexed by $t,t',\dots$.
+\item $B$ is the equilibrium rotational constant.
+\item $D_J$ is the equilibrium quartic centrifugal distortion constant.
+\item $\omega_n$ and $\omega_t$ are harmonic frequencies of parallel and
+perpendicular modes.
+\item $B_n^{xx}$ is the parallel rotational derivative entering
+$C_n = -B B_n^{xx}/\omega_n$.
+\item $k'_{ijk}$ and $k'_{ijkl}$ denote the cubic and quartic constants in the
+Aliev-side coordinate convention used by the implementation.
+\end{itemize}
+
+\section*{3. Primary definitions}
+
+The implemented primary objects are
+\begin{align}
+C_n &= - \frac{B B_n^{xx}}{\omega_n},
+\\[0.4em]
+X^{nt} &= \frac{2B\zeta_{nt}\sqrt{\omega_n\omega_t}}{\omega_n^2-\omega_t^2},
+\\[0.4em]
+X_{nt} &= \frac{B\zeta_{nt}(\omega_n^2+\omega_t^2)}
+{\sqrt{\omega_n\omega_t}(\omega_n^2-\omega_t^2)},
+\\[0.4em]
+r_n &= 4\omega_n C_n\left(\frac{D_J}{B}-\frac{B^2}{\omega_n^2}\right)
++ \frac{1}{2}\sum_{n',n''} k'_{nn'n''} C_{n'} C_{n''},
+\\[0.4em]
+r_{nn'} &= \frac{3\omega_n\omega_{n'} C_n C_{n'}}{4B}
++ \frac{1}{2}\sum_{n''} k'_{nn'n''} C_{n''},
+\\[0.4em]
+r_{tt'} &= \frac{1}{2}\sum_n k'_{tt'n} C_n.
+\end{align}
+
+\section*{4. Auxiliary families}
+
+The implemented $F$, $U$, and $V$ families are
+\begin{align}
+F^{nn'} &=
+B^2\sum_t \zeta_{nt}\zeta_{n't}\sqrt{\omega_n\omega_{n'}}
+\frac{\omega_n^2+\omega_{n'}^2-2\omega_t^2}
+{(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)},
+\\[0.6em]
+F_{nn'} &=
+r_{nn'}
++ B^2\sum_t \zeta_{nt}\zeta_{n't}
+\frac{\omega_n^2\omega_{n'}^2-\omega_t^4}
+{\omega_t\sqrt{\omega_n\omega_{n'}}(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)},
+\\[0.6em]
+U_{nn'} &=
+\frac{r_{nn'}}{4(\omega_n+\omega_{n'})}
++ \frac{B^2}{8}\sum_t
+\frac{\zeta_{nt}\zeta_{n't}}
+{\omega_t(\omega_n\omega_{n'})^{1/2}}
+\frac{(\omega_n+\omega_t)^2(\omega_{n'}-\omega_t)^2+(\omega_n-\omega_t)^2(\omega_{n'}+\omega_t)^2}
+{(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)},
+\\[0.6em]
+V_{nn'} &=
+\frac{r_{nn'}}{4(\omega_n-\omega_{n'})}
++ \frac{B^2}{8}\sum_t
+\frac{\zeta_{nt}\zeta_{n't}}
+{\omega_t(\omega_n\omega_{n'})^{1/2}}
+\frac{
+(\omega_n+\omega_t)^2(\omega_{n'}+\omega_t)^2(\omega_n+\omega_{n'}-2\omega_t)
+-
+(\omega_n-\omega_t)^2(\omega_{n'}-\omega_t)^2(\omega_n+\omega_{n'}+2\omega_t)
+}
+{(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)(\omega_n-\omega_{n'})}.
+\end{align}
+
+For the perpendicular branch the implementation also keeps the analogous
+families
+\begin{align}
+U_{tt'} &=
+\frac{r_{tt'}}{4(\omega_t+\omega_{t'})}
++ \frac{B^2}{8}\sum_n
+\frac{\zeta_{nt}\zeta_{nt'}}
+{\omega_n(\omega_t\omega_{t'})^{1/2}}
+\frac{(\omega_t+\omega_n)^2(\omega_{t'}-\omega_n)^2+(\omega_t-\omega_n)^2(\omega_{t'}+\omega_n)^2}
+{(\omega_t^2-\omega_n^2)(\omega_{t'}^2-\omega_n^2)},
+\\[0.6em]
+V_{tt'} &=
+\frac{r_{tt'}}{4(\omega_t-\omega_{t'})}
++ \frac{B^2}{8}\sum_n
+\frac{\zeta_{nt}\zeta_{nt'}}
+{\omega_n(\omega_t\omega_{t'})^{1/2}}
+\frac{
+(\omega_t+\omega_{t'})^2(\omega_{t'}+\omega_n)^2(\omega_t+\omega_{t'}-2\omega_n)
+-
+(\omega_t-\omega_{t'})^2(\omega_{t'}-\omega_n)^2(\omega_t+\omega_{t'}+2\omega_n)
+}
+{(\omega_t^2-\omega_n^2)(\omega_{t'}^2-\omega_n^2)(\omega_t-\omega_{t'})}.
+\end{align}
+
+\section*{5. Parallel coefficient \texorpdfstring{$\beta_n$}{beta n}}
+
+The implemented parallel coefficient is
+\begin{equation}
+\begin{aligned}
+\beta_n &=
+4\omega_n^2 C_n^2\left(\frac{B}{\omega_n^2}-\frac{D_J}{B^2}\right)
++ \frac{1}{4}\sum_{n',n''} k^{(4)}_{\beta_n}(n;n',n'') C_{n'}C_{n''}
+- \sum_{n'} \frac{k'_{nnnn'}}{2\omega_{n'}} r_{n'}
+\\[0.4em]
+&\quad
+- 4B\sum_{n',t} C_{n'}\zeta_{n't}
+\frac{
+(3\omega_n^2+\omega_t^2)\omega_n^{3/2} C_n \zeta_{nt}
++
+(\omega_n^2+\omega_t^2)\omega_n^{3/2} C_n r_{nn'}
+}
+{\sqrt{\omega_n\omega_t}(\omega_n^2-\omega_t^2)}
+\\[0.4em]
+&\quad
++ 4\sum_{n',t}\left(X_{nt}X_{n't}F^{nn'} + X^{nt}X^{n't}F_{nn'}\right)
+- 4\sum_{n',t}\left(X_{nt}X^{n't}F_{n'n} + X^{nt}X_{n't}F^{n'n}\right)
+\\[0.4em]
+&\quad
+- 16\sum_{n'}
+\left[U_{nn'}(\omega_n+\omega_{n'}) + V_{nn'}(\omega_{n'}-\omega_n)\right].
+\end{aligned}
+\end{equation}
+
+\paragraph{Final working convention for the current linearmolecule branch.}
+In the current working branch, the final parallel $uv$ insertion is disabled:
+\[
+(\beta_n)_{\mathrm{frozen}}
+=
+(\beta_n)_{\mathrm{full}}
+- \left[-16\sum_{n'}
+\left( U_{nn'}(\omega_n+\omega_{n'}) + V_{nn'}(\omega_{n'}-\omega_n)\right)\right].
+\]
+
+This is not presented as a literature-derived theorem. It is the final working
+convention of the present linear branch because, with the current Gaussian
+$\to$ Aliev mapping, the parallel $uv$ block behaves as a dominant non-modal
+offset and drives otherwise sane parallel outputs to the wrong scale.
+
+\section*{6. Perpendicular coefficient \texorpdfstring{$\beta_t$}{beta t}}
+
+The implemented perpendicular coefficient is
+\begin{equation}
+\begin{aligned}
+\beta_t &=
+\frac{1}{4}\sum_{n,n'} k^{(4)}_{\beta_t}(t;n,n') C_n C_{n'}
++ \mathcal{P}_t
+- \sum_n \frac{k'_{ttn}}{2\omega_n} r_n
+\\[0.4em]
+&\quad
+- 4B\sum_{n,n'} C_n \zeta_{nt}
+\frac{
+2\omega_t^2 \omega_{n'}^{3/2} C_{n'}\zeta_{n't}
++
+(3\omega_t^2+\omega_{n'}^2)\omega_{n'}^{3/2} C_{n'} r_{nn'}
+}
+{\omega_t\sqrt{\omega_{n'}}(\omega_t^2-\omega_{n'}^2)}
+\\[0.4em]
+&\quad
++ 4\sum_{n,n'}\left(X_{nt}X_{n't}F^{nn'} + X^{nt}X^{n't}F_{nn'}\right)
+- 4\sum_{n,t'}\left(X_{nt}X^{nt'}F_{tt'} + X^{nt}X_{nt'}F^{tt'}\right)
+\\[0.4em]
+&\quad
+- 16\sum_{t'} \left[U_{tt'}(\omega_t+\omega_{t'}) + V_{tt'}(\omega_{t'}-\omega_t)\right].
+\end{aligned}
+\end{equation}
+
+\paragraph{Bending seed currently used.}
+The currently frozen diagnostic branch uses
+\[
+\mathcal{P}_t = \texttt{rotder\_seed\_gram},
+\]
+namely the seed built from the geometry/mode-based rotational-derivative
+scaffold in
+\path{/Users/vincenzobarone/centrifugal/linear_aliev_rotder_zeta.py}.
+
+\paragraph{Final working sign convention.}
+After correcting the negative $X/F$ block to use the perpendicular families
+$F_{tt'}$ and $F^{tt'}$ rather than reusing $F_{nn'}$ and $F^{nn'}$, the
+remaining bending discrepancy is still controlled by the common sign of the
+full perpendicular $xf/cross$ insertion. In the present linear branch this is encoded as
+\[
+\texttt{beta\_t\_xf\_cross\_sign} = -1.
+\]
+
+This is not yet a literature-proof derivation, but it is the final working
+convention reached after the remaining structural alternatives inside the
+implemented branch have been eliminated.
+
+\section*{7. Optical scalar \texorpdfstring{$L$}{L}}
+
+The implemented quartic optical scalar is
+\begin{equation}
+L =
+-\frac{8D_J^3}{B^2}
++ \frac{1}{24}\sum_{n,n',n'',n'''} k'_{nn'n''n'''} C_n C_{n'} C_{n''} C_{n'''}
++ 8BD_J \sum_n \frac{C_n^2}{\omega_n}
+- \sum_n \frac{r_n^2}{2\omega_n}.
+\end{equation}
+
+This is exposed programmatically by
+\[
+\texttt{build\_explicit\_aliev\_L\_model(inputs).value}.
+\]
+
+The implementation also provides a bookkeeping partition of $L$ into modewise
+contributions, but this partition remains provisional because the global
+$-8D_J^3/B^2$ term is not intrinsically mode-local.
+
+\section*{8. Final state dependence}
+
+The state dependence implemented for linear molecules is
+\begin{equation}
+D_v = D_J - \sum_n \beta_n\left(v_n+\frac{1}{2}\right) - \sum_t \beta_t (v_t+1).
+\end{equation}
+
+\section*{9. Working linear branch}
+
+The current working branch for linear molecules is:
+\begin{itemize}
+\item bending seed:
+\[
+\texttt{pair\_seed\_source} = \texttt{rotder\_seed\_gram};
+\]
+\item perpendicular $xf/cross$ sign:
+\[
+\texttt{beta\_t\_xf\_cross\_sign} = -1;
+\]
+\item parallel $uv$ insertion:
+\[
+(\beta_n)_{\mathrm{frozen}} \text{ uses } uv_{\parallel}=0.
+\]
+\end{itemize}
+
+With this branch the two current linear benchmarks in the repo behave as
+follows:
+
+\paragraph{C\textsubscript{2}H\textsubscript{2}.}
+\begin{align*}
+v_1 &\sim -1.530\times 10^{-9},
+&
+v_2 &\sim -1.199\times 10^{-10},
+&
+v_3 &\sim -9.539\times 10^{-10},
+\\
+v_4 &\sim +5.970\times 10^{-9},
+&
+v_5 &\sim +4.728\times 10^{-9}.
+\end{align*}
+
+\paragraph{HCN.}
+\[
+\beta_{\parallel} \sim 10^{-17}\text{ to }10^{-15},
+\qquad
+\beta_{\perp} \sim -1.79\times 10^{-15}.
+\]
+
+The important point is not that these are yet a final literature match. The
+important point is that the catastrophic scale failures of the earlier branch
+are gone.
+
+\section*{10. Honest status}
+
+The current linear branch should be read in the following way.
+
+\begin{itemize}
+\item The algebraic implementation of the linear families, of $\beta_n$,
+$\beta_t$, and of the optical scalar $L$ is now explicit and internally
+consistent.
+\item The Gaussian bootstrap is no longer using the Gaussian Coriolis tensor as
+if it were already the physical Aliev $\zeta$ object.
+\item The present linear branch is numerically sane and suitable as a working
+benchmark branch.
+\item It is still not a fully derived, literature-validated final theory branch,
+because two conventions remain final working conventions rather than proved:
+  \begin{itemize}
+  \item the sign of the perpendicular $xf/cross$ insertion;
+  \item the exclusion of the parallel $uv$ insertion.
+  \end{itemize}
+\end{itemize}
+
+So the correct conclusion is:
+
+\begin{quote}
+The linear-molecule branch is now closed as a strong working implementation,
+including the optical scalar $L$, but not yet closed as a fully justified final
+derivation of every remaining convention.
+\end{quote}
+
+\end{document}

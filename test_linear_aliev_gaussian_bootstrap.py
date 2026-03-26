@@ -256,6 +256,58 @@ def test_c2h2_gaussian_bootstrap_supports_rotder_seed_gram_path() -> None:
     assert np.max(np.abs(vals)) < 1.0e-20
 
 
+def test_pair_seed_source_sets_frozen_beta_t_xf_cross_sign_defaults() -> None:
+    payload_gaussian = build_payload(
+        fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
+        log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
+        pair_seed_source="gaussian_qe_source",
+    )
+    payload_rotder = build_payload(
+        fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
+        log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
+        pair_seed_source="rotder_seed_gram",
+    )
+    assert payload_gaussian["metadata"]["beta_t_xf_cross_sign"] == 1
+    assert payload_rotder["metadata"]["beta_t_xf_cross_sign"] == -1
+
+
+def test_c2h2_frozen_linear_diagnostic_branch_stays_in_sane_scale() -> None:
+    payload = build_payload(
+        fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
+        log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
+        cn_source="didq_linear_v_iscr",
+        force_constant_source="raw_au_reconverted",
+        zeta_reduction="principal_direction",
+        pair_seed_source="rotder_seed_gram",
+    )
+    inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
+    dv = build_explicit_aliev_dv_model(inputs)
+    breakdown = build_explicit_aliev_beta_breakdown(inputs)
+    beta_parallel = np.asarray([float(dv.beta_parallel[i]) for i in range(len(dv.beta_parallel))], dtype=float)
+    beta_perpendicular = np.asarray([float(dv.beta_perpendicular[i]) for i in range(len(dv.beta_perpendicular))], dtype=float)
+    assert np.max(np.abs(beta_parallel)) < 1.0e-8
+    assert np.all(beta_perpendicular < 0.0)
+    assert np.max(np.abs(beta_perpendicular)) < 1.0e-8
+    assert all(abs(float(breakdown.parallel[i]["uv_block"])) < 1.0e-30 for i in range(len(beta_parallel)))
+
+
+def test_hcn_frozen_linear_diagnostic_branch_is_near_zero() -> None:
+    payload = build_payload(
+        fchk_path="/Users/vincenzobarone/centrifugal/hcn.fchk",
+        log_path="/Users/vincenzobarone/centrifugal/hcn.log",
+        cn_source="didq_linear_v_iscr",
+        force_constant_source="raw_au_reconverted",
+        zeta_reduction="principal_direction",
+        pair_seed_source="rotder_seed_gram",
+    )
+    inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
+    dv = build_explicit_aliev_dv_model(inputs)
+    beta_parallel = np.asarray([float(dv.beta_parallel[i]) for i in range(len(dv.beta_parallel))], dtype=float)
+    beta_perpendicular = np.asarray([float(dv.beta_perpendicular[i]) for i in range(len(dv.beta_perpendicular))], dtype=float)
+    assert np.max(np.abs(beta_parallel)) < 1.0e-12
+    assert np.max(np.abs(beta_perpendicular)) < 1.0e-12
+
+
 def test_gaussian_raw_force_constant_reconversions_match_reduced_printout() -> None:
     anh = parse_gaussian_anharmonic_force_data("/Users/vincenzobarone/centrifugal/gaussian/c2h2.log")
     phi3 = raw_cubic_to_reduced_cm(anh.phi3_raw_au, anh.frequencies_cm)
