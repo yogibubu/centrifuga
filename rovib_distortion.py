@@ -879,7 +879,14 @@ def rotational_constants(i_tensor: np.ndarray) -> tuple[np.ndarray, np.ndarray, 
     if np.linalg.det(vecs) < 0.0:
         vecs[:, 2] *= -1.0
 
-    abc_mhz = ROT_CONST_MHZ_AMU_A2 / moments
+    abc_mhz = np.empty_like(moments)
+    np.divide(
+        ROT_CONST_MHZ_AMU_A2,
+        moments,
+        out=abc_mhz,
+        where=np.abs(moments) > 1.0e-30,
+    )
+    abc_mhz[np.abs(moments) <= 1.0e-30] = np.inf
     return moments, abc_mhz, vecs
 
 

@@ -1,0 +1,231 @@
+# Linear Aliev Unit Audit (2026-03-25)
+
+## Scope
+
+Audit of the current Gaussian -> Aliev bridge used by:
+
+- [/Users/vincenzobarone/centrifugal/scripts/build_linear_aliev_payload_from_gaussian.py](/Users/vincenzobarone/centrifugal/scripts/build_linear_aliev_payload_from_gaussian.py)
+- [/Users/vincenzobarone/centrifugal/linear_dv_aliev_terms.py](/Users/vincenzobarone/centrifugal/linear_dv_aliev_terms.py)
+
+Reference test case:
+
+- `C2H2`
+
+## What is already coherent
+
+- `B` is taken from the perpendicular rotational constants and converted to `cm^-1`.
+- `D_J` is parsed from Gaussian linear Pickett output and converted from `MHz` to `cm^-1`.
+- `q^e`, `q^J`, `q^K` parsing is internally consistent.
+- `alpha_cm`, `phi3_reduced_cm`, `phi4_reduced_cm`, `phi3_raw_au`, `phi4_raw_au` are parsed correctly as printed by Gaussian.
+
+These are parser-level statements only. They do not imply compatibility with the Aliev convention.
+
+## Main quantitative problem
+
+The current bridge is not yet unit-clean for quantitative Aliev use.
+
+## Current recommended baseline for `zeta_nt`
+
+The scanned definition identifies
+
+- `zeta_nt = zeta^x_(n,tb)`
+
+so the scalar `zeta_nt` should be built from one explicit Coriolis component,
+not from a norm over the full degenerate pair.
+
+Working conclusion from the current `C2H2` audit:
+
+- `zeta_reduction = component_tb` is the only defensible default so far
+- `zeta_reduction = component_ua` is numerically equivalent to `component_tb`
+- `zeta_reduction = norm` is not compatible with the paper definition
+- `zeta_reduction = maxabs` is only a rough sensitivity check
+
+Systematic doublet scan on `C2H2`:
+
+- small branch:
+  - `component_tb`
+  - `component_ua`
+- large branch:
+  - `component_ta`
+  - `component_ub`
+  - `maxabs`
+- worst branch:
+  - `norm`
+
+Therefore the current operational rule is:
+
+- keep `component_tb` as the default
+- accept `component_ua` as an equivalent sensitivity branch
+- treat `component_ta`, `component_ub`, `maxabs`, and especially `norm` as
+  non-primary diagnostics only
+
+In the current implementation this equivalence is not just qualitative.
+For the `C2H2` reference case, `component_tb` and `component_ua` give the same
+results to machine precision for:
+
+- `beta_parallel`
+- `beta_perpendicular`
+- `uv_parallel`
+- `uv_perpendicular`
+- `D_v(0)`
+- `L`
+
+The only visible difference is in the sign/layout of the raw selected
+`zeta_nt` components before they enter the quadratic combinations used by the
+Aliev expressions. Operationally, the repo can therefore treat
+`component_ua` as a strict basis-equivalent branch of `component_tb`.
+
+Therefore the reporting policy is:
+
+- use `component_tb` in operational reports and comparisons
+- keep `component_ua` only in dedicated equivalence checks
+- reserve the full four-component scan for diagnostic work
+
+This improves the scale of the prototype significantly for the non-quadratic
+blocks, but it does not close the quantitative bending gap with experiment.
+
+## Current operational status of bending modes
+
+The bending branch is no longer treated as a quantitative `Delta D_t`
+benchmark.
+
+Current operational policy:
+
+- use `pair_seed_source = gaussian_qe_source` as a non-physical bridge
+- interpret that bridge as a proxy for the pairwise `l`-type `J0` layer
+- do **not** interpret `v4/v5` output as a quantitative validation of
+  `beta_t` or `Delta D_t`
+
+Reason:
+
+- the pure Aliev bending seed built directly from the current Gaussian-side
+  `zeta` objects is not physically trustworthy
+- Gaussian `q^e` is not the same observable as the scalar vibrational
+  increment `Delta D_t`
+- therefore the current bending comparison is qualitative only
+
+## Small-branch residual audit
+
+Using the physically acceptable small branch
+
+- `zeta_reduction = component_tb`
+- or equivalently `zeta_reduction = component_ua`
+
+and fixing the bending seed to Gaussian
+
+- `pair_seed_source = gaussian_qe_source`
+
+the residual dependence on the bootstrap of `B_n^(xx)` is now very limited for
+the perpendicular sector.
+
+On `C2H2`, the following three choices were compared:
+
+- `alpha_perp_with_Bxx_equals_minus_alpha_perp`
+- `alpha_perp_with_Bxx_equals_minus_half_alpha_perp`
+- `didq_linear_v_iscr`
+
+The results are:
+
+- `max|beta_parallel| = 2.19e-04, 2.07e-04, 2.03e-04 cm^-1`
+- `max|beta_perpendicular| = 5.44e-03, 5.49e-03, 5.50e-03 cm^-1`
+- `max|uv_parallel| = 2.19e-04, 2.07e-04, 2.03e-04 cm^-1`
+- `max|uv_perpendicular| = 2.61e-04, 2.18e-04, 2.04e-04 cm^-1`
+
+The practical interpretation is:
+
+- the perpendicular residual is almost insensitive to the current `B_n^(xx)`
+  bootstrap
+- the parallel sector remains somewhat sensitive to the geometric bridge
+- `L` changes very little across the same scan
+
+Therefore, once the analysis is restricted to the operational bridge branch,
+the dominant remaining bending issue is no longer primarily in the `B_n^(xx)`
+bootstrap.
+
+The largest issue is the bootstrap of `B_n^(xx)` from Gaussian `alpha_perp`.
+
+Current code path:
+
+- [`build_linear_aliev_payload_from_gaussian.py`](/Users/vincenzobarone/centrifugal/scripts/build_linear_aliev_payload_from_gaussian.py)
+- `bxx_parallel <- -alpha_perp` or `-alpha_perp/2`
+- [`linear_dv_aliev_terms.py`](/Users/vincenzobarone/centrifugal/linear_dv_aliev_terms.py)
+- `C_n = -B * B_n^(xx) / omega_n`
+
+With `B`, `B_n^(xx)`, and `omega_n` all in `cm^-1`, the resulting `C_n` carries an extra frequency scale unless `B_n^(xx)` already matches the exact Aliev normal-coordinate convention. That identification has not been demonstrated.
+
+## Second major problem
+
+The force constants fed into the Aliev equations are Gaussian reduced force constants:
+
+- `phi3_reduced_cm`
+- `phi4_reduced_cm`
+
+The current implementation uses them directly as:
+
+- `k3_parallel`
+- `k3_perp_pair`
+- `k4_reduced`
+
+This is structurally useful, but it has not been shown that these objects coincide numerically with the `k'` constants assumed in the Aliev formulas.
+
+Therefore the current bridge should be treated as:
+
+- structurally useful
+- good for sign/ranking experiments
+- not yet quantitatively validated
+
+## Numerical evidence from C2H2
+
+Representative payload values:
+
+- `B = 1.1766208404697134 cm^-1`
+- `D_J = 1.4489396527780562e-06 cm^-1`
+- `bxx_parallel = [0.00267, 0.00213, 0.00213]`
+- `C_n = [-1.50e-06, -7.28e-07, -7.08e-07]`
+
+Current model output:
+
+- `beta_parallel ~ -1.36e-02 cm^-1`
+- `beta_perpendicular ~ +5.2e-01 ... +5.6e-01 cm^-1`
+
+Experimental working dataset:
+
+- `beta_exp ~ 1e-09 ... 2e-08 cm^-1`
+
+This mismatch is far too large to be explained by a minor sign or indexing mistake. The bridge is mixing conventions, not merely suffering from a small coding bug.
+
+## Important structural observation
+
+For `C2H2` the current bootstrap produces:
+
+- `k3_parallel = 0`
+- one nonzero block in `k3_perp_pair`
+- sizeable `k4_reduced`
+
+Therefore the current `beta` values are dominated by the quartic and l-type sectors, not by a balanced full Aliev evaluation.
+
+## Operational conclusion
+
+The current Gaussian -> Aliev bridge is acceptable only as:
+
+- a structural prototype
+- a ranking/sign diagnostic
+- a way to test mode bookkeeping and formula wiring
+
+More precisely:
+
+- stretching-side output can still be used as a quantitative internal
+  diagnostic
+- bending-side output is currently only a qualitative proxy through the
+  pairwise `l`-type bridge
+
+It is **not** acceptable yet as a quantitative pipeline for comparison with
+experimental bending `beta_k` or `Delta H_k`.
+
+## Next required work
+
+1. Build the true rotational-derivative `zeta` object for linear molecules.
+2. Reconstruct the exact Aliev convention for `B_n^(xx)`.
+3. Determine whether the paper's `k'_{ijk}` and `k'_{ijkl}` match Gaussian reduced force constants, or require re-normalization from `phi_raw_au`.
+4. Rebuild the payload using those exact conventions.
+5. Only then compare bending observables against experiment.
