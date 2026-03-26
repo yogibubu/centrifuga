@@ -423,6 +423,7 @@ def build_payload(
     force_constant_source: str = "reduced",
     zeta_reduction: str = "principal_direction",
     pair_seed_source: str = "gaussian_qe_source",
+    beta_t_xf_cross_sign: int | None = None,
 ) -> dict[str, object]:
     model, _ = _build_harmonic_model_from_inputs("I", fchk_path=fchk_path)
     rotor_limit = _classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
@@ -440,6 +441,7 @@ def build_payload(
     pair_seed_src = str(pair_seed_source).strip().lower()
     if pair_seed_src not in {"gaussian_qe_source", "rotder_seed_gram"}:
         raise ValueError("pair_seed_source must be 'gaussian_qe_source' or 'rotder_seed_gram'.")
+    beta_t_xf_cross_sign_value = -1 if beta_t_xf_cross_sign is None and pair_seed_src == "rotder_seed_gram" else (1 if beta_t_xf_cross_sign is None else int(beta_t_xf_cross_sign))
     fc_source = str(force_constant_source).strip().lower()
     if fc_source not in {"reduced", "raw_au_reconverted"}:
         raise ValueError("force_constant_source must be 'reduced' or 'raw_au_reconverted'.")
@@ -504,6 +506,7 @@ def build_payload(
         "rotder_degenerate_axis_indices": [int(x) for x in rotder_zeta.degenerate_axis_indices],
         "bxx_parallel": [float(x) for x in bxx_parallel],
         "pair_seed_perpendicular": None if pair_seed_perpendicular is None else [float(x) for x in pair_seed_perpendicular],
+        "beta_t_xf_cross_sign": int(beta_t_xf_cross_sign_value),
         "k3_parallel": _build_k3_parallel(phi3_for_bootstrap, parallel_indices),
         "k3_perp_pair": _build_k3_perp_pair(phi3_for_bootstrap, pair_meta, parallel_indices),
         "k4_reduced": _build_k4_reduced(phi4_for_bootstrap, parallel_indices),
@@ -518,6 +521,7 @@ def build_payload(
             "coriolis_scalar_status": "non_physical_projection_for_operator_terms_only",
             "zeta_reduction": zeta_reduction,
             "pair_seed_source": pair_seed_src,
+            "beta_t_xf_cross_sign": int(beta_t_xf_cross_sign_value),
             "pair_seed_status": "non_physical_bridge" if pair_seed_src == "gaussian_qe_source" else "diagnostic_rotder_seed",
             "pair_seed_physical_role": (
                 "pairwise_l_type_J0_driver_proxy" if pair_seed_src == "gaussian_qe_source" else "rotder_seed_gram_diagnostic"
@@ -583,6 +587,13 @@ def main() -> int:
         default="gaussian_qe_source",
         help="Use the non-physical Gaussian q^e bridge or the diagnostic rotational-derivative seed Gram branch.",
     )
+    ap.add_argument(
+        "--beta-t-xf-cross-sign",
+        choices=(-1, 1),
+        default=None,
+        type=int,
+        help="Diagnostic sign applied only to the perpendicular xf/cross block. Defaults to -1 for rotder_seed_gram, +1 otherwise.",
+    )
     args = ap.parse_args()
 
     payload = build_payload(
@@ -592,6 +603,7 @@ def main() -> int:
         force_constant_source=args.force_constant_source,
         zeta_reduction=args.zeta_reduction,
         pair_seed_source=args.pair_seed_source,
+        beta_t_xf_cross_sign=args.beta_t_xf_cross_sign,
     )
     text = json.dumps(payload, indent=2, sort_keys=True)
     if args.output:

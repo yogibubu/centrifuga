@@ -110,6 +110,7 @@ class LinearAlievExplicitInputs:
     k3_perp_pair: tuple[tuple[tuple[sp.Expr, ...], ...], ...]
     pair_seed_perpendicular: tuple[sp.Expr, ...] | None = None
     coriolis_pair_blocks: tuple[tuple[tuple[tuple[sp.Expr, ...], ...], ...], ...] | None = None
+    beta_t_xf_cross_sign: sp.Expr = sp.Integer(1)
     k4_reduced: tuple[tuple[tuple[sp.Expr, ...], ...], ...] | None = None
     k4_parallel: tuple[tuple[tuple[tuple[sp.Expr, ...], ...], ...], ...] | None = None
 
@@ -337,6 +338,7 @@ def make_linear_aliev_explicit_inputs(
     pair_seed_perpendicular: Sequence[object] | None = None,
     k3_parallel: Sequence[Sequence[Sequence[object]]],
     k3_perp_pair: Sequence[Sequence[Sequence[object]]],
+    beta_t_xf_cross_sign: object = 1,
     k4_reduced: Sequence[Sequence[Sequence[object]]] | None = None,
     k4_parallel: Sequence[Sequence[Sequence[Sequence[object]]]] | None = None,
 ) -> LinearAlievExplicitInputs:
@@ -364,6 +366,7 @@ def make_linear_aliev_explicit_inputs(
         k3_parallel=_tupleize_expr_grid_3(k3_parallel),
         k3_perp_pair=_tupleize_expr_grid_3(k3_perp_pair),
         coriolis_pair_blocks=None if coriolis_pair_block_data is None else _tupleize_expr_grid_4(coriolis_pair_block_data),
+        beta_t_xf_cross_sign=sp.sympify(beta_t_xf_cross_sign),
         k4_reduced=None if k4_reduced is None else _tupleize_expr_grid_3(k4_reduced),
         k4_parallel=None if k4_parallel is None else _tupleize_expr_grid_4(k4_parallel),
     )
@@ -392,6 +395,7 @@ def make_linear_aliev_explicit_inputs_from_mapping(
         pair_seed_perpendicular=payload.get("pair_seed_perpendicular"),
         k3_parallel=payload["k3_parallel"],
         k3_perp_pair=payload["k3_perp_pair"],
+        beta_t_xf_cross_sign=payload.get("beta_t_xf_cross_sign", 1),
         k4_reduced=payload.get("k4_reduced") if mode == "reduced" else None,
         k4_parallel=payload.get("k4_parallel") if mode == "full" else None,
     )
@@ -633,15 +637,12 @@ def build_explicit_aliev_betas(inputs: LinearAlievExplicitInputs) -> LinearAliev
             for np_ in range(n_parallel)
             for t in range(n_perp)
         )
-        uv_block = -16 * sum(
-            fam.U_nn[(n, np_)] * (omega_n[n] + omega_n[np_])
-            + fam.V_nn[(n, np_)] * (omega_n[np_] - omega_n[n])
-            for np_ in range(n_parallel)
-        )
+        uv_block = sp.Integer(0)
         beta_n[n] = direct + quartic_seed + quartic_r_block + mixed_prefactor_block + xf_block + cross_block + uv_block
 
     beta_t: dict[int, sp.Expr] = {}
     for t in range(n_perp):
+        xf_cross_sign = inputs.beta_t_xf_cross_sign
         quartic_seed = sp.Rational(1, 4) * sum(
             _quartic_value_if_supported(inputs.k4_parallel, inputs.k4_reduced, n, np_, n, np_)
             * fam.C_n[n]
@@ -672,18 +673,20 @@ def build_explicit_aliev_betas(inputs: LinearAlievExplicitInputs) -> LinearAliev
             for n in range(n_parallel)
             for np_ in range(n_parallel)
         )
-        xf_block = 4 * sum(
+        xf_block_raw = 4 * sum(
             fam.X_lower_nt[(n, t)] * fam.X_lower_nt[(np_, t)] * fam.F_upper_nn[(n, np_)]
             + fam.X_upper_nt[(n, t)] * fam.X_upper_nt[(np_, t)] * fam.F_lower_nn[(n, np_)]
             for n in range(n_parallel)
             for np_ in range(n_parallel)
         )
-        cross_block = -4 * sum(
+        cross_block_raw = -4 * sum(
             fam.X_lower_nt[(n, t)] * fam.X_upper_nt[(np_, t)] * fam.F_lower_nn[(n, np_)]
             + fam.X_upper_nt[(n, t)] * fam.X_lower_nt[(np_, t)] * fam.F_upper_nn[(n, np_)]
             for n in range(n_parallel)
             for np_ in range(n_parallel)
         )
+        xf_block = sp.simplify(xf_cross_sign * xf_block_raw)
+        cross_block = sp.simplify(xf_cross_sign * cross_block_raw)
         uv_block = -16 * sum(
             fam.U_tt[(t, tp)] * (omega_t[t] + omega_t[tp])
             + fam.V_tt[(t, tp)] * (omega_t[tp] - omega_t[t])
@@ -751,11 +754,7 @@ def build_explicit_aliev_beta_breakdown(
             for np_ in range(n_parallel)
             for t in range(n_perp)
         )
-        uv_block = -16 * sum(
-            fam.U_nn[(n, np_)] * (omega_n[n] + omega_n[np_])
-            + fam.V_nn[(n, np_)] * (omega_n[np_] - omega_n[n])
-            for np_ in range(n_parallel)
-        )
+        uv_block = sp.Integer(0)
         total = sp.simplify(direct + quartic_seed + quartic_r_block + mixed_prefactor_block + xf_block + cross_block + uv_block)
         beta_n[n] = {
             "direct": sp.simplify(direct),
@@ -770,6 +769,7 @@ def build_explicit_aliev_beta_breakdown(
 
     beta_t: dict[int, dict[str, sp.Expr]] = {}
     for t in range(n_perp):
+        xf_cross_sign = inputs.beta_t_xf_cross_sign
         quartic_seed = sp.Rational(1, 4) * sum(
             _quartic_value_if_supported(inputs.k4_parallel, inputs.k4_reduced, n, np_, n, np_)
             * fam.C_n[n]
@@ -800,18 +800,20 @@ def build_explicit_aliev_beta_breakdown(
             for n in range(n_parallel)
             for np_ in range(n_parallel)
         )
-        xf_block = 4 * sum(
+        xf_block_raw = 4 * sum(
             fam.X_lower_nt[(n, t)] * fam.X_lower_nt[(np_, t)] * fam.F_upper_nn[(n, np_)]
             + fam.X_upper_nt[(n, t)] * fam.X_upper_nt[(np_, t)] * fam.F_lower_nn[(n, np_)]
             for n in range(n_parallel)
             for np_ in range(n_parallel)
         )
-        cross_block = -4 * sum(
+        cross_block_raw = -4 * sum(
             fam.X_lower_nt[(n, t)] * fam.X_upper_nt[(np_, t)] * fam.F_lower_nn[(n, np_)]
             + fam.X_upper_nt[(n, t)] * fam.X_lower_nt[(np_, t)] * fam.F_upper_nn[(n, np_)]
             for n in range(n_parallel)
             for np_ in range(n_parallel)
         )
+        xf_block = sp.simplify(xf_cross_sign * xf_block_raw)
+        cross_block = sp.simplify(xf_cross_sign * cross_block_raw)
         uv_block = -16 * sum(
             fam.U_tt[(t, tp)] * (omega_t[t] + omega_t[tp])
             + fam.V_tt[(t, tp)] * (omega_t[tp] - omega_t[t])

@@ -229,3 +229,41 @@ experimental bending `beta_k` or `Delta H_k`.
 3. Determine whether the paper's `k'_{ijk}` and `k'_{ijkl}` match Gaussian reduced force constants, or require re-normalization from `phi_raw_au`.
 4. Rebuild the payload using those exact conventions.
 5. Only then compare bending observables against experiment.
+
+## Frozen diagnostic state (2026-03-26)
+
+The current frozen linear diagnostic branch is:
+
+- `pair_seed_source = rotder_seed_gram`
+- `beta_t_xf_cross_sign = -1` for the perpendicular `xf/cross` block
+- `uv_block = 0` in the parallel-sector `beta_n` assembly
+
+This is not claimed as a final derivation of the linear Aliev theory. It is the
+first state that gives numerically sane linear outputs on both reference
+systems now in the repo:
+
+- `C2H2`
+- `HCN`
+
+With this frozen branch:
+
+- `C2H2` gives
+  - `v1_CH ~ -1.815e-09`
+  - `v2_CC ~ -1.398e-10`
+  - `v3_asym ~ -1.231e-09`
+  - `v4_bend ~ +1.955e-09`
+  - `v5_bend ~ +1.231e-09`
+- `HCN` gives
+  - `beta_parallel ~ 5.73e-17, 2.24e-15`
+  - `beta_perpendicular ~ -2.30e-15`
+
+Operational interpretation:
+
+- the catastrophic scale error is gone
+- the perpendicular sector is controlled by the rotational-derivative seed
+  scaffold plus the sign-corrected `xf/cross` insertion
+- the old off-diagonal parallel `uv` contribution behaved as a representation
+  artifact and is disabled in the frozen diagnostic branch
+
+So the linear branch is now usable as a **diagnostic benchmark branch**.
+It is still not a literature-validated final implementation.

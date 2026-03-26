@@ -30,6 +30,7 @@ def run_compare(
     cn_source: str = "alpha_perp_with_Bxx_equals_minus_alpha_perp",
     zeta_reduction: str = "principal_direction",
     pair_seed_source: str = "gaussian_qe_source",
+    beta_t_xf_cross_sign: int | None = None,
 ) -> str:
     payload = build_payload(
         fchk_path=fchk_path,
@@ -37,6 +38,7 @@ def run_compare(
         cn_source=cn_source,
         zeta_reduction=zeta_reduction,
         pair_seed_source=pair_seed_source,
+        beta_t_xf_cross_sign=beta_t_xf_cross_sign,
     )
     inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode=quartic_mode)
     dv = build_explicit_aliev_dv_model(inputs)
@@ -64,6 +66,8 @@ def run_compare(
             "Bending rows currently use the diagnostic rotational-derivative seed-Gram branch. "
             "This is the first geometry/mode-based zeta scaffold, but it is not yet a validated physical Aliev seed."
         )
+        if int(payload.get("metadata", {}).get("beta_t_xf_cross_sign", 1)) == -1:
+            beta_note += " The perpendicular xf/cross block is sign-flipped as a diagnostic convention test."
     return format_comparison_report(
         beta_table,
         beta_note=beta_note,
@@ -93,6 +97,7 @@ def main() -> int:
         choices=("principal_direction", "norm", "maxabs", "pair_offdiag", "pair_diag", "component_ta", "component_tb", "component_ua", "component_ub"),
     )
     ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source", "rotder_seed_gram"))
+    ap.add_argument("--beta-t-xf-cross-sign", default=None, type=int, choices=(-1, 1))
     args = ap.parse_args()
     print(
         run_compare(
@@ -102,6 +107,7 @@ def main() -> int:
             cn_source=args.cn_source,
             zeta_reduction=args.zeta_reduction,
             pair_seed_source=args.pair_seed_source,
+            beta_t_xf_cross_sign=args.beta_t_xf_cross_sign,
         )
     )
     return 0

@@ -34,6 +34,10 @@ def _species_paths(gaussian_dir: Path, species: str) -> tuple[Path, Path]:
     fchk = gaussian_dir / f"{species}.fchk"
     log = gaussian_dir / f"{species}.log"
     if not fchk.exists() or not log.exists():
+        alt_fchk = ROOT / f"{species}.fchk"
+        alt_log = ROOT / f"{species}.log"
+        if alt_fchk.exists() and alt_log.exists():
+            return alt_fchk, alt_log
         raise FileNotFoundError(f"Missing Gaussian inputs for {species}: {fchk.name}, {log.name}")
     return fchk, log
 
@@ -42,7 +46,7 @@ def _state_zero(n_parallel: int, n_perp: int) -> tuple[int, ...]:
     return (0,) * (n_parallel + n_perp)
 
 
-def _report_species(gaussian_dir: Path, species: str) -> None:
+def _report_species(gaussian_dir: Path, species: str, beta_t_xf_cross_sign: int | None) -> None:
     fchk, log = _species_paths(gaussian_dir, species)
     print(f"\n=== {species} ===")
     qconst = parse_gaussian_linear_ltype_constants(log)
@@ -64,6 +68,7 @@ def _report_species(gaussian_dir: Path, species: str) -> None:
                     cn_source=source,
                     zeta_reduction=zeta_reduction,
                     pair_seed_source=pair_seed_source,
+                    beta_t_xf_cross_sign=beta_t_xf_cross_sign,
                 )
                 inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
                 dv = build_explicit_aliev_dv_model(inputs)
@@ -74,7 +79,7 @@ def _report_species(gaussian_dir: Path, species: str) -> None:
                 beta_t = [float(dv.beta_perpendicular[i]) for i in range(len(dv.beta_perpendicular))]
                 dv0 = float(dv.value_for_state(_state_zero(len(beta_n), len(beta_t))))
                 lval = float(l_model.value)
-                print(f"zeta_reduction = {zeta_reduction}, cn_source = {source}, pair_seed_source = {pair_seed_source}")
+                print(f"zeta_reduction = {zeta_reduction}, cn_source = {source}, pair_seed_source = {pair_seed_source}, beta_t_xf_cross_sign = {payload['metadata']['beta_t_xf_cross_sign']}")
                 print(f"  parallel modes: {payload['metadata']['parallel_mode_indices_0based']}")
                 print(f"  perpendicular pairs: {payload['metadata']['perpendicular_pairs_0based']}")
                 print(f"  bxx_parallel = {payload['bxx_parallel']}")
@@ -122,11 +127,12 @@ def _report_species(gaussian_dir: Path, species: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gaussian-dir", default="/Users/vincenzobarone/centrifugal/gaussian")
-    ap.add_argument("--species", nargs="+", default=["c2h2", "hccd"])
+    ap.add_argument("--species", nargs="+", default=["c2h2", "hcn"])
+    ap.add_argument("--beta-t-xf-cross-sign", default=None, type=int, choices=(-1, 1))
     args = ap.parse_args()
     gaussian_dir = Path(args.gaussian_dir)
     for species in args.species:
-        _report_species(gaussian_dir, species)
+        _report_species(gaussian_dir, species, args.beta_t_xf_cross_sign)
     return 0
 
 
