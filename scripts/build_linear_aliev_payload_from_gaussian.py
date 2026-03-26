@@ -148,6 +148,35 @@ def _build_pair_seed_perpendicular_from_gaussian_qe(
     return [float(-val / CMINV_TO_MHZ) for _, val in qe_items[:n_pairs]]
 
 
+def _build_pair_seed_perpendicular_from_rotder_seed_gram(
+    *,
+    B_cm: float,
+    omega_parallel_cm: list[float],
+    omega_perpendicular_cm: list[float],
+    rotder_seed_gram: np.ndarray,
+) -> list[float]:
+    """Build a diagnostic Aliev-like bending seed from the rotational-derivative Gram object."""
+
+    gram = np.asarray(rotder_seed_gram, dtype=float)
+    n_pairs = len(omega_perpendicular_cm)
+    n_parallel = len(omega_parallel_cm)
+    if gram.shape != (n_pairs, n_parallel, n_parallel):
+        raise ValueError(f"Unexpected rotder seed Gram shape {gram.shape}, expected {(n_pairs, n_parallel, n_parallel)}.")
+    out: list[float] = []
+    for t in range(n_pairs):
+        wt = float(omega_perpendicular_cm[t])
+        acc = 0.0
+        for n in range(n_parallel):
+            for np_ in range(n_parallel):
+                acc += float(
+                    B_cm
+                    * np.sqrt(wt * wt / (omega_parallel_cm[n] * omega_parallel_cm[np_]))
+                    * gram[t, n, np_]
+                )
+        out.append(acc)
+    return out
+
+
 def _build_zeta_nt_component(
     zeta: np.ndarray,
     pair_meta: list[dict[str, object]],
@@ -409,11 +438,8 @@ def build_payload(
     if rotdist.d_mhz is None:
         raise ValueError("Gaussian log does not expose a linear D constant.")
     pair_seed_src = str(pair_seed_source).strip().lower()
-    if pair_seed_src != "gaussian_qe_source":
-        raise ValueError(
-            "pair_seed_source='formula' is disabled: the Gaussian Coriolis tensor is not treated as the physical "
-            "rotational-derivative zeta object required for the Aliev bending seed."
-        )
+    if pair_seed_src not in {"gaussian_qe_source", "rotder_seed_gram"}:
+        raise ValueError("pair_seed_source must be 'gaussian_qe_source' or 'rotder_seed_gram'.")
     fc_source = str(force_constant_source).strip().lower()
     if fc_source not in {"reduced", "raw_au_reconverted"}:
         raise ValueError("force_constant_source must be 'reduced' or 'raw_au_reconverted'.")
@@ -451,11 +477,20 @@ def build_payload(
             n_pairs=len(pair_meta),
         )
     rotder_zeta = build_linear_aliev_rotder_zeta(model)
+    omega_parallel_cm = [float(abs(model.vib_freq_cm[i])) for i in parallel_indices]
+    omega_perpendicular_cm = [float(meta["freq_cm"]) for meta in pair_meta]
+    if pair_seed_src == "rotder_seed_gram":
+        pair_seed_perpendicular = _build_pair_seed_perpendicular_from_rotder_seed_gram(
+            B_cm=_perpendicular_rotational_constant_cm(model, rotor_limit),
+            omega_parallel_cm=omega_parallel_cm,
+            omega_perpendicular_cm=omega_perpendicular_cm,
+            rotder_seed_gram=rotder_zeta.zeta_seed_gram,
+        )
     payload = {
         "B": _perpendicular_rotational_constant_cm(model, rotor_limit),
         "D_J": float(rotdist.d_mhz / CMINV_TO_MHZ),
-        "omega_parallel": [float(abs(model.vib_freq_cm[i])) for i in parallel_indices],
-        "omega_perpendicular": [float(meta["freq_cm"]) for meta in pair_meta],
+        "omega_parallel": omega_parallel_cm,
+        "omega_perpendicular": omega_perpendicular_cm,
         "coriolis_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
         "coriolis_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
         "zeta_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
@@ -483,8 +518,10 @@ def build_payload(
             "coriolis_scalar_status": "non_physical_projection_for_operator_terms_only",
             "zeta_reduction": zeta_reduction,
             "pair_seed_source": pair_seed_src,
-            "pair_seed_status": "non_physical_bridge",
-            "pair_seed_physical_role": "pairwise_l_type_J0_driver_proxy" if pair_seed_src == "gaussian_qe_source" else "diagnostic_aliev_formula_seed",
+            "pair_seed_status": "non_physical_bridge" if pair_seed_src == "gaussian_qe_source" else "diagnostic_rotder_seed",
+            "pair_seed_physical_role": (
+                "pairwise_l_type_J0_driver_proxy" if pair_seed_src == "gaussian_qe_source" else "rotder_seed_gram_diagnostic"
+            ),
             "bending_comparison_status": "qualitative_proxy_only" if pair_seed_src == "gaussian_qe_source" else "diagnostic_only",
             "pair_seed_invariant": "frobenius_dot_of_full_2x2_degenerate_coriolis_blocks",
             "rotder_zeta_builder": "canonical_pair_basis_from_mu1_then_recomputed_coriolis",
@@ -505,6 +542,7 @@ def build_payload(
                 "B_n^(xx) is now normalized to Aliev coordinates, but the Gaussian-side source used to estimate B_n^(xx)(Gaussian) still needs analytic validation.",
                 "Force constants are now normalized once into Aliev coordinates before entering the downstream equations; remaining mismatch would point to a deeper convention issue, not to hidden downstream rescaling.",
                 "The default bending seed is a non-physical bridge from Gaussian q^e until a rotational-derivative zeta builder is implemented.",
+                "The optional rotder_seed_gram branch is a diagnostic seed built from the canonical pair-basis rotational-derivative scaffold; it is not yet validated as the physical Aliev seed.",
                 "Under the Gaussian q^e bridge, the v4/v5 comparison is qualitative only: q^e drives the pairwise l-type J0 layer and is not a quantitative Delta D_t target.",
             ],
         },
@@ -541,9 +579,9 @@ def main() -> int:
     )
     ap.add_argument(
         "--pair-seed-source",
-        choices=("gaussian_qe_source",),
+        choices=("gaussian_qe_source", "rotder_seed_gram"),
         default="gaussian_qe_source",
-        help="Non-physical Gaussian q^e bridge used until a rotational-derivative zeta builder exists.",
+        help="Use the non-physical Gaussian q^e bridge or the diagnostic rotational-derivative seed Gram branch.",
     )
     args = ap.parse_args()
 

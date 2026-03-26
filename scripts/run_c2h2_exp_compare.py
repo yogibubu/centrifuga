@@ -59,6 +59,11 @@ def run_compare(
             "Bending rows currently use a non-physical Gaussian q^e bridge into the pairwise l-type J0 layer. "
             "Those v4/v5 comparisons are qualitative only and should not be read as quantitative Delta D_t validation."
         )
+    elif pair_seed_status == "diagnostic_rotder_seed":
+        beta_note = (
+            "Bending rows currently use the diagnostic rotational-derivative seed-Gram branch. "
+            "This is the first geometry/mode-based zeta scaffold, but it is not yet a validated physical Aliev seed."
+        )
     return format_comparison_report(
         beta_table,
         beta_note=beta_note,
@@ -87,7 +92,7 @@ def main() -> int:
         default="principal_direction",
         choices=("principal_direction", "norm", "maxabs", "pair_offdiag", "pair_diag", "component_ta", "component_tb", "component_ua", "component_ub"),
     )
-    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source",))
+    ap.add_argument("--pair-seed-source", default="gaussian_qe_source", choices=("gaussian_qe_source", "rotder_seed_gram"))
     args = ap.parse_args()
     print(
         run_compare(

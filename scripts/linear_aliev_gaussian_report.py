@@ -57,7 +57,7 @@ def _report_species(gaussian_dir: Path, species: str) -> None:
     baseline = None
     for zeta_reduction in ZETA_REDUCTIONS:
         for source in CN_SOURCES:
-            for pair_seed_source in ("gaussian_qe_source",):
+            for pair_seed_source in ("gaussian_qe_source", "rotder_seed_gram"):
                 payload = build_payload(
                     fchk_path=str(fchk),
                     log_path=str(log),

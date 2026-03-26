@@ -242,17 +242,18 @@ def test_c2h2_gaussian_bootstrap_defaults_to_gaussian_qe_bridge_seed() -> None:
     assert all(np.isfinite(np.asarray(payload["pair_seed_perpendicular"], dtype=float)))
 
 
-def test_c2h2_gaussian_bootstrap_rejects_formula_pair_seed_path() -> None:
-    try:
-        build_payload(
-            fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
-            log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
-            pair_seed_source="formula",
-        )
-    except ValueError as exc:
-        assert "disabled" in str(exc)
-    else:
-        raise AssertionError("Expected formula pair-seed path to be disabled.")
+def test_c2h2_gaussian_bootstrap_supports_rotder_seed_gram_path() -> None:
+    payload = build_payload(
+        fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk",
+        log_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.log",
+        pair_seed_source="rotder_seed_gram",
+    )
+    assert payload["metadata"]["pair_seed_source"] == "rotder_seed_gram"
+    assert payload["metadata"]["pair_seed_status"] == "diagnostic_rotder_seed"
+    vals = np.asarray(payload["pair_seed_perpendicular"], dtype=float)
+    assert vals.shape == (2,)
+    assert np.all(np.isfinite(vals))
+    assert np.max(np.abs(vals)) < 1.0e-20
 
 
 def test_gaussian_raw_force_constant_reconversions_match_reduced_printout() -> None:
