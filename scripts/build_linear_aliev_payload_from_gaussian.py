@@ -49,6 +49,7 @@ from gaussian_vpt_parser import (
     parse_gaussian_linear_ltype_constants,
     parse_gaussian_linear_rotdist_constants,
 )
+from linear_aliev_rotder_zeta import build_linear_aliev_rotder_zeta
 from symmetry_metadata import assign_normal_mode_irreps
 
 
@@ -449,6 +450,7 @@ def build_payload(
             log_path,
             n_pairs=len(pair_meta),
         )
+    rotder_zeta = build_linear_aliev_rotder_zeta(model)
     payload = {
         "B": _perpendicular_rotational_constant_cm(model, rotor_limit),
         "D_J": float(rotdist.d_mhz / CMINV_TO_MHZ),
@@ -458,6 +460,13 @@ def build_payload(
         "coriolis_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
         "zeta_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
         "zeta_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
+        "rotder_zeta_pair_vectors": rotder_zeta.zeta_pair_vectors.tolist(),
+        "rotder_zeta_seed_gram": rotder_zeta.zeta_seed_gram.tolist(),
+        "rotder_canonical_pair_rotations": [
+            [[float(x) for x in row] for row in rot] for rot in rotder_zeta.canonical_pair_rotations
+        ],
+        "rotder_symmetry_axis_index": int(rotder_zeta.symmetry_axis_index),
+        "rotder_degenerate_axis_indices": [int(x) for x in rotder_zeta.degenerate_axis_indices],
         "bxx_parallel": [float(x) for x in bxx_parallel],
         "pair_seed_perpendicular": None if pair_seed_perpendicular is None else [float(x) for x in pair_seed_perpendicular],
         "k3_parallel": _build_k3_parallel(phi3_for_bootstrap, parallel_indices),
@@ -478,6 +487,7 @@ def build_payload(
             "pair_seed_physical_role": "pairwise_l_type_J0_driver_proxy" if pair_seed_src == "gaussian_qe_source" else "diagnostic_aliev_formula_seed",
             "bending_comparison_status": "qualitative_proxy_only" if pair_seed_src == "gaussian_qe_source" else "diagnostic_only",
             "pair_seed_invariant": "frobenius_dot_of_full_2x2_degenerate_coriolis_blocks",
+            "rotder_zeta_builder": "canonical_pair_basis_from_mu1_then_recomputed_coriolis",
             "parallel_mode_indices_0based": parallel_indices,
             "parallel_mode_indices_1based": [int(i + 1) for i in parallel_indices],
             "parallel_mode_irreps": [str(mode_irreps[i]) for i in parallel_indices],
@@ -489,6 +499,7 @@ def build_payload(
             "cn_rationale": "Primary bootstrap treats the Gaussian-side B_n^(xx) estimate as a Gaussian-normal-coordinate quantity and converts it once to Aliev form through B_n^(xx)(Aliev)=B_n^(xx)(Gaussian)/sqrt(omega_n). Alternative sources remain diagnostic only.",
             "coriolis_rationale": "Scalar coriolis_nt is a projected Coriolis operator proxy used only in Coriolis-dependent terms such as X/F/U/V. It is not treated as the physical Aliev zeta object.",
             "zeta_rationale": "No physical Aliev zeta builder is currently available. Any scalar built from Gaussian Coriolis data is treated as a Coriolis proxy, not as zeta_nt.",
+            "rotder_zeta_rationale": "Canonical pair vectors and seed Gram matrices are built from geometry-side mu1/c1 tensors plus canonicalized normal modes. These are the future starting point for a physical bending-seed zeta reconstruction.",
             "known_unit_risks": [
                 "Gaussian Coriolis tensors are not assumed equivalent to the physical zeta objects required by the Aliev bending seed.",
                 "B_n^(xx) is now normalized to Aliev coordinates, but the Gaussian-side source used to estimate B_n^(xx)(Gaussian) still needs analytic validation.",

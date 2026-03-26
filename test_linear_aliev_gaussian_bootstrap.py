@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import sys
 
@@ -20,7 +21,9 @@ from linear_dv_aliev_terms import (
 )
 from gaussian_force_constant_units import raw_cubic_to_reduced_cm, raw_quartic_to_reduced_cm
 from gaussian_vpt_parser import parse_gaussian_anharmonic_force_data
+from linear_aliev_rotder_zeta import build_linear_aliev_rotder_zeta
 from scripts.build_linear_aliev_payload_from_gaussian import build_payload, _principal_coriolis_projection
+from ceditt_gui import _build_harmonic_model_from_inputs
 
 
 def test_c2h2_gaussian_bootstrap_builds_reduced_payload() -> None:
@@ -38,6 +41,8 @@ def test_c2h2_gaussian_bootstrap_builds_reduced_payload() -> None:
     assert len(payload["coriolis_pair_blocks"]) == 3
     assert len(payload["coriolis_pair_blocks"][0]) == 2
     assert np.asarray(payload["coriolis_pair_blocks"], dtype=float).shape == (3, 2, 2, 2)
+    assert np.asarray(payload["rotder_zeta_pair_vectors"], dtype=float).shape == (3, 2, 2)
+    assert np.asarray(payload["rotder_zeta_seed_gram"], dtype=float).shape == (2, 3, 3)
     assert len(payload["zeta_nt"]) == 3
     assert len(payload["zeta_nt"][0]) == 2
     assert len(payload["zeta_pair_blocks"]) == 3
@@ -47,6 +52,38 @@ def test_c2h2_gaussian_bootstrap_builds_reduced_payload() -> None:
     assert payload["metadata"]["coordinate_normalization"] == "aliev"
     assert payload["metadata"]["zeta_reduction"] == "principal_direction"
     assert payload["metadata"]["coriolis_projection_mode"] == "principal_direction"
+    assert payload["metadata"]["rotder_zeta_builder"] == "canonical_pair_basis_from_mu1_then_recomputed_coriolis"
+
+
+def test_c2h2_rotder_zeta_builder_returns_finite_pair_data() -> None:
+    model, _ = _build_harmonic_model_from_inputs("I", fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk")
+    zeta = build_linear_aliev_rotder_zeta(model)
+    assert zeta.parallel_indices == (4, 5, 6)
+    assert zeta.perpendicular_pairs == ((0, 1), (2, 3))
+    assert zeta.zeta_pair_vectors.shape == (3, 2, 2)
+    assert zeta.zeta_seed_gram.shape == (2, 3, 3)
+    assert np.all(np.isfinite(zeta.zeta_pair_vectors))
+    assert np.all(np.isfinite(zeta.zeta_seed_gram))
+
+
+def test_c2h2_rotder_zeta_seed_gram_is_invariant_under_pair_rotation() -> None:
+    model, _ = _build_harmonic_model_from_inputs("I", fchk_path="/Users/vincenzobarone/centrifugal/gaussian/c2h2.fchk")
+    ref = build_linear_aliev_rotder_zeta(model)
+
+    vib = np.array(model.vib_vecs_mw_pa, dtype=float, copy=True)
+    dinv = np.array(model.dInv_au, dtype=float, copy=True)
+    angle0 = 0.347
+    angle1 = -0.281
+    rot0 = np.array([[np.cos(angle0), -np.sin(angle0)], [np.sin(angle0), np.cos(angle0)]], dtype=float)
+    rot1 = np.array([[np.cos(angle1), -np.sin(angle1)], [np.sin(angle1), np.cos(angle1)]], dtype=float)
+    vib[:, [0, 1]] = vib[:, [0, 1]] @ rot0
+    vib[:, [2, 3]] = vib[:, [2, 3]] @ rot1
+    dinv[:, :, [0, 1]] = np.einsum("ab,ijb->ija", rot0, dinv[:, :, [0, 1]], optimize=True)
+    dinv[:, :, [2, 3]] = np.einsum("ab,ijb->ija", rot1, dinv[:, :, [2, 3]], optimize=True)
+
+    rotated_model = replace(model, vib_vecs_mw_pa=vib, dInv_au=dinv)
+    got = build_linear_aliev_rotder_zeta(rotated_model)
+    assert np.max(np.abs(ref.zeta_seed_gram - got.zeta_seed_gram)) < 1.0e-10
 
 
 def test_c2h2_gaussian_bootstrap_feeds_linear_aliev_models() -> None:
