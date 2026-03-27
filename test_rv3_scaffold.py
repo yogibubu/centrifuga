@@ -57,6 +57,27 @@ def test_rv3_order3_h2o_log_fchk_smoke() -> None:
     assert len(result.cubic_stage.mode_reorder_map) == 3
 
 
+def test_rv3_order3_h2o_alpha_routes_smoke() -> None:
+    request = RV3Request(
+        max_derivative_order=3,
+        geometry=RV3Source(str(REPO / "gaussian" / "h2o.fchk")),
+        hessian=RV3Source(str(REPO / "gaussian" / "h2o.fchk")),
+        cubic=RV3Source(str(REPO / "gaussian" / "h2o.log")),
+        alpha_excluded_modes=(1,),
+        representation="I",
+    )
+    result = run_rv3(request)
+    assert result.alpha_parser_stage is not None
+    assert result.alpha_internal_stage is not None
+    assert result.alpha_parser_stage.excluded_modes == [1]
+    assert result.alpha_internal_stage.excluded_modes == [1]
+    assert len(result.alpha_parser_stage.total_alpha_mhz) == 3
+    assert len(result.alpha_internal_stage.alpha_total_sum_mhz) == 3
+    assert result.alpha_internal_stage.cubic_matrix_origin == "derived_from_cubic_log"
+    text = json.dumps(result.to_jsonable(), allow_nan=False)
+    assert "NaN" not in text
+
+
 def test_rv3_order4_hcn_linear_branch_smoke() -> None:
     request = RV3Request(
         max_derivative_order=4,

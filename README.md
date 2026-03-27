@@ -40,6 +40,8 @@ The current scaffold already wires:
 - point-group and normal-mode symmetry assignment
 - quartic order-2 constants
 - cubic Gaussian-log loading plus sextic/H22 diagnostics
+- Gaussian alpha parsing / mode filtering
+- internal alpha route from the harmonic model plus semi-diagonal cubic input
 - linear order-4 migration through the existing general/decompacted Aliev branch
 - manual quartic and sextic transform routes through JSON requests
 

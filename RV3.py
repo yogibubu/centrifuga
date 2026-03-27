@@ -14,6 +14,8 @@ Current live scope:
 - quartic distortion from the harmonic route
 - order-3 cubic loading from Gaussian log plus mode-order consistency checks
 - order-3 sextic/H22 diagnostics through the existing backend
+- Gaussian alpha parsing / mode filtering
+- alpha from the harmonic model plus semi-diagonal cubic input
 
 Current deferred scope:
 - Der2/Der3/Der4 parsers (formats still to be fixed)
@@ -59,6 +61,7 @@ from distortion_workflow import compute_order2_quartic
 from gaussian_vpt_parser import (
     align_gaussian_cubic_force_constants,
     frequency_reorder_map,
+    parse_gaussian_alpha_data,
     parse_gaussian_anharmonic_force_data,
     parse_gaussian_fchk_harmonic_data,
     parse_gaussian_harmonic_data,
@@ -74,6 +77,7 @@ from linear_dv_aliev_terms import (
 )
 from rovib_distortion import (
     ANGSTROM_TO_BOHR,
+    CMINV_TO_MHZ,
     HarmonicInertiaModel,
     Molecule,
     harmonic_inertia_model_from_geometry_hessian,
@@ -83,6 +87,7 @@ from rovib_distortion import (
 )
 from scripts.build_linear_aliev_payload_from_gaussian import build_payload as build_linear_aliev_payload
 from symmetry_metadata import assign_normal_mode_irreps, point_group_from_geometry, rotor_type_for_symmetry, symbols_from_atomic_numbers
+from vibrot_alpha import alpha_matrix_from_cubic_two_index_cm, read_cubic_two_index_matrix
 
 
 RV3_ALLOWED_ORDERS = (0, 1, 2, 3, 4)
@@ -104,6 +109,9 @@ class RV3Request:
     hessian: RV3Source | None = None
     cubic: RV3Source | None = None
     quartic: RV3Source | None = None
+    alpha_log: RV3Source | None = None
+    alpha_cubic_two_index: RV3Source | None = None
+    alpha_excluded_modes: tuple[int, ...] = ()
     representation: str = "I"
 
 
@@ -148,6 +156,38 @@ class RV3CubicStage:
 
 
 @dataclass
+class RV3AlphaParserStage:
+    source_path: str
+    source_format: str
+    axis_labels: list[str]
+    excluded_modes: list[int]
+    total_alpha_mhz: list[float]
+    kept_alpha_mhz: list[float]
+    removed_alpha_mhz: list[float]
+    total_alpha_cm: list[float]
+    kept_alpha_cm: list[float]
+    removed_alpha_cm: list[float]
+    mode_rows_mhz: list[dict[str, Any]]
+
+
+@dataclass
+class RV3AlphaInternalStage:
+    source_path: str
+    source_format: str
+    cubic_matrix_shape: list[int]
+    cubic_matrix_origin: str
+    excluded_modes: list[int]
+    alpha_total_sum_mhz: list[float]
+    alpha_component_sums_mhz: dict[str, list[float]]
+    projection_strategy: str | None
+    rotor_limit: dict[str, Any] | None
+    special_limit_summary_mhz: dict[str, float] | None
+    benchmark_total_sum_mhz: list[float] | None
+    benchmark_difference_mhz: list[float] | None
+    mode_rows_mhz: list[dict[str, Any]]
+
+
+@dataclass
 class RV3QuarticStage:
     source_path: str
     source_format: str
@@ -167,6 +207,8 @@ class RV3Result:
     geometry_stage: RV3GeometryStage
     harmonic_stage: RV3HarmonicStage | None
     cubic_stage: RV3CubicStage | None
+    alpha_parser_stage: RV3AlphaParserStage | None
+    alpha_internal_stage: RV3AlphaInternalStage | None
     quartic_stage: RV3QuarticStage | None
     pending_work: list[str]
 
@@ -234,6 +276,32 @@ class _LoadedHessian:
     coords_ang: np.ndarray
     hessian: np.ndarray
     symbols: list[str]
+
+
+def _parse_mode_selection(spec: str) -> set[int]:
+    out: set[int] = set()
+    text = spec.strip()
+    if not text:
+        return out
+    for chunk in text.split(","):
+        item = chunk.strip()
+        if not item:
+            continue
+        if "-" in item:
+            left, right = item.split("-", 1)
+            i = int(left.strip())
+            j = int(right.strip())
+            if i <= 0 or j <= 0:
+                raise ValueError("Mode indices must be positive integers.")
+            if j < i:
+                i, j = j, i
+            out.update(range(i, j + 1))
+            continue
+        idx = int(item)
+        if idx <= 0:
+            raise ValueError("Mode indices must be positive integers.")
+        out.add(idx)
+    return out
 
 
 def _sanitize_jsonable(obj: Any) -> Any:
@@ -475,6 +543,21 @@ def _reorder_quartic_force_constants(phi4: np.ndarray, source_to_target: np.ndar
     return out
 
 
+def _reduce_cubic_to_two_index_matrix(phi3_reduced_cm: np.ndarray) -> np.ndarray:
+    phi3 = np.asarray(phi3_reduced_cm, dtype=float)
+    if phi3.ndim != 3 or not (phi3.shape[0] == phi3.shape[1] == phi3.shape[2]):
+        raise ValueError(f"Unexpected reduced cubic tensor shape: {phi3.shape}")
+    n_modes = phi3.shape[0]
+    out = np.zeros((n_modes, n_modes), dtype=float)
+    for i in range(n_modes):
+        out[i, i] = phi3[i, i, i]
+        for j in range(n_modes):
+            if i == j:
+                continue
+            out[i, j] = phi3[i, i, j]
+    return out
+
+
 def _validate_symbol_sequence(expected: list[str], observed: list[str], *, context: str) -> None:
     if len(expected) != len(observed):
         raise ValueError(f"{context}: atom count mismatch ({len(expected)} vs {len(observed)}).")
@@ -567,6 +650,160 @@ def _cubic_stage_from_source(model: HarmonicInertiaModel, source: RV3Source) -> 
         sextic_cubic_hierarchy_hz=hierarchy,
         sextic_linear_source_formula_hz=linear_source,
         notes=notes,
+    )
+
+
+def _alpha_parser_stage_from_log(
+    source: RV3Source,
+    *,
+    excluded_modes: tuple[int, ...] | list[int] | set[int] = (),
+) -> RV3AlphaParserStage:
+    fmt = _infer_format(source, role="cubic")
+    if fmt != "log":
+        raise ValueError("Gaussian alpha parsing currently requires a Gaussian anharmonic log source.")
+    path = str(source.resolved_path())
+    bench = parse_gaussian_alpha_data(path)
+    excluded = sorted(int(x) for x in excluded_modes)
+    mode_indices = np.asarray(bench.mode_indices, dtype=int)
+    n_modes = int(mode_indices.size)
+    invalid = sorted(idx for idx in excluded if idx < 1 or idx > n_modes)
+    if invalid:
+        raise ValueError(f"Excluded mode indices out of range: {invalid}")
+    keep_mask = np.array([idx not in excluded for idx in mode_indices], dtype=bool)
+    alpha_mhz = np.asarray(bench.alpha_mhz, dtype=float)
+    alpha_cm = np.asarray(bench.alpha_cm, dtype=float)
+    total_mhz = np.sum(alpha_mhz, axis=0)
+    kept_mhz = np.sum(alpha_mhz[keep_mask], axis=0) if np.any(keep_mask) else np.zeros(3, dtype=float)
+    total_cm = np.sum(alpha_cm, axis=0)
+    kept_cm = np.sum(alpha_cm[keep_mask], axis=0) if np.any(keep_mask) else np.zeros(3, dtype=float)
+    mode_rows: list[dict[str, Any]] = []
+    harm = parse_gaussian_harmonic_data(path).reordered_to_anharmonic()
+    freqs = np.asarray(harm.frequencies_cm, dtype=float)
+    for i, mode_idx in enumerate(mode_indices):
+        row = alpha_mhz[i]
+        mode_rows.append(
+            {
+                "mode": int(mode_idx),
+                "frequency_cm": float(freqs[i]) if i < freqs.size else None,
+                "status": "excluded" if int(mode_idx) in excluded else "kept",
+                "values_mhz": [float(x) for x in row],
+            }
+        )
+    return RV3AlphaParserStage(
+        source_path=path,
+        source_format=fmt,
+        axis_labels=[str(x) for x in bench.axis_labels],
+        excluded_modes=excluded,
+        total_alpha_mhz=[float(x) for x in total_mhz],
+        kept_alpha_mhz=[float(x) for x in kept_mhz],
+        removed_alpha_mhz=[float(x) for x in (total_mhz - kept_mhz)],
+        total_alpha_cm=[float(x) for x in total_cm],
+        kept_alpha_cm=[float(x) for x in kept_cm],
+        removed_alpha_cm=[float(x) for x in (total_cm - kept_cm)],
+        mode_rows_mhz=mode_rows,
+    )
+
+
+def _alpha_internal_stage_from_sources(
+    model: HarmonicInertiaModel,
+    *,
+    cubic_source: RV3Source | None,
+    alpha_cubic_two_index: RV3Source | None,
+    alpha_log_source: RV3Source | None,
+    excluded_modes: tuple[int, ...] | list[int] | set[int] = (),
+) -> RV3AlphaInternalStage | None:
+    if alpha_cubic_two_index is None and cubic_source is None:
+        return None
+    n_modes = int(np.abs(np.asarray(model.vib_freq_cm, dtype=float)).size)
+    excluded = sorted(int(x) for x in excluded_modes)
+    invalid = sorted(idx for idx in excluded if idx < 1 or idx > n_modes)
+    if invalid:
+        raise ValueError(f"Excluded mode indices out of range: {invalid}")
+
+    origin = ""
+    source_path = ""
+    source_format = ""
+    if alpha_cubic_two_index is not None:
+        source_path = str(alpha_cubic_two_index.resolved_path())
+        source_format = _infer_format(alpha_cubic_two_index, role="cubic")
+        mat = read_cubic_two_index_matrix(source_path, n_modes)
+        origin = "provided_2index"
+    else:
+        assert cubic_source is not None
+        fmt, path, anh = _load_anharmonic(cubic_source, role="cubic")
+        _mapping, phi3_reduced_cm, _phi3_raw = align_gaussian_cubic_force_constants(anh, np.asarray(model.vib_freq_cm, dtype=float))
+        mat = _reduce_cubic_to_two_index_matrix(phi3_reduced_cm)
+        source_path = path
+        source_format = fmt
+        origin = "derived_from_cubic_log"
+
+    alpha = alpha_matrix_from_cubic_two_index_cm(model, mat, excluded_modes=set(excluded))
+    total_cm = np.asarray(alpha["alpha_total_cm_abc"], dtype=float)
+    total_mhz = total_cm * CMINV_TO_MHZ
+    cor_mhz = np.asarray(alpha["alpha_coriolis_cm_abc"], dtype=float) * CMINV_TO_MHZ
+    inertia_mhz = np.asarray(alpha["alpha_inertia_cm_abc"], dtype=float) * CMINV_TO_MHZ
+    anh_mhz = np.asarray(alpha["alpha_anharmonic_cm_abc"], dtype=float) * CMINV_TO_MHZ
+    anh_diag_mhz = np.asarray(alpha["alpha_anharmonic_diagonal_cm_abc"], dtype=float) * CMINV_TO_MHZ
+    anh_sd_mhz = np.asarray(alpha["alpha_anharmonic_semidiagonal_cm_abc"], dtype=float) * CMINV_TO_MHZ
+
+    special_limit_summary_mhz = None
+    rotor_limit = alpha.get("rotor_limit")
+    if rotor_limit is not None and rotor_limit["is_special_limit"]:
+        if rotor_limit["kind"] == "linear" and "alpha_linear_cm" in alpha:
+            alpha_lin_mhz = np.asarray(alpha["alpha_linear_cm"], dtype=float) * CMINV_TO_MHZ
+            special_limit_summary_mhz = {"linear_perpendicular_sum_mhz": float(np.sum(alpha_lin_mhz))}
+        elif "alpha_axial_cm" in alpha:
+            axial = alpha["alpha_axial_cm"]
+            par_mhz = np.asarray(axial["parallel"], dtype=float) * CMINV_TO_MHZ
+            perp_mhz = np.asarray(axial["perpendicular"], dtype=float) * CMINV_TO_MHZ
+            special_limit_summary_mhz = {
+                "parallel_sum_mhz": float(np.sum(par_mhz)),
+                "perpendicular_sum_mhz": float(np.sum(perp_mhz)),
+            }
+
+    benchmark_total_sum_mhz = None
+    benchmark_difference_mhz = None
+    bench_source = alpha_log_source if alpha_log_source is not None else cubic_source
+    if bench_source is not None and _infer_format(bench_source, role="cubic") == "log":
+        bench = parse_gaussian_alpha_data(str(bench_source.resolved_path()))
+        bench_sum_mhz = np.sum(np.asarray(bench.alpha_mhz, dtype=float), axis=0)
+        benchmark_total_sum_mhz = [float(x) for x in bench_sum_mhz]
+        benchmark_difference_mhz = [float(x) for x in (np.sum(total_mhz, axis=0) - bench_sum_mhz)]
+
+    mode_rows = []
+    for i in range(n_modes):
+        mode_rows.append(
+            {
+                "mode": i + 1,
+                "frequency_cm": float(np.asarray(model.vib_freq_cm, dtype=float)[i]),
+                "status": "excluded" if (i + 1) in excluded else "kept",
+                "total_mhz": [float(x) for x in total_mhz[i]],
+                "coriolis_mhz": [float(x) for x in cor_mhz[i]],
+                "inertia_mhz": [float(x) for x in inertia_mhz[i]],
+                "anharmonic_diag_mhz": [float(x) for x in anh_diag_mhz[i]],
+                "anharmonic_semidiagonal_mhz": [float(x) for x in anh_sd_mhz[i]],
+            }
+        )
+    return RV3AlphaInternalStage(
+        source_path=source_path,
+        source_format=source_format,
+        cubic_matrix_shape=[int(x) for x in mat.shape],
+        cubic_matrix_origin=origin,
+        excluded_modes=excluded,
+        alpha_total_sum_mhz=[float(x) for x in np.sum(total_mhz, axis=0)],
+        alpha_component_sums_mhz={
+            "coriolis": [float(x) for x in np.sum(cor_mhz, axis=0)],
+            "inertia": [float(x) for x in np.sum(inertia_mhz, axis=0)],
+            "anharmonic": [float(x) for x in np.sum(anh_mhz, axis=0)],
+            "anharmonic_diag": [float(x) for x in np.sum(anh_diag_mhz, axis=0)],
+            "anharmonic_semidiagonal": [float(x) for x in np.sum(anh_sd_mhz, axis=0)],
+        },
+        projection_strategy=None if alpha.get("projection_strategy") is None else str(alpha["projection_strategy"]),
+        rotor_limit=alpha.get("rotor_limit"),
+        special_limit_summary_mhz=special_limit_summary_mhz,
+        benchmark_total_sum_mhz=benchmark_total_sum_mhz,
+        benchmark_difference_mhz=benchmark_difference_mhz,
+        mode_rows_mhz=mode_rows,
     )
 
 
@@ -674,6 +911,8 @@ def run_rv3(request: RV3Request) -> RV3Result:
 
     harmonic_stage = None
     cubic_stage = None
+    alpha_parser_stage = None
+    alpha_internal_stage = None
     quartic_stage = None
     pending_work = [
         "Der2/Der3/Der4 external formats are not wired yet.",
@@ -692,6 +931,22 @@ def run_rv3(request: RV3Request) -> RV3Result:
         if request.max_derivative_order >= 3:
             assert request.cubic is not None
             cubic_stage = _cubic_stage_from_source(model, request.cubic)
+            alpha_log_source = request.alpha_log if request.alpha_log is not None else request.cubic
+            if alpha_log_source is not None:
+                try:
+                    alpha_parser_stage = _alpha_parser_stage_from_log(
+                        alpha_log_source,
+                        excluded_modes=request.alpha_excluded_modes,
+                    )
+                except Exception:
+                    alpha_parser_stage = None
+            alpha_internal_stage = _alpha_internal_stage_from_sources(
+                model,
+                cubic_source=request.cubic,
+                alpha_cubic_two_index=request.alpha_cubic_two_index,
+                alpha_log_source=alpha_log_source,
+                excluded_modes=request.alpha_excluded_modes,
+            )
         if request.max_derivative_order >= 4:
             assert request.quartic is not None
             quartic_stage = _quartic_stage_from_source(
@@ -707,11 +962,16 @@ def run_rv3(request: RV3Request) -> RV3Result:
             "hessian": None if request.hessian is None else asdict(request.hessian),
             "cubic": None if request.cubic is None else asdict(request.cubic),
             "quartic": None if request.quartic is None else asdict(request.quartic),
+            "alpha_log": None if request.alpha_log is None else asdict(request.alpha_log),
+            "alpha_cubic_two_index": None if request.alpha_cubic_two_index is None else asdict(request.alpha_cubic_two_index),
+            "alpha_excluded_modes": [int(x) for x in request.alpha_excluded_modes],
             "representation": request.representation,
         },
         geometry_stage=geometry_stage,
         harmonic_stage=harmonic_stage,
         cubic_stage=cubic_stage,
+        alpha_parser_stage=alpha_parser_stage,
+        alpha_internal_stage=alpha_internal_stage,
         quartic_stage=quartic_stage,
         pending_work=pending_work,
     )
@@ -736,6 +996,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--cubic-format", default="auto")
     ap.add_argument("--quartic", help="Quartic source path (log or Der4).")
     ap.add_argument("--quartic-format", default="auto")
+    ap.add_argument("--alpha-log", help="Optional Gaussian anharmonic log for alpha parsing/benchmarking.")
+    ap.add_argument("--alpha-log-format", default="auto")
+    ap.add_argument("--alpha-cubic-two-index", help="Optional semi-diagonal cubic 2-index matrix for the internal alpha route.")
+    ap.add_argument("--alpha-cubic-two-index-format", default="auto")
+    ap.add_argument(
+        "--alpha-excluded-modes",
+        default="",
+        help="Optional 1-based alpha mode exclusion list, e.g. 1,3-5.",
+    )
     ap.add_argument("--representation", default="I", choices=("I", "II", "III"))
     ap.add_argument("--json", action="store_true", help="Emit JSON instead of a human summary.")
     return ap
@@ -752,6 +1021,10 @@ def _format_human_summary(result: RV3Result) -> str:
         lines.append(f"  harmonic modes: {result.harmonic_stage.n_modes} in representation {result.harmonic_stage.representation}")
     if result.cubic_stage is not None:
         lines.append(f"  cubic source aligned with mapping: {result.cubic_stage.mode_reorder_map}")
+    if result.alpha_parser_stage is not None:
+        lines.append(f"  alpha parser total (MHz): {result.alpha_parser_stage.total_alpha_mhz}")
+    if result.alpha_internal_stage is not None:
+        lines.append(f"  alpha internal total (MHz): {result.alpha_internal_stage.alpha_total_sum_mhz}")
     if result.quartic_stage is not None:
         lines.append(f"  quartic stage: {result.quartic_stage.linear_branch_status}")
         if result.quartic_stage.linear_compactness_audit is not None:
@@ -783,6 +1056,13 @@ def main(argv: list[str] | None = None) -> int:
         hessian=None if ns.hessian is None else RV3Source(ns.hessian, ns.hessian_format),
         cubic=None if ns.cubic is None else RV3Source(ns.cubic, ns.cubic_format),
         quartic=None if ns.quartic is None else RV3Source(ns.quartic, ns.quartic_format),
+        alpha_log=None if ns.alpha_log is None else RV3Source(ns.alpha_log, ns.alpha_log_format),
+        alpha_cubic_two_index=(
+            None
+            if ns.alpha_cubic_two_index is None
+            else RV3Source(ns.alpha_cubic_two_index, ns.alpha_cubic_two_index_format)
+        ),
+        alpha_excluded_modes=tuple(sorted(_parse_mode_selection(ns.alpha_excluded_modes))),
         representation=ns.representation,
     )
     result = run_rv3(request)
