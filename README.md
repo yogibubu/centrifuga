@@ -4,12 +4,46 @@ This repository contains the current production and benchmark workflow for
 quartic and sextic centrifugal distortion constants derived from geometry,
 Cartesian Hessians, and optional Gaussian/GDV anharmonic data.
 
+The repository now also contains the first `RV3` scaffold:
+
+- [`rv3.py`](./rv3.py)
+
+where `RV3` stands for **Ro-Vibrational Van Vleck**. The purpose of this module
+is to become the single staged program over the existing backend, rather than a
+new monolithic implementation.
+
 The repository also contains the current `CeDiTT1.0` app code. The GUI is now
 organized around a shared vibro-rotational dataset:
 
 - one common harmonic/anharmonic input block,
 - quartic, alpha, and sextic properties derived from that same dataset,
 - coordinated reporting of harmonic-only and anharmonic contributions.
+
+## RV3 Target
+
+`RV3` is the forward program architecture for the current codebase.
+
+The intended staged workflow is:
+
+1. read geometry / Hessian / cubic / quartic sources from potentially distinct files
+2. compute point group and rotational constants
+3. if order `>= 2`, build the harmonic model and order-2 quartic route
+4. if order `>= 3`, read cubic derivatives and compute sextic/H22 diagnostics
+5. if order `>= 4`, read quartic derivatives and connect the linear order-4 branch
+6. later add GVPT2 vibrational and ro-vibrational layers
+
+The current scaffold already wires:
+
+- geometry loaders from `xyz`, Gaussian `log`, Gaussian `fchk`
+- Hessian loading from Gaussian `fchk`
+- harmonic model construction
+- point-group and normal-mode symmetry assignment
+- quartic order-2 constants
+- cubic Gaussian-log loading plus sextic/H22 diagnostics
+
+The current scaffold deliberately does **not** pretend that the full RV3
+program is finished. It fixes the API and stage ownership so the remaining work
+can be built without rewriting the current backend.
 
 ## Active Projects
 
