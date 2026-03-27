@@ -681,6 +681,7 @@ def _c2_modepair_tensor(c1: np.ndarray, zeta_xyz: np.ndarray, freq_cm: np.ndarra
     """
     n_modes = freq_cm.size
     out = np.zeros((n_modes, n_modes, 3, 3, 3), dtype=float)
+    safe_rot_cm = np.where(np.isfinite(rot_cm), np.asarray(rot_cm, dtype=float), 0.0)
     for i in range(n_modes):
         frq_i = abs(freq_cm[i])
         if frq_i <= 1.0e-12:
@@ -694,9 +695,9 @@ def _c2_modepair_tensor(c1: np.ndarray, zeta_xyz: np.ndarray, freq_cm: np.ndarra
                 for jx in range(3):
                     for kx in range(3):
                         out[i, j, ix, jx, kx] = kernel * (
-                            rot_cm[ix] * zeta_xyz[ix, i, j] * c1[j, jx, kx]
-                            + rot_cm[jx] * zeta_xyz[jx, i, j] * c1[j, kx, ix]
-                            + rot_cm[kx] * zeta_xyz[kx, i, j] * c1[j, ix, jx]
+                            safe_rot_cm[ix] * zeta_xyz[ix, i, j] * c1[j, jx, kx]
+                            + safe_rot_cm[jx] * zeta_xyz[jx, i, j] * c1[j, kx, ix]
+                            + safe_rot_cm[kx] * zeta_xyz[kx, i, j] * c1[j, ix, jx]
                         )
     return out
 
