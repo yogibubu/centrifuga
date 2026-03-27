@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
 from linear_dv_aliev_terms import (  # noqa: E402
     build_explicit_aliev_L_model,
     build_explicit_aliev_beta_breakdown,
-    build_explicit_aliev_dv_model,
+    build_explicit_aliev_dv_legacy_compact_model,
     build_explicit_aliev_uv_breakdown,
     make_linear_aliev_explicit_inputs_from_mapping,
 )
@@ -52,8 +52,8 @@ def _collect(branch: str, fchk: str, log: str, cn_source: str, pair_seed_source:
         cn_source=cn_source,
         pair_seed_source=pair_seed_source,
     )
-    inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
-    dv = build_explicit_aliev_dv_model(inputs)
+    inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced_input")
+    dv = build_explicit_aliev_dv_legacy_compact_model(inputs)
     bd = build_explicit_aliev_beta_breakdown(inputs)
     uvd = build_explicit_aliev_uv_breakdown(inputs)
     lm = build_explicit_aliev_L_model(inputs)

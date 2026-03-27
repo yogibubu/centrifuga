@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
 from linear_dv_aliev_terms import (
     build_explicit_aliev_L_model,
     build_explicit_aliev_beta_breakdown,
-    build_explicit_aliev_dv_model,
+    build_explicit_aliev_dv_legacy_compact_model,
     make_linear_aliev_explicit_inputs_from_mapping,
 )
 from scripts.build_linear_aliev_payload_from_gaussian import build_payload
@@ -63,8 +63,8 @@ def main() -> int:
             cn_source=cn_source,
             pair_seed_source=args.pair_seed_source,
         )
-        inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
-        dv = build_explicit_aliev_dv_model(inputs)
+        inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced_input")
+        dv = build_explicit_aliev_dv_legacy_compact_model(inputs)
         bd = build_explicit_aliev_beta_breakdown(inputs)
         l_model = build_explicit_aliev_L_model(inputs)
         beta_n = [float(dv.beta_parallel[i]) for i in range(len(dv.beta_parallel))]

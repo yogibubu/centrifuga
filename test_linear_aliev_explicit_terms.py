@@ -500,6 +500,8 @@ def test_resolve_linear_aliev_quartic_mode() -> None:
     assert resolve_linear_aliev_quartic_mode(k4_reduced=[[[1]]], quartic_mode="auto") == "reduced"
     assert resolve_linear_aliev_quartic_mode(k4_parallel=[[[[1]]]], quartic_mode="auto") == "full"
     assert resolve_linear_aliev_quartic_mode(k4_parallel=[[[[1]]]], k4_reduced=[[[2]]], quartic_mode="auto") == "full"
+    assert resolve_linear_aliev_quartic_mode(k4_parallel=[[[[1]]]], quartic_mode="general_4index") == "full"
+    assert resolve_linear_aliev_quartic_mode(k4_reduced=[[[1]]], quartic_mode="reduced_input") == "reduced"
 
 
 def test_make_linear_aliev_inputs_from_mapping_respects_quartic_mode() -> None:

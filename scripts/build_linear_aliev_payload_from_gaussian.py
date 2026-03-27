@@ -421,7 +421,7 @@ def build_payload(
     log_path: str,
     cn_source: str = "alpha_perp_with_Bxx_equals_minus_alpha_perp",
     force_constant_source: str = "reduced",
-    zeta_reduction: str = "principal_direction",
+    zeta_reduction: str = "pair_offdiag",
     pair_seed_source: str = "gaussian_qe_source",
     beta_t_xf_cross_sign: int | None = None,
 ) -> dict[str, object]:
@@ -488,14 +488,15 @@ def build_payload(
             omega_perpendicular_cm=omega_perpendicular_cm,
             rotder_seed_gram=rotder_zeta.zeta_seed_gram,
         )
+    coriolis_nt = _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction)
     payload = {
         "B": _perpendicular_rotational_constant_cm(model, rotor_limit),
         "D_J": float(rotdist.d_mhz / CMINV_TO_MHZ),
         "omega_parallel": omega_parallel_cm,
         "omega_perpendicular": omega_perpendicular_cm,
-        "coriolis_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
+        "coriolis_nt": coriolis_nt,
         "coriolis_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
-        "zeta_nt": _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction),
+        "zeta_nt": coriolis_nt,
         "zeta_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
         "rotder_zeta_pair_vectors": rotder_zeta.zeta_pair_vectors.tolist(),
         "rotder_zeta_seed_gram": rotder_zeta.zeta_seed_gram.tolist(),
@@ -538,7 +539,7 @@ def build_payload(
             "cn_source": cn_source,
             "cn_recommended_source": "alpha_perp_with_Bxx_equals_minus_alpha_perp",
             "cn_rationale": "Primary bootstrap treats the Gaussian-side B_n^(xx) estimate as a Gaussian-normal-coordinate quantity and converts it once to Aliev form through B_n^(xx)(Aliev)=B_n^(xx)(Gaussian)/sqrt(omega_n). Alternative sources remain diagnostic only.",
-            "coriolis_rationale": "Scalar coriolis_nt is a projected Coriolis operator proxy used only in Coriolis-dependent terms such as X/F/U/V. It is not treated as the physical Aliev zeta object.",
+            "coriolis_rationale": "Scalar coriolis_nt is a projected Coriolis operator proxy used only in Coriolis-dependent terms such as X/F/U/V. The current default uses the degenerate-subspace off-diagonal reduction because it suppresses the spurious off-diagonal U_nn/V_nn blowup seen with principal-direction projection.",
             "zeta_rationale": "No physical Aliev zeta builder is currently available. Any scalar built from Gaussian Coriolis data is treated as a Coriolis proxy, not as zeta_nt.",
             "rotder_zeta_rationale": "Canonical pair vectors and seed Gram matrices are built from geometry-side mu1/c1 tensors plus canonicalized normal modes. These are the future starting point for a physical bending-seed zeta reconstruction.",
             "known_unit_risks": [
@@ -578,8 +579,8 @@ def main() -> int:
     ap.add_argument(
         "--zeta-reduction",
         choices=("principal_direction", "norm", "maxabs", "pair_offdiag", "pair_diag", "component_ta", "component_tb", "component_ua", "component_ub"),
-        default="principal_direction",
-        help="How the degenerate-pair Coriolis block is converted into the scalar zeta_nt supplied to the Aliev equations.",
+        default="pair_offdiag",
+        help="How the degenerate-pair Coriolis block is converted into the scalar coriolis_nt supplied to operator terms such as X/F/U/V.",
     )
     ap.add_argument(
         "--pair-seed-source",

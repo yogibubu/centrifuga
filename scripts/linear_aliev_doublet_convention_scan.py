@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scan candidate degenerate-doublet Coriolis component conventions.
 
-This is a diagnostic script for the linear Aliev prototype. It compares the
+This is a diagnostic script for the legacy compact linear scalar branch. It compares the
 four explicit component choices suggested by the paper-style definition
 
     zeta_nt = zeta^x_(n,tb)
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from linear_dv_aliev_terms import build_explicit_aliev_dv_model, make_linear_aliev_explicit_inputs_from_mapping
+from linear_dv_aliev_terms import build_explicit_aliev_dv_legacy_compact_model, make_linear_aliev_explicit_inputs_from_mapping
 from scripts.build_linear_aliev_payload_from_gaussian import build_payload
 
 
@@ -69,8 +69,8 @@ def main() -> int:
             zeta_reduction=variant,
             pair_seed_source=args.pair_seed_source,
         )
-        inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
-        dv = build_explicit_aliev_dv_model(inputs)
+        inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced_input")
+        dv = build_explicit_aliev_dv_legacy_compact_model(inputs)
         beta_n = [float(dv.beta_parallel[i]) for i in range(len(dv.beta_parallel))]
         beta_t = [float(dv.beta_perpendicular[i]) for i in range(len(dv.beta_perpendicular))]
         dv0 = float(dv.value_for_state(_state_zero(len(beta_n), len(beta_t))))

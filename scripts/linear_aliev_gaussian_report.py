@@ -7,6 +7,8 @@ import argparse
 from pathlib import Path
 import sys
 
+import sympy as sp
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -15,7 +17,11 @@ from gaussian_vpt_parser import parse_gaussian_linear_ltype_constants, parse_gau
 from linear_dv_aliev_terms import (
     build_explicit_aliev_L_model,
     build_explicit_aliev_beta_breakdown,
+    build_explicit_aliev_dv_compactness_audit,
+    build_explicit_aliev_dv_general_model,
+    build_explicit_aliev_dv_legacy_compact_model,
     build_explicit_aliev_dv_model,
+    build_explicit_aliev_pair_channel_breakdown,
     build_explicit_aliev_uv_breakdown,
     make_linear_aliev_explicit_inputs_from_mapping,
 )
@@ -27,7 +33,7 @@ CN_SOURCES = (
     "alpha_perp_with_Bxx_equals_minus_half_alpha_perp",
     "didq_linear_v_iscr",
 )
-ZETA_REDUCTIONS = ("principal_direction", "component_tb", "pair_offdiag", "norm", "maxabs")
+ZETA_REDUCTIONS = ("pair_offdiag", "principal_direction", "component_tb", "norm", "maxabs")
 
 
 def _species_paths(gaussian_dir: Path, species: str) -> tuple[Path, Path]:
@@ -70,14 +76,19 @@ def _report_species(gaussian_dir: Path, species: str, beta_t_xf_cross_sign: int 
                     pair_seed_source=pair_seed_source,
                     beta_t_xf_cross_sign=beta_t_xf_cross_sign,
                 )
-                inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced")
-                dv = build_explicit_aliev_dv_model(inputs)
+                inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode="reduced_input")
+                dv = build_explicit_aliev_dv_general_model(inputs)
+                dv_legacy = build_explicit_aliev_dv_legacy_compact_model(inputs)
+                dv_general = build_explicit_aliev_dv_general_model(inputs)
+                compactness = build_explicit_aliev_dv_compactness_audit(inputs)
+                decomp_pair = build_explicit_aliev_pair_channel_breakdown(inputs)
                 l_model = build_explicit_aliev_L_model(inputs)
                 breakdown = build_explicit_aliev_beta_breakdown(inputs)
                 uv_breakdown = build_explicit_aliev_uv_breakdown(inputs)
-                beta_n = [float(dv.beta_parallel[i]) for i in range(len(dv.beta_parallel))]
+                beta_n = [float(dv.beta_parallel_mode_terms[i]) for i in range(len(inputs.omega_parallel))]
                 beta_t = [float(dv.beta_perpendicular[i]) for i in range(len(dv.beta_perpendicular))]
                 dv0 = float(dv.value_for_state(_state_zero(len(beta_n), len(beta_t))))
+                dv0_general = float(dv_general.value_for_state(_state_zero(len(beta_n), len(beta_t))))
                 lval = float(l_model.value)
                 print(f"zeta_reduction = {zeta_reduction}, cn_source = {source}, pair_seed_source = {pair_seed_source}, beta_t_xf_cross_sign = {payload['metadata']['beta_t_xf_cross_sign']}")
                 print(f"  parallel modes: {payload['metadata']['parallel_mode_indices_0based']}")
@@ -86,8 +97,16 @@ def _report_species(gaussian_dir: Path, species: str, beta_t_xf_cross_sign: int 
                 print(f"  zeta_reduction(meta) = {payload['metadata']['zeta_reduction']}")
                 print(f"  beta_parallel = {beta_n}")
                 print(f"  beta_perpendicular = {beta_t}")
-                print(f"  D_v(0) = {dv0:.12f} cm^-1")
+                print(f"  D_v(0) general/decompacted = {dv0:.12f} cm^-1")
+                print(f"  D_v(0) compact/legacy = {float(dv_legacy.value_for_state(_state_zero(len(beta_n), len(beta_t)))):.12f} cm^-1")
                 print(f"  L = {lval:.12e} cm^-1")
+                print(f"  general_alias_matches_general = {dv_general == dv}")
+                print(
+                    "  compactness audit:"
+                    f" max_mode = {float(sp.N(compactness.max_parallel_mode_term)):+.12e},"
+                    f" max_pair = {float(sp.N(compactness.max_parallel_pair_term)):+.12e},"
+                    f" pair/mode = {float(sp.N(compactness.pair_to_mode_ratio)):+.6e}"
+                )
                 if payload["metadata"].get("pair_seed_status") == "non_physical_bridge":
                     print("  note: bending pair seed is a Gaussian q^e -> pairwise l-type J0 proxy; v4/v5 comparison is qualitative only.")
                 print("  dominant beta blocks:")
@@ -103,6 +122,19 @@ def _report_species(gaussian_dir: Path, species: str, beta_t_xf_cross_sign: int 
                 for idx in range(len(dv.beta_perpendicular)):
                     block = {k: float(v) for k, v in uv_breakdown.perpendicular[idx].items()}
                     print(f"    pair {idx}: {block}")
+                print("  decompacted parallel pair channels:")
+                for pair_key in sorted(dv_general.beta_parallel_pair_terms):
+                    gamma = float(dv_general.beta_parallel_pair_terms[pair_key])
+                    print(f"    gamma{pair_key} = {gamma:+.12e} cm^-1")
+                    for t_idx in sorted(decomp_pair.parallel[pair_key]):
+                        block = decomp_pair.parallel[pair_key][t_idx]
+                        print(
+                            "      "
+                            f"t={t_idx}: offdiag_n={float(block['offdiag_n']):+.6e}, "
+                            f"offdiag_np={float(block['offdiag_np']):+.6e}, "
+                            f"u_working={float(block['u_from_working']):+.6e}, "
+                            f"v_working={float(block['v_from_working']):+.6e}"
+                        )
                 print("  pair-seed vs Gaussian q^e:")
                 for idx in range(len(dv.beta_perpendicular)):
                     pair_seed_cm = float(breakdown.perpendicular[idx]["pair_seed"])

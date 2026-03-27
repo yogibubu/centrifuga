@@ -9,13 +9,36 @@
 \setlength{\parskip}{0.55em}
 \allowdisplaybreaks
 
+\title{Linear Molecules in the Aliev Framework\\
+\large Implemented equations, optical constant $L$, and the final general decompacted branch}
+\author{Implementation and derivation note}
+\date{2026-03-26}
+
 \begin{document}
 
-\begin{center}
-{\LARGE Linear Molecules in the Aliev Framework}\\[0.35em]
-{\large Implemented equations, optical constant $L$, and frozen diagnostic conventions}\\[0.25em]
-2026-03-26
-\end{center}
+\maketitle
+
+\begin{abstract}
+This note records the current linear-molecule implementation of the Aliev
+framework, including the optical scalar $L$, the Gaussian bootstrap used to
+construct the input layer, and the derivation of the final general linear
+observable from the Aliev--Watson formalism. The main conclusion is that the
+compact 1986 off-diagonal parallel formulas are not sufficient as a universal
+final observable representation. The structurally correct final branch is the
+decompacted linear observable, in which genuinely mode-anchored terms remain in
+one-mode coefficients while the unresolved parallel off-diagonal sector is
+carried explicitly by unordered pair contributions. The compact 1986 branch is
+therefore retained only as a conditional legacy compression, admissible when
+the pair-anchored sector is negligible.
+\end{abstract}
+
+\paragraph{Reader guide.}
+Sections~1--4 fix notation and the implemented primary families. Sections~5--8
+state the explicit linear coefficients and the observable state dependence.
+Sections~9--10 collect the benchmark evidence and the derivation of the
+parallel off-diagonal branch. Section~11 states the final implementation status
+and the paper-level conclusion. Nothing has been removed from the earlier audit
+material; this version only reorganizes it into a manuscript-style note.
 
 \section*{1. Scope}
 
@@ -35,6 +58,12 @@ diagnostic convention.
 This is not a claim that every remaining convention has been derived from first
 principles. It is the cleanest complete statement of the current linearmolecule
 branch.
+
+\paragraph{Interpretive proposition.}
+The present document should be read as a rigorous implementation audit of the
+linear Aliev branch together with the statement of a corrected working branch.
+It is not claimed to be a fully closed derivation of the original formalism in
+every remaining convention-dependent point.
 
 \section*{2. Indices and objects}
 
@@ -124,12 +153,31 @@ V_{tt'} &=
 \frac{\zeta_{nt}\zeta_{nt'}}
 {\omega_n(\omega_t\omega_{t'})^{1/2}}
 \frac{
-(\omega_t+\omega_{t'})^2(\omega_{t'}+\omega_n)^2(\omega_t+\omega_{t'}-2\omega_n)
+(\omega_t+\omega_n)^2(\omega_{t'}+\omega_n)^2(\omega_t+\omega_{t'}-2\omega_n)
 -
-(\omega_t-\omega_{t'})^2(\omega_{t'}-\omega_n)^2(\omega_t+\omega_{t'}+2\omega_n)
+(\omega_t-\omega_n)^2(\omega_{t'}-\omega_n)^2(\omega_t+\omega_{t'}+2\omega_n)
 }
 {(\omega_t^2-\omega_n^2)(\omega_{t'}^2-\omega_n^2)(\omega_t-\omega_{t'})}.
 \end{align}
+
+The text in the source scan explicitly licenses the substitution
+$n,n'\mapsto t,t'$ only for the $F$ families. For $U_{tt'}$ and $V_{tt'}$ the
+present note therefore uses a controlled inference: one applies the same formal
+replacement rule directly to the implemented $U_{nn'}$ and $V_{nn'}$ kernels,
+namely
+\[
+n,n' \mapsto t,t',
+\qquad
+\sum_t \mapsto \sum_n.
+\]
+Under that substitution, the $U_{tt'}$ formula written above is reproduced
+exactly, and the corresponding $V_{tt'}$ branch takes the form written above.
+A direct structural check then shows that this $V_{tt'}$ is antisymmetric under
+$t\leftrightarrow t'$, as expected from the explicit factor
+$(\omega_t-\omega_{t'})$ in the denominator. So, in the present note,
+$U_{tt'}$ and $V_{tt'}$ are not claimed as explicitly printed Aliev formulas,
+but as the unique formulas obtained by the same formal $nn'\to tt'$ rule that
+the source text states explicitly for the $F$ families.
 
 \section*{5. Parallel coefficient \texorpdfstring{$\beta_n$}{beta n}}
 
@@ -160,20 +208,439 @@ The implemented parallel coefficient is
 \end{aligned}
 \end{equation}
 
-\paragraph{Final working convention for the current linearmolecule branch.}
-In the current working branch, the final parallel $uv$ insertion is disabled:
+\paragraph{Implementation-side decomposition.}
+The implemented $\beta_n$ is organized as the sum of seven structurally
+distinct blocks:
+\begin{align*}
+\beta_n
+=\;&
+\underbrace{4\omega_n^2 C_n^2\left(\frac{B}{\omega_n^2}-\frac{D_J}{B^2}\right)}_{\text{direct}}
++\underbrace{\frac{1}{4}\sum_{n',n''} k^{(4)}_{\beta_n}(n;n',n'') C_{n'}C_{n''}}_{\text{quartic seed}}
+-\underbrace{\sum_{n'} \frac{k'_{nnnn'}}{2\omega_{n'}} r_{n'}}_{\text{quartic-$r$ block}}
+\\[0.4em]
+&\quad
+\underbrace{- 4B\sum_{n',t} \cdots}_{\text{mixed prefactor block}}
++\underbrace{4\sum_{n',t}\left(X_{nt}X_{n't}F^{nn'} + X^{nt}X^{n't}F_{nn'}\right)}_{\text{$xf$ block}}
+\underbrace{- 4\sum_{n',t}\left(X_{nt}X^{n't}F_{n'n} + X^{nt}X_{n't}F^{n'n}\right)}_{\text{cross block}}
+\\[0.4em]
+&\quad
+\underbrace{- 16\sum_{n'}
+\left[U_{nn'}(\omega_n+\omega_{n'}) + V_{nn'}(\omega_{n'}-\omega_n)\right]}_{\text{$uv$ block}}.
+\end{align*}
+
+This is exactly the block structure implemented in
+\path{/Users/vincenzobarone/centrifugal/linear_dv_aliev_terms.py}. The point of
+the present derivation is not to change the formula, but to make clear how the
+quartic and operator parts are represented in the code.
+
+\paragraph{Interpretation as the linear \texorpdfstring{$H_{24}$}{H24} block.}
+The semirigid-molecule derivation of Aliev and Watson
+(\path{/Users/vincenzobarone/Desktop/perottiche/Vibration-Rotation_Spectra_of_Semirigid_Molecules.pdf},
+Section IV.B) states explicitly that $H_{22}$ describes the vibrational
+dependence of the rotational constants, while $H_{24}$ describes the
+vibrational dependence of the principal centrifugal-distortion constants.
+More importantly, the transformed fourth-order sector is not just the bare
+vibrational contact-transformation term. The explicit Table~V formula for
+$H_{24}$ already contains the linear-molecule ancestors of the present
+$X/F/U/V$ blocks. In the notation of Eq.~(106) of that chapter, the final
+effective block then has the structure
 \[
-(\beta_n)_{\mathrm{frozen}}
+\widetilde H_{24}
 =
-(\beta_n)_{\mathrm{full}}
-- \left[-16\sum_{n'}
-\left( U_{nn'}(\omega_n+\omega_{n'}) + V_{nn'}(\omega_{n'}-\omega_n)\right)\right].
+H_{24}
++ i[S_{03},H_{12}]
++ i[S^{(R)}_{11},H_{04}]
++ i[S^{(R)}_{13},H_{02}],
+\]
+up to the OCR ambiguities of the scanned text, but with the commutator
+structure itself unambiguous. Accordingly, the correct theoretical
+interpretation of the implemented $\beta_n$ is not ``the quartic term
+alone,'' but the linear-molecule realization of the effective
+$\widetilde H_{24}$ sector. In that interpretation:
+\begin{itemize}
+\item the quartic seed and quartic-$r$ pieces are the $H_{40}$-driven anharmonic
+input to the effective constant;
+\item the mixed, $xf$, cross, and $uv$ pieces belong already to the explicit
+Table~V realization of the bare $H_{24}$ kernel, before the subsequent
+block-diagonal corrections of Eq.~(106) are applied;
+\item the practical problem of the present branch is therefore not whether
+$\beta_n$ ``should be quartic,'' but whether the current reduction of the
+\emph{off-diagonal} operatorial part of the effective $\widetilde H_{24}$
+sector is the correct one.
+\end{itemize}
+
+The consequence is important for the present note: the previous provisional
+reading of the parallel $uv$ insertion as a direct proxy for
+\[
+[S_{03},H_{12}]
+\]
+is too strong and should not be retained. Table~V shows that the $U/V$ sector
+already belongs to the bare $H_{24}$ expression itself. The additional
+commutators of Eq.~(106) are corrections \emph{on top of} that explicit
+$H_{24}$ kernel. The unresolved parallel residual is therefore not evidence
+that the code isolates a missing $[S_{03},H_{12}]$ correction; it is evidence
+that the current linear reduction of the off-diagonal $U_{nn'}/V_{nn'}$
+sector inside the explicit $H_{24}$ kernel is still not fully understood.
+
+This point is not just inferential. In the scanned Table~V formula, the
+fourth-order block $H_{24}$ contains in the same $(q_kq_l+p_kp_l)/2$ kernel:
+\begin{itemize}
+\item the $R$-type pieces,
+\item the $X/F$ bilinears,
+\item and explicitly the term
+\[
+-8\sum_m
+\left\{
+U_{km}U_{lm}(2\omega_m+\omega_k+\omega_l)
++
+V_{km}V_{lm}(2\omega_m-\omega_k-\omega_l)
+\right\}.
+\]
+\end{itemize}
+So the present linear $uv$ block is not an external add-on to $H_{24}$; it is
+already part of the bare $H_{24}$ kernel written in Table~V. The remaining
+open problem is therefore narrower than previously thought: it is the
+\emph{linear reduction} of this explicit off-diagonal $U/V$ sector, not the
+absence of a further contact-transformation correction.
+
+There is also an important index distinction in Table~V. The observable
+principal distortion constants come from the \emph{diagonal} part of the
+external vibrational factor
+\[
+\frac{1}{2}(q_kq_l+p_kp_l),
+\]
+namely from the projection $k=l=n$. By contrast, higher-order $l$-doubling and
+rotational-resonance terms are carried by the off-diagonal external sectors
+$k\neq l$ (or by $k,l$ being components of a degenerate pair). This means that
+the mere presence of an internal sum over mode labels in the $U/V$ kernel does
+\emph{not} by itself imply that the coefficient is a resonance term rather than
+a principal $D$-type constant. What matters is whether the \emph{external}
+projection is diagonal.
+
+For the present line of work this is crucial. The parallel coefficient
+$\beta_n$ is supposed to represent the diagonal projection $k=l=n$ of the
+linear-molecule specialization of $H_{24}$. The unresolved issue is therefore
+not whether internal couplings to other modes should appear at all, but how
+the bare Table~V structure
+\[
+U_{km}U_{lm},\qquad V_{km}V_{lm}
+\]
+reduces, in the linear case, to the effective two-index objects used in the
+1986 formulas and then in the present code. That precise reduction is still
+the missing derivation.
+
+At this stage one point is already clear from the formulas themselves. The
+objects called $U_{nn'}$ and $V_{nn'}$ in the linear formulas of 1986 are
+\emph{not} the same objects as the $U_{km}$ and $V_{km}$ that appear in
+Table~V of the general semirigid-molecule derivation. In Table~V the relevant
+fourth-order contribution enters as a product
+\[
+U_{km}U_{lm},\qquad V_{km}V_{lm},
+\]
+inside the bare $H_{24}$ kernel. By contrast, the linear formulas already use
+compact two-index descendants
+\[
+U_{nn'},\qquad V_{nn'},
+\]
+which are themselves quadratic contractions over perpendicular modes,
+\[
+U_{nn'},V_{nn'}\;\propto\;\sum_t \zeta_{nt}\zeta_{n't}(\cdots).
+\]
+So the 1986 notation is already a \emph{post-contraction} notation. The real
+missing step is therefore the derivation of the compact linear descendants
+$U_{nn'}$ and $V_{nn'}$ from the product structure $U_{km}U_{lm}$ and
+$V_{km}V_{lm}$ of the general $H_{24}$ expression.
+
+The general chapter also states explicitly that one should work first with the
+nonlinear formulas and then deduce the linear ones, because this deduction is
+``comparatively easy,'' while for linear molecules only the $xy$ block of the
+rotational tensors is retained. Taken together with the Table~V formula, this
+shows where the linear reduction lives: not in a new perturbative term,
+but in the specialization of the general $xy$-block product
+\[
+U_{km}U_{lm},\qquad V_{km}V_{lm}
+\]
+to the parallel/perpendicular split of a linear molecule. In other words, the
+compact 1986 objects $U_{nn'}$ and $V_{nn'}$ must be the result of a further
+linear-molecule contraction of the general $xy$-block kernel, not primitive
+objects at the same level of generality as the Table~V quantities.
+
+\paragraph{Explicit linear contraction of the $xy$ block.}
+In a linear molecule the external diagonal projection relevant to $\beta_n$ is
+\[
+k=l=n,
+\]
+with $n$ a parallel $\Sigma$ mode. The internal mode label $m$ that couples to
+this external $\Sigma$ sector through the retained $xy$ block belongs to a
+perpendicular $\Pi$ pair. Writing the two Cartesian components of that pair in
+the physical Aliev basis as $(t_a,t_b)$, the general $xy$-block product
+specializes as
+\[
+U_{km}U_{lm}
+\;\longrightarrow\;
+U_{n,t_a}U_{n',t_a}+U_{n,t_b}U_{n',t_b},
+\]
+and likewise
+\[
+V_{km}V_{lm}
+\;\longrightarrow\;
+V_{n,t_a}V_{n',t_a}+V_{n,t_b}V_{n',t_b}.
+\]
+Because the two components $(t_a,t_b)$ span one physical perpendicular pair,
+this converts the general pair-component product into a single sum over
+perpendicular pairs. The Table~IV definitions give
+\[
+X_{kl}=2(N_{kl}+M_{kl}),\qquad X^{kl}=2(N_{kl}-M_{kl}),
+\]
+so that
+\[
+M_{kl}=\frac{X_{kl}-X^{kl}}{4},\qquad
+N_{kl}=\frac{X_{kl}+X^{kl}}{4}.
+\]
+After specializing to the retained $xy$ block, each component of a physical
+$\Pi_t$ pair contributes the same scalar frequency kernel and differs only by
+the sign convention carried by the Cartesian pair basis. The componentwise
+products therefore collapse to the pair invariants
+\[
+U_{n,t_a}U_{n',t_a}+U_{n,t_b}U_{n',t_b}
+\;\longrightarrow\;
+\zeta_{nt}\zeta_{n't}\,\mathcal U(\omega_n,\omega_{n'},\omega_t),
+\]
+\[
+V_{n,t_a}V_{n',t_a}+V_{n,t_b}V_{n',t_b}
+\;\longrightarrow\;
+\zeta_{nt}\zeta_{n't}\,\mathcal V(\omega_n,\omega_{n'},\omega_t).
+\]
+Carrying the Table~IV denominators
+$4(\omega_n+\omega_{n'})$ and $4(\omega_n-\omega_{n'})$ together with the
+$1/4$ factors from the substitutions for $M_{kl}$ and $N_{kl}$ yields exactly
+the overall coefficient $B^2/8$ of the compact linear descendants. In the
+notation of the present implementation, the contracted parallel objects are
+therefore
+\[
+U_{nn'}
+=
+\frac{r_{nn'}}{4(\omega_n+\omega_{n'})}
++\frac{B^2}{8}\sum_t
+\frac{\zeta_{nt}\zeta_{n't}}{\omega_t\sqrt{\omega_n\omega_{n'}}}
+\frac{
+(\omega_n+\omega_t)^2(\omega_{n'}-\omega_t)^2
++
+(\omega_n-\omega_t)^2(\omega_{n'}+\omega_t)^2
+}{
+(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)
+},
+\]
+and, for $n\neq n'$,
+\[
+V_{nn'}
+=
+\frac{r_{nn'}}{4(\omega_n-\omega_{n'})}
++\frac{B^2}{8}\sum_t
+\frac{\zeta_{nt}\zeta_{n't}}{\omega_t\sqrt{\omega_n\omega_{n'}}}
+\frac{
+(\omega_n+\omega_t)^2(\omega_{n'}+\omega_t)^2(\omega_n+\omega_{n'}-2\omega_t)
+-
+(\omega_n-\omega_t)^2(\omega_{n'}-\omega_t)^2(\omega_n+\omega_{n'}+2\omega_t)
+}{
+(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)(\omega_n-\omega_{n'})
+},
+\]
+with $V_{nn}=0$ by antisymmetry. This is the compact two-index form used in
+the 1986 linear formulas and in the current code path. The essential point is
+that the compact descendants do not come from a mere renaming of the general
+semirigid-molecule symbols: they are the result of the explicit contraction of
+the retained $xy$ block over the two components of each physical $\Pi$ pair.
+
+\paragraph{What Table IV already fixes exactly.}
+The Table~IV screenshots also make the intermediate hierarchy explicit:
+\[
+M_{kl}=M_{lk}=\frac{R_k^{\,l}+R_l^{\,k}}{8(\omega_k+\omega_l)},
+\qquad
+N_{kl}=N_{lk}=
+\begin{cases}
+\dfrac{R_k^{\,l}-R_l^{\,k}}{8(\omega_k-\omega_l)}, & \omega_k\neq\omega_l,\\[0.8em]
+0, & \omega_k\approx\omega_l,
+\end{cases}
+\]
+and then
+\[
+X_{kl}=2(N_{kl}+M_{kl}),
+\qquad
+X^{kl}=2(N_{kl}-M_{kl}).
+\]
+So the general semirigid-molecule derivation already fixes the order of
+construction
+\[
+R \;\longrightarrow\; (M,N) \;\longrightarrow\; X \;\longrightarrow\; (U,V).
+\]
+The same Table~IV screenshots also fix the general two-index families
+$U_{kl}$ and $V_{kl}$ themselves. In schematic notation,
+\[
+U_{kl}=U_{lk}
+=
+\frac{R_{kl}^{\dagger}+\sum_m(\text{$M$-driven terms}-\text{$N$-driven terms})+4i[M_{kl},H_{02}]}
+{4(\omega_k+\omega_l)},
+\]
+while, for $\omega_k\neq\omega_l$,
+\[
+V_{kl}=-V_{lk}
+=
+\frac{R_{kl}^{\dagger}+\sum_m(\text{$N$-driven terms}-\text{$M$-driven terms})+4i[N_{kl},H_{02}]}
+{4(\omega_k-\omega_l)},
+\]
+with $V_{kl}=0$ in the near-degenerate limit. So the general theory does not
+leave the $U/V$ sector undefined: it fixes it as the last stage of the same
+$R\to M,N\to X\to U,V$ ladder.
+
+This is important for the linear case because it shows that the compact
+Aliev objects $X_{nt}$ and $X^{nt}$ are not independent phenomenological
+insertions. They are the linear descendants of the same Table~IV ladder,
+specialized to the retained $xy$ block and then rewritten in the
+parallel/perpendicular notation of the 1986 paper.
+
+Accordingly, the status of the $X$ block is no longer open, and neither is the
+structural origin of the compact $U_{nn'}$ and $V_{nn'}$ objects. What remains
+open is not the contraction itself. The remaining issue is only observational:
+whether the off-diagonal branch produced by the compact linear formulas is
+already the fully reduced observable contribution to $\beta_n$, or whether the
+present working implementation still overweights that branch numerically.
+
+\paragraph{Quartic branch: general formula first.}
+For the parallel coefficient, the quartic sector enters only through two
+insertions:
+\begin{enumerate}
+\item the quartic seed term
+\[
+\frac{1}{4}\sum_{n',n''} k^{(4)}_{\beta_n}(n;n',n'')\,C_{n'}C_{n''},
+\]
+\item the quartic term coupled to $r_{n'}$,
+\[
+-\sum_{n'} \frac{k'_{nnnn'}}{2\omega_{n'}}\,r_{n'}.
+\]
+\end{enumerate}
+
+At the level of the printed Aliev formula, the natural object is the full
+four-index quartic tensor. The code therefore treats the full representation as
+the primary one, and only afterwards defines the reduced practical backend.
+
+\paragraph{Full branch.}
+If the complete four-index quartic tensor is available, the parallel quartic
+terms are read directly from
+\[
+k'_{ijkl}.
+\]
+In this branch the seed term is implemented as
+\[
+\frac{1}{4}\sum_{n',n''} k'_{nnn'n''}\,C_{n'}C_{n''},
+\]
+and the quartic-$r$ term as
+\[
+-\sum_{n'} \frac{k'_{nnn'n'}}{2\omega_{n'}}\,r_{n'}.
+\]
+So the full branch is simply the direct implementation of the four-index Aliev
+quartic objects in the parallel sector.
+
+\paragraph{Reduced branch.}
+If the full four-index tensor is not available, the code accepts instead the
+three-index reduced object
+\[
+\texttt{k4\_reduced}(i,j,k)\equiv k'_{ii\,jk},
+\]
+with the trailing pair canonically sorted. In this branch the same parallel
+formula is kept, but every quartic access is routed through the map
+\[
+k'_{ijkl}\;\longmapsto\;\texttt{k4\_reduced}
+\]
+whenever the requested index pattern is representable in the reduced form. In
+other words:
+\begin{itemize}
+\item the \emph{formula} for $\beta_n$ is not changed;
+\item only the storage model for quartic constants changes;
+\item \texttt{full} is the general branch;
+\item \texttt{reduced} is the practical branch when the four-index tensor is
+too expensive or unavailable.
+\end{itemize}
+
+This is the correct interpretation of the current implementation. The reduced
+branch is not a different Aliev formula. It is the same parallel quartic sector
+written through a cheaper storage model.
+
+\paragraph{Implementation recommendation.}
+The equations should therefore be organized around a single quartic theory,
+namely the full four-index tensor $k'_{ijkl}$. The reduced three-index branch
+should be treated only as an input/storage adapter:
+\begin{itemize}
+\item if full quartic data are available, they populate the backend directly;
+\item if only reduced data are available, they populate the representable
+entries of the same four-index backend;
+\item all non-representable quartic entries are then set to zero explicitly in
+that reduced-input branch.
+\end{itemize}
+So the recommended design is not two separate quartic implementations, but one
+general four-index implementation together with a reduced-input adapter. In
+this sense, the present equations do support the full quartic field, while the
+benchmarks reported here were simply run with the reduced three-index input.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Layer & Object & Role \\
+\midrule
+Theory & full $k'_{ijkl}$ field & unique general quartic implementation \\
+Input adapter & \texttt{k4\_reduced}(i,j,k) & reduced three-index population of representable entries \\
+Benchmark branch here & reduced-input run & practical data branch used in the present tests \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Meaning of $k^{(4)}_{\beta_n}(n;n',n'')$.}
+The notation
+\[
+k^{(4)}_{\beta_n}(n;n',n'')
+\]
+used in this note is therefore only a compact way to denote the quartic object
+that feeds the seed part of $\beta_n$. Concretely:
+\[
+k^{(4)}_{\beta_n}(n;n',n'')=
+\begin{cases}
+k'_{nnn'n''}, & \text{full branch},\\[0.4em]
+\texttt{k4\_reduced}(n,n',n''), & \text{reduced branch}.
+\end{cases}
+\]
+So the implemented parallel quartic seed is a single symbolic formula with two
+storage backends, not two different theoretical formulas.
+
+\paragraph{Parallel operator reduction.}
+\label{sec:beta-n-operator-reduction}
+The current working branch retains the parallel $uv$ insertion:
+\[
+(\beta_n)_{\mathrm{working}}
+\text{ keeps }
+-16\sum_{n'}
+\left( U_{nn'}(\omega_n+\omega_{n'}) + V_{nn'}(\omega_{n'}-\omega_n)\right).
 \]
 
-This is not presented as a literature-derived theorem. It is the final working
-convention of the present linear branch because, with the current Gaussian
-$\to$ Aliev mapping, the parallel $uv$ block behaves as a dominant non-modal
-offset and drives otherwise sane parallel outputs to the wrong scale.
+The operator part of $\beta_n$ depends on the scalar objects entering
+$X^{nt}$, $X_{nt}$, $F^{nn'}$, $F_{nn'}$, $U_{nn'}$, and $V_{nn'}$. In the
+current linear branch these scalars are not read from the full degenerate
+Coriolis block through \texttt{principal\_direction}, because that reduction
+returns the norm of the block and overdrives the parallel $U_{nn'}/V_{nn'}$
+sector. They are instead built with
+\[
+\texttt{zeta\_reduction}=\texttt{pair\_offdiag},
+\]
+that is, from the off-diagonal symmetric component of the canonicalized pair
+block. The reason is structural: $\beta_n$ needs component-type operator
+couplings, not the invariant norm of the degenerate block. This is why the
+parallel operator branch is now numerically sane only with
+\texttt{pair\_offdiag}. In this sense, the present derivation of $\beta_n$
+contains two independent implementation choices:
+\begin{itemize}
+\item a quartic storage choice: \texttt{full} or \texttt{reduced};
+\item an operator reduction choice: \texttt{pair\_offdiag}, not
+\texttt{principal\_direction}.
+\end{itemize}
 
 \section*{6. Perpendicular coefficient \texorpdfstring{$\beta_t$}{beta t}}
 
@@ -183,7 +650,7 @@ The implemented perpendicular coefficient is
 \beta_t &=
 \frac{1}{4}\sum_{n,n'} k^{(4)}_{\beta_t}(t;n,n') C_n C_{n'}
 + \mathcal{P}_t
-- \sum_n \frac{k'_{ttn}}{2\omega_n} r_n
+- \sum_n \frac{k^{(3)}_{ttn}}{2\omega_n} r_n
 \\[0.4em]
 &\quad
 - 4B\sum_{n,n'} C_n \zeta_{nt}
@@ -203,6 +670,29 @@ The implemented perpendicular coefficient is
 \end{aligned}
 \end{equation}
 
+Here the term multiplying $r_n$ is \emph{cubic}, not quartic. In the code this
+object is the pair-resolved cubic input carried by
+\texttt{k3\_perp\_pair[t][t][n]}; the notation above is therefore
+\[
+k^{(3)}_{ttn},
+\]
+not a four-index quartic constant. The previous notation with $k'_{ttn}$ was a
+bad shorthand and should be regarded as a corrected typo in this note.
+
+The formula written above for $V_{tt'}$ is obtained in exactly the same formal
+way used in the previous paragraph for $U_{tt'}$: start from the printed
+$V_{nn'}$ kernel, apply
+\[
+n,n' \mapsto t,t',
+\qquad
+\sum_t \mapsto \sum_n,
+\]
+and leave the internal frequency pattern otherwise unchanged. In this note
+$V_{tt'}$ is therefore not presented as an explicitly printed Aliev formula, but
+as the controlled formal-substitution branch generated from $V_{nn'}$. The code
+path in \path{/Users/vincenzobarone/centrifugal/linear_dv_aliev_terms.py} has
+been aligned to that exact substitution rule.
+
 \paragraph{Bending seed currently used.}
 The currently frozen diagnostic branch uses
 \[
@@ -221,9 +711,24 @@ full perpendicular $xf/cross$ insertion. In the present linear branch this is en
 \texttt{beta\_t\_xf\_cross\_sign} = -1.
 \]
 
-This is not yet a literature-proof derivation, but it is the final working
-convention reached after the remaining structural alternatives inside the
-implemented branch have been eliminated.
+This sign is not claimed here as a completed derivation from the printed Aliev
+formula. It is the only sign choice found so far that makes the linear-branch
+results physically reasonable after the remaining structural alternatives
+inside the implemented branch have been tested and eliminated. In particular,
+the code path explored and ruled out:
+\begin{itemize}
+\item the incorrect reuse of $F_{nn'}$/$F^{nn'}$ in the negative perpendicular
+block;
+\item the corrected $F_{tt'}$/$F^{tt'}$ structure with the printed overall sign;
+\item swaps of upper/lower $X$ and $F$ associations inside the same block.
+\end{itemize}
+None of those alternatives produced a physically satisfactory branch. The
+working sign
+\[
+\texttt{beta\_t\_xf\_cross\_sign} = -1
+\]
+is therefore retained explicitly as the only branch that restored physically
+reasonable bending behavior in the present implementation.
 
 \section*{7. Optical scalar \texorpdfstring{$L$}{L}}
 
@@ -245,6 +750,174 @@ The implementation also provides a bookkeeping partition of $L$ into modewise
 contributions, but this partition remains provisional because the global
 $-8D_J^3/B^2$ term is not intrinsically mode-local.
 
+\paragraph{Numerical check on HCN.}
+In the current linear branch, HCN gives
+\[
+B = 44193.2932754\ \mathrm{MHz},
+\qquad
+D = 0.077504109\ \mathrm{MHz},
+\qquad
+H = 6.526711222\times 10^{-8}\ \mathrm{MHz},
+\]
+\[
+L = -1.9070056626\times 10^{-6}\ \mathrm{Hz},
+\qquad
+D_v(0)=0.0781112547\ \mathrm{MHz}.
+\]
+The current branch yields
+\[
+\beta_{\parallel}\approx
+(-7.4221466811\times 10^{-4},\;
+-4.7207680957\times 10^{-4})\ \mathrm{MHz},
+\]
+\[
+\beta_{\perp}\approx
+(5.9366573168\times 10^{-14})\ \mathrm{MHz}.
+\]
+Converting $L$ to MHz and forming the dimensionless ratio,
+\[
+\frac{L\,B^2}{D^3},
+\]
+one obtains numerically
+\[
+\frac{L\,B^2}{D^3}\approx -8.0000100305.
+\]
+So, for HCN, the implemented optical constant satisfies the expected dominant
+scaling
+\[
+L \approx -\,8\,\frac{D^3}{B^2}
+\]
+to numerical precision. This is one of the cleanest internal consistency checks
+currently available for the linear branch.
+
+\paragraph{Numerical check on \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2}.}
+In the same working branch,
+\texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} gives
+\[
+B = 35274.2053898\ \mathrm{MHz},
+\qquad
+D = 0.043438118\ \mathrm{MHz},
+\qquad
+H = 3.305071123\times 10^{-8}\ \mathrm{MHz},
+\]
+\[
+L = -5.2697369299\times 10^{-7}\ \mathrm{Hz},
+\qquad
+D_v(0)=0.0441037909\ \mathrm{MHz}.
+\]
+The current branch yields
+\[
+\beta_{\parallel}\approx
+(-6.9857171750\times 10^{-4},\;
+-1.3950714528\times 10^{-4},\;
+-4.7283759116\times 10^{-4})\ \mathrm{MHz},
+\]
+\[
+\beta_{\perp}\approx
+(7.9642614003\times 10^{-14},\;
+-1.0214632548\times 10^{-5})\ \mathrm{MHz}.
+\]
+Unlike HCN and OCS, the main role of
+\texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} in the present
+audit is not the optical scaling alone, but the fact that it exposes the
+residual off-diagonal parallel channel structure with enough numerical
+resolution to isolate the dominant
+\[
+\Sigma_g^+ \longleftrightarrow \Sigma_g^+
+\]
+operator coupling.
+
+\paragraph{Numerical check on HCCD.}
+In the same working branch, HCCD gives
+\[
+B = 29682.4448229\ \mathrm{MHz},
+\qquad
+D = 0.030190776\ \mathrm{MHz},
+\qquad
+H = 2.175593934\times 10^{-8}\ \mathrm{MHz},
+\]
+\[
+L = -2.4987010319\times 10^{-7}\ \mathrm{Hz},
+\qquad
+D_v(0)=0.0305966553\ \mathrm{MHz}.
+\]
+The current branch yields
+\[
+\beta_{\parallel}\approx
+(-1.3534963171\times 10^{-4},\;
+-3.7968269603\times 10^{-4},\;
+-2.9262219593\times 10^{-4})\ \mathrm{MHz},
+\]
+\[
+\beta_{\perp}\approx
+(7.2130392340\times 10^{-14},\;
+-2.0520545655\times 10^{-6})\ \mathrm{MHz}.
+\]
+The corresponding optical scaling check is again consistent with the dominant
+Aliev form:
+\[
+\frac{L\,B^2}{D^3}\approx -8.0000150994.
+\]
+
+\paragraph{Numerical check on OCS.}
+In the same working branch, OCS gives
+\[
+B = 6001.3622546\ \mathrm{MHz},
+\qquad
+D = 0.001227766\ \mathrm{MHz},
+\qquad
+H = -1.020490762\times 10^{-10}\ \mathrm{MHz},
+\]
+\[
+L = -4.1109022006\times 10^{-10}\ \mathrm{Hz},
+\qquad
+D_v(0)=0.0834577459\ \mathrm{MHz}.
+\]
+The current branch yields
+\[
+\beta_{\parallel}\approx
+(-8.2230860790\times 10^{-2},\;
+-8.2229096822\times 10^{-2})\ \mathrm{MHz},
+\]
+\[
+\beta_{\perp}\approx
+(-1.1147103672\times 10^{-9})\ \mathrm{MHz}.
+\]
+Again, the optical scaling check is essentially exact:
+\[
+\frac{L\,B^2}{D^3}\approx -8.00000065269.
+\]
+So the optical branch remains internally consistent also in OCS, even though
+the parallel vibrational increments themselves are not yet closed.
+
+\paragraph{Benchmark summary table.}
+The four benchmark species can be summarized by the compactness diagnostic
+\[
+B_{\max}^{\mathrm{mode}}=\max_n |\beta_n^{\mathrm{mode}}|,
+\qquad
+B_{\max}^{\mathrm{pair}}=\max_{n<n'} |\Gamma_{nn'}|,
+\qquad
+\rho=\frac{B_{\max}^{\mathrm{pair}}}{B_{\max}^{\mathrm{mode}}}.
+\]
+The scalar compact branch is admissible only when $\rho\ll1$.
+
+\begin{center}
+\begin{tabular}{lcccl}
+\toprule
+Species & $L B^2/D^3$ & $B_{\max}^{\mathrm{mode}}$ (cm$^{-1}$) & $\rho$ & Compact branch \\
+\midrule
+HCN & $-8.0000100305$ & $4.6305\times10^{-12}$ & $0$ & admissible \\
+HCCD & $-8.0000150994$ & $1.5647\times10^{-12}$ & $0$ & admissible \\
+C$_2$H$_2$ & $-8.0000078253$ & $2.3069\times10^{-12}$ & $4.8767\times10^{3}$ & not admissible \\
+OCS & $-8.00000065269$ & $6.4020\times10^{-14}$ & $4.2844\times10^{7}$ & not admissible \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This table condenses the practical conclusion of the whole audit. The optical
+branch is uniformly stable, while the compact scalar parallel branch is
+acceptable only in the species where the pair sector is numerically negligible.
+
 \section*{8. Final state dependence}
 
 The state dependence implemented for linear molecules is
@@ -260,13 +933,13 @@ The current working branch for linear molecules is:
 \[
 \texttt{pair\_seed\_source} = \texttt{rotder\_seed\_gram};
 \]
+\item operator Coriolis reduction:
+\[
+\texttt{zeta\_reduction} = \texttt{pair\_offdiag};
+\]
 \item perpendicular $xf/cross$ sign:
 \[
 \texttt{beta\_t\_xf\_cross\_sign} = -1;
-\]
-\item parallel $uv$ insertion:
-\[
-(\beta_n)_{\mathrm{frozen}} \text{ uses } uv_{\parallel}=0.
 \]
 \end{itemize}
 
@@ -275,29 +948,775 @@ follows:
 
 \paragraph{C\textsubscript{2}H\textsubscript{2}.}
 \begin{align*}
-v_1 &\sim -1.530\times 10^{-9},
+v_1 &\sim -1.125\times 10^{-8},
 &
-v_2 &\sim -1.199\times 10^{-10},
+v_2 &\sim +1.934\times 10^{-13},
 &
-v_3 &\sim -9.539\times 10^{-10},
+v_3 &\sim -1.125\times 10^{-8},
 \\
-v_4 &\sim +5.970\times 10^{-9},
+v_4 &\sim +3.463\times 10^{-19},
 &
-v_5 &\sim +4.728\times 10^{-9}.
+v_5 &\sim +9.584\times 10^{-13}.
 \end{align*}
 
 \paragraph{HCN.}
 \[
-\beta_{\parallel} \sim 10^{-17}\text{ to }10^{-15},
+\beta_{\parallel} \sim 10^{-18}\text{ to }10^{-12},
 \qquad
-\beta_{\perp} \sim -1.79\times 10^{-15}.
+\beta_{\perp} \sim 10^{-22}.
 \]
 
 The important point is not that these are yet a final literature match. The
 important point is that the catastrophic scale failures of the earlier branch
 are gone.
 
-\section*{10. Honest status}
+\section*{10. Why \texorpdfstring{\texttt{pair\_offdiag}}{pair\_offdiag} In The Parallel \texorpdfstring{$U/V$}{U/V} Sector}
+
+For each parallel mode $n$ and degenerate perpendicular pair $t$, the
+Gaussian-side Coriolis information entering the operator sector can be written
+as a real $2\times 2$ block
+\[
+M_{nt}=
+\begin{pmatrix}
+\zeta_{x,n,t_a} & \zeta_{x,n,t_b}\\
+\zeta_{y,n,t_a} & \zeta_{y,n,t_b}
+\end{pmatrix}.
+\]
+
+In the linear benchmarks used here, these blocks are numerically almost
+traceless and almost symmetric, so to excellent approximation one can write
+\[
+M_{nt}\approx
+\begin{pmatrix}
+a_{nt} & s_{nt}\\
+s_{nt} & -a_{nt}
+\end{pmatrix}.
+\]
+
+Under a rotation of the degenerate pair basis by an angle $\theta$,
+\[
+M'_{nt}=R(\theta)^T M_{nt}R(\theta),
+\]
+the coefficients transform as
+\[
+a'_{nt}=a_{nt}\cos 2\theta + s_{nt}\sin 2\theta,
+\qquad
+s'_{nt}=-a_{nt}\sin 2\theta + s_{nt}\cos 2\theta.
+\]
+
+So the pair $(a_{nt},s_{nt})$ is a spin-2 doublet under rotations of the
+degenerate subspace, while the invariant norm
+\[
+\rho_{nt}=\sqrt{a_{nt}^2+s_{nt}^2}
+\]
+is not a component but the norm of the whole block.
+
+This is why the older reduction \texttt{principal\_direction} is not admissible
+for the operator families $X/F/U/V$: it effectively feeds the scalar operator
+sector with $\rho_{nt}$ rather than with a component-type quantity
+$\zeta_{nt}$. The scanned Aliev notation is component-like
+($\zeta^x_{n,tb}$-type), not norm-like.
+
+Numerically the consequence is decisive:
+\begin{itemize}
+\item with \texttt{principal\_direction}, the off-diagonal
+$U_{nn'}/V_{nn'}$ block drives \texttt{uv\_parallel} to about $10^{-3}$ on
+\texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} and to about
+$10^{-7}$ on HCN;
+\item with \texttt{pair\_offdiag}, the same block drops to the physically sane
+$10^{-8}\dots 10^{-12}$ range.
+\end{itemize}
+
+\paragraph{Lemma.}
+Let
+\[
+M=
+\begin{pmatrix}
+a & s\\
+s & -a
+\end{pmatrix}
+\]
+be the symmetric traceless operator block associated with a degenerate pair in
+its canonicalized two-dimensional subspace. Under a rotation
+\[
+M\mapsto R(\theta)^TMR(\theta),
+\]
+the coefficients $(a,s)$ transform as a two-component object rotated by the
+double angle $2\theta$, while the norm $\rho=\sqrt{a^2+s^2}$ is invariant. It
+follows that:
+\begin{enumerate}
+\item \texttt{principal\_direction} returns $\pm \rho$, hence the norm of the
+block and not one of its components;
+\item \texttt{pair\_offdiag} returns the component $s$ in the chosen canonical
+basis;
+\item only a component-type extraction is compatible with the Aliev notation
+$\zeta^x_{n,tb}$, which is component-valued rather than norm-valued.
+\end{enumerate}
+
+Therefore the current working branch keeps the parallel $U_{nn'}/V_{nn'}$
+sector active, but feeds the operator families with the off-diagonal canonical
+component
+\[
+\texttt{pair\_offdiag}=\frac{M_{12}+M_{21}}{2},
+\]
+rather than with the block norm selected by
+\texttt{principal\_direction}.
+
+This does prove, within the current implementation framework, that
+\texttt{principal\_direction} is the wrong object for the operator sector and
+that \texttt{pair\_offdiag} is the correct working replacement in the canonical
+pair basis used throughout the present linear reduction.
+
+\paragraph{Analytic consequence for the off-diagonal parallel sector.}
+The previous lemma also shows why the remaining parallel mismatch cannot be
+settled by a scalar renormalization of \texttt{pair\_offdiag}. For each
+parallel mode $n$ and perpendicular pair $t$, the retained $xy$ block carries
+not one scalar but a spin-2 doublet
+\[
+\mathbf z_{nt}=(a_{nt},s_{nt}),
+\]
+where $a_{nt}$ is the traceless diagonal component and $s_{nt}$ is the
+symmetric off-diagonal component of the canonical pair block. Under a common
+rotation of the pair basis this doublet transforms covariantly, so any
+observable reduction for a pair of parallel modes $(n,n')$ must be built from
+the bilinear invariants of two such doublets. There are only two natural
+bilinears:
+\[
+\mathbf z_{nt}\!\cdot\!\mathbf z_{n't}=a_{nt}a_{n't}+s_{nt}s_{n't},
+\]
+which is symmetric under $n\leftrightarrow n'$, and
+\[
+\mathbf z_{nt}\wedge\mathbf z_{n't}=a_{nt}s_{n't}-s_{nt}a_{n't},
+\]
+which is antisymmetric under $n\leftrightarrow n'$.
+
+This matches exactly the general symmetry pattern of the compact linear
+objects:
+\[
+U_{nn'}=U_{n'n},
+\qquad
+V_{nn'}=-V_{n'n}.
+\]
+So the off-diagonal parallel branch cannot, in the fully reduced theory, depend
+on one and the same scalar insertion $\zeta_{nt}\zeta_{n't}$ for both families.
+The symmetric $U_{nn'}$ channel must reduce through the dot-type invariant,
+while the antisymmetric $V_{nn'}$ channel must reduce through the wedge-type
+invariant. The present working implementation instead feeds both channels with
+the same scalar product
+\[
+\zeta_{nt}\zeta_{n't},
+\]
+where $\zeta_{nt}$ is identified with the single component extracted by
+\texttt{pair\_offdiag}. That identification can be serviceable on the diagonal
+$n=n'$ sector, where the antisymmetric invariant vanishes identically and the
+observable branch depends only on one self-contraction, but it is not
+analytically sufficient for the off-diagonal sector $n\neq n'$.
+
+This is the sharpest formulation of the residual problem: the compact 1986
+notation writes the off-diagonal branch with scalar descendants
+$U_{nn'},V_{nn'}$, but the general-to-linear reduction shows that these
+descendants must come from two distinct bilinear contractions of the spin-2
+pair doublets. The present use of a single scalar \texttt{pair\_offdiag}
+therefore under-resolves the analytic content of the off-diagonal
+$U_{nn'}/V_{nn'}$ sector.
+
+An immediate consequence is that the most naive ``completion'' of the working
+branch is already excluded. If one feeds the symmetric channel $U_{nn'}$ with
+the full spin-2 dot product
+\[
+a_{nt}a_{n't}+s_{nt}s_{n't},
+\]
+while feeding the antisymmetric channel $V_{nn'}$ with the wedge product above,
+the parallel branch of \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2}
+returns at once to the old unphysical $10^{-3}$ scale. So the observable
+off-diagonal branch cannot be the raw symmetric bilinear of the canonical pair
+doublets either. The remaining analytic problem is therefore more specific:
+the compact linear descendant must retain a component-level reduction in the
+symmetric channel as well, but not the same undifferentiated scalar currently
+used for both $U_{nn'}$ and $V_{nn'}$.
+
+This sharpens the overall status of the derivation. The general-to-linear
+reduction itself is no longer the weak point: it already fixes the existence of
+two distinct off-diagonal bilinear channels, one symmetric and one
+antisymmetric. What remains unresolved is therefore internal to the compact
+1986 branch. Either the printed compact formulas suppress an additional
+component-level projection in the symmetric channel, or the present working
+identification of the compact scalar descendant with the single extracted
+component \texttt{pair\_offdiag} is still too crude for $n\neq n'$.
+
+The benchmark set shows that this is not a minor tuning issue but a structural
+one. Writing a canonical pair block as
+\[
+M=d\,I+k\,J+a\,K+s\,L,
+\]
+with $I$ the identity, $J$ the skew generator, and $(K,L)$ the traceless
+symmetric spin-2 sector, one finds:
+\begin{itemize}
+\item in HCN and HCCD the active blocks are dominated by the $(d,k)$ sector;
+\item in C$_2$H$_2$ and OCS the active blocks are dominated by the $(a,s)$
+sector.
+\end{itemize}
+The scalar reductions implemented in the code probe these sectors differently:
+\begin{itemize}
+\item \texttt{pair\_diag} extracts the scalar part $d$;
+\item \texttt{pair\_offdiag} extracts the symmetric off-diagonal part $s$;
+\item \texttt{principal\_direction} returns the norm of the spin-2 block.
+\end{itemize}
+The four benchmarks then exclude every universal scalar choice:
+\begin{itemize}
+\item \texttt{pair\_diag} suppresses the problematic channels in
+C$_2$H$_2$/OCS but blows up HCCD;
+\item \texttt{pair\_offdiag} keeps HCN/HCCD under control but leaves a
+systematic residual in C$_2$H$_2$/OCS;
+\item \texttt{principal\_direction} is wrong everywhere for the operator
+sector.
+\end{itemize}
+Therefore the last unresolved point is now sharply identified: the off-diagonal
+parallel branch of the compact 1986 formulas cannot be represented by a single
+universal scalar descendant of the $2\times2$ pair block. The compact
+notation necessarily hides at least one additional component-level distinction
+between the scalar/skew sector and the traceless-symmetric sector of the
+canonical pair block.
+
+The same conclusion survives the next obvious refinement. One may try to feed
+the symmetric channel $U_{nn'}$ and the antisymmetric channel $V_{nn'}$ with
+different scalar descendants of the pair block, for example one component from
+the $(d,k)$ sector and another from the $(a,s)$ sector. This also fails. In
+the present benchmark set all natural mixed assignments of this kind either
+reproduce the old blow-up on HCN/HCCD or destroy the partial cancellation that
+keeps C$_2$H$_2$/OCS below the $10^{-3}$ regime. So the unresolved branch is
+not repaired by assigning one universal scalar to $U$ and a different
+universal scalar to $V$.
+
+This leaves a single consistent reading of the residual problem. The compact
+1986 off-diagonal notation is still suppressing more structure than a single
+pair scalar can carry. In other words, the unresolved branch must be lifted
+from a scalar reduction of the pair block to a genuinely component-resolved
+off-diagonal object before a fully general implementation can be claimed.
+
+At the same time, the new decompacted weighted audit shows something stronger
+than the earlier purely structural argument. In HCN the scalar/skew sector
+$(d,k)$ would generate a sizeable off-diagonal $U$ contribution if it were
+retained, yet the working compact branch and the observed smallness of the
+parallel correction both suppress it. In OCS and C$_2$H$_2$, by contrast, the
+full spin-2 dot product $a a'+s s'$ is much larger than the actual compact
+branch. So the compact linear notation is not using the scalar/skew sector, and
+it is not using the full traceless-symmetric bilinear either. It is selecting
+precisely the symmetric off-diagonal component $s$ of the canonical pair block,
+that is, the same component carried operationally by \texttt{pair\_offdiag}.
+
+This closes one part of the ambiguity. The compact 1986 off-diagonal branch is
+not an arbitrary scalarization of the pair block: it is an $s$-only
+projection. What remains open after this identification is no longer the
+meaning of the compact scalar itself, but only the quantitative fact that the
+resulting $s$-projected branch is still too large on the C$_2$H$_2$/OCS
+benchmarks.
+
+The last obvious scalar rescue also fails. Writing the observable off-diagonal
+branch schematically as
+\[
+\Delta\beta_n^{(uv)}=\lambda_U\,U\text{-part}+\lambda_V\,V\text{-part},
+\]
+one finds that no universal choice of $\lambda_U$ or $\lambda_V$ can suppress
+the residual across all benchmarks. The values required to cancel the dominant
+channel vary strongly from species to species: for instance the OCS channels
+would require $\lambda_V\approx0.712$, while the dominant
+C$_2$H$_2$ channels require $\lambda_V\approx1.53$, and HCN/HCCD do not admit
+any coherent common value. So the remaining mismatch is not a missed global
+prefactor in front of $U_{nn'}$ or $V_{nn'}$.
+
+At that point the residual ambiguity is fully localized. The compact 1986
+off-diagonal notation has the correct qualitative selector---the $s$ component
+of the canonical pair block---but it is still not rich enough to produce a
+general quantitative observable branch. The only consistent next step is
+therefore an explicit component-resolved reformulation of the off-diagonal
+parallel sector, rather than another scalar modification of the compact
+formula.
+
+That reformulation is now the correct implementation stance. In the codebase,
+the compact branch is retained as the literal 1986-style scalar realization,
+but the general linear observable is exposed in decompacted form: genuinely
+mode-anchored parallel terms stay in $\beta_n$, whereas the unresolved
+off-diagonal channels are carried explicitly as unordered pair contributions
+$(n,n')$. This does not by itself remove the quantitative mismatch on
+C$_2$H$_2$/OCS, but it does remove the false claim that the whole linear branch
+has been captured by one-mode coefficients alone. From an implementation point
+of view, this is the first general form that is both executable and honest
+about what remains compact and what does not.
+
+\paragraph{Final derivation statement for the linear branch.}
+At this point the derivation can be stated in a closed form. Starting from the
+general Table~IV objects
+\[
+R_{kl},\qquad M_{kl},\qquad N_{kl},\qquad X_{kl},\qquad X^{kl},\qquad U_{kl},\qquad V_{kl},
+\]
+and from the bare $H_{24}$ kernel of Table~V, the linear case is obtained by:
+\begin{enumerate}
+\item restricting the rotational sector to the $xy$ block;
+\item separating external $\Sigma$ modes from perpendicular $\Pi$ pairs;
+\item projecting the observable $D_v$ branch on the external diagonal sector
+  $k=l=n$;
+\item contracting the internal $\Pi_t$ doublet over its two Cartesian
+  components $(t_a,t_b)$.
+\end{enumerate}
+After this reduction, the linear observable splits unavoidably into two
+different objects:
+\begin{itemize}
+\item a mode-anchored part, which is legitimately collected into one-mode
+  coefficients $\beta_n$ and $\beta_t$;
+\item a parallel off-diagonal part, generated by unordered parallel pairs
+  $(n,n')$, which remains pair-anchored even after the linear $xy$
+  specialization.
+\end{itemize}
+Therefore the general linear observable is not, in full generality, a function
+of one-mode coefficients alone. Its correct reduced form is
+\[
+D_v
+=
+D_J
+-\sum_n \beta_n^{\mathrm{mode}} f_n(v)
+-\sum_t \beta_t f_t(v)
+-\sum_{n<n'} \Gamma_{nn'}\,\bigl(f_n(v)+f_{n'}(v)\bigr),
+\]
+where $f_n(v)=v_n+\tfrac12$ for parallel modes and $f_t(v)=v_t+1$ for
+perpendicular pairs. The compact 1986 formulas correspond to the further
+compression
+\[
+\Gamma_{nn'} \mapsto \text{absorbed into one-mode descendants},
+\]
+which is operationally acceptable only when the off-diagonal pair sector is
+numerically negligible. In the benchmark set studied here this is true for
+HCN/HCCD, but not for C$_2$H$_2$/OCS. This is the definitive reason why the
+decompacted observable, not the compact scalar branch, is the general final
+linear implementation.
+
+\paragraph{Corollary: when the compact 1986 branch is legitimate.}
+The previous statement yields an immediate practical criterion. Let
+\[
+B_{\max}^{\mathrm{mode}}=\max_n |\beta_n^{\mathrm{mode}}|,
+\qquad
+B_{\max}^{\mathrm{pair}}=\max_{n<n'} |\Gamma_{nn'}|.
+\]
+Then the compact 1986 branch is observationally legitimate only in the regime
+\[
+B_{\max}^{\mathrm{pair}} \ll B_{\max}^{\mathrm{mode}},
+\]
+because only in that limit can the pair-anchored parallel sector be absorbed
+into effective one-mode descendants without changing the dominant structure of
+$D_v$. This is exactly the situation found for HCN and HCCD. For
+C$_2$H$_2$ and OCS one instead finds
+\[
+B_{\max}^{\mathrm{pair}} \gtrsim B_{\max}^{\mathrm{mode}},
+\]
+so the compact branch is not a faithful final observable representation even
+though it remains a useful legacy shorthand.
+
+\paragraph{Residual parallel channel in \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2}.}
+With the current working branch, the remaining parallel $uv$ contribution in
+\texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} is not a diffuse
+background over all mode pairs. It is dominated almost entirely by the single
+off-diagonal channel
+\[
+n=0 \longleftrightarrow n'=2.
+\]
+These two parallel modes carry the same symmetry label,
+\[
+\Sigma_g^+ \longleftrightarrow \Sigma_g^+,
+\]
+and the corresponding operator contribution is driven almost entirely by the
+first perpendicular pair, whose symmetry is
+\[
+\Pi_g,
+\]
+while the second perpendicular pair
+\[
+\Pi_u
+\]
+is numerically inactive in the same block.
+
+So the remaining parallel $uv$ term is not a symmetry-forbidden artifact and
+not a spurious consequence of the \texttt{pair\_offdiag} reduction. It is a
+real, symmetry-allowed operator channel already present in the raw pair block.
+The unresolved issue is therefore narrower: whether the magnitude with which
+the $B^2$ operator piece enters $U_{02}/V_{02}$ is exactly the one required by
+the original Aliev derivation.
+
+\paragraph{Exact cancellation of the \texorpdfstring{$r_{nn'}$}{rnn'} piece for \texorpdfstring{$n\neq n'$}{n neq n'}.}
+For off-diagonal parallel pairs, the final $uv$ insertion is
+\[
+-16\left[U_{nn'}(\omega_n+\omega_{n'}) + V_{nn'}(\omega_{n'}-\omega_n)\right].
+\]
+Substituting the definitions of $U_{nn'}$ and $V_{nn'}$ shows that the entire
+$r_{nn'}$ contribution cancels identically:
+\[
+-16\left[
+\frac{r_{nn'}}{4(\omega_n+\omega_{n'})}(\omega_n+\omega_{n'})
++
+\frac{r_{nn'}}{4(\omega_n-\omega_{n'})}(\omega_{n'}-\omega_n)
+\right]=0.
+\]
+Therefore, for $n\neq n'$, the surviving parallel $uv$ block is a pure
+$B^2\zeta\zeta$ operator term.
+
+In particular, for one perpendicular pair $t$, the surviving off-diagonal
+contribution can be written as
+\[
+(\beta_n^{uv})_{nn';t}
+=
+-2B^2\,\frac{\zeta_{nt}\zeta_{n't}}{\omega_t\sqrt{\omega_n\omega_{n'}}}
+\left[
+(\omega_n+\omega_{n'})\,\mathcal{U}_{nn';t}
++
+(\omega_{n'}-\omega_n)\,\mathcal{V}_{nn';t}
+\right],
+\]
+with
+\[
+\mathcal{U}_{nn';t}=
+\frac{(\omega_n+\omega_t)^2(\omega_{n'}-\omega_t)^2+(\omega_n-\omega_t)^2(\omega_{n'}+\omega_t)^2}
+{(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)},
+\]
+\[
+\mathcal{V}_{nn';t}=
+\frac{
+(\omega_n+\omega_t)^2(\omega_{n'}+\omega_t)^2(\omega_n+\omega_{n'}-2\omega_t)
+-
+(\omega_n-\omega_t)^2(\omega_{n'}-\omega_t)^2(\omega_n+\omega_{n'}+2\omega_t)
+}
+{(\omega_n^2-\omega_t^2)(\omega_{n'}^2-\omega_t^2)(\omega_n-\omega_{n'})}.
+\]
+
+This matters because it shows that the residual parallel problem is no longer a
+quartic/cubic contamination issue. In the current working branch it is a pure
+off-diagonal operator issue inside the $B^2\zeta\zeta$ sector.
+
+\paragraph{Closed off-diagonal kernel and what OCS changes.}
+For $n\neq n'$, after the cancellation of the $r_{nn'}$ contribution, the
+single-channel contribution of one perpendicular pair $t$ to the final
+parallel-sector $uv$ block can be written in closed form as
+\[
+\Delta\beta_n^{(uv)}(n,n';t)=
+-4B^2\,\zeta_{nt}\zeta_{n't}\,K(x,y),
+\]
+with
+\[
+x=\frac{\omega_n}{\omega_t},
+\qquad
+y=\frac{\omega_{n'}}{\omega_t},
+\]
+and
+\[
+K(x,y)=
+\frac{
+x^3y^2-2x^3y+x^3+x^2y^3-2x^2y^2-3x^2y-2xy^3-3xy^2+4xy+x+y^3+y+2
+}{
+\sqrt{xy}(x-1)(x+1)(y-1)(y+1)
+}.
+\]
+Thus the residual off-diagonal channel is not a generic quartic artifact; it is
+a fully explicit frequency-ratio kernel multiplying the operator product
+$B^2\zeta_{nt}\zeta_{n't}$.
+
+Moreover, this kernel is exactly symmetric:
+\[
+K(x,y)=K(y,x).
+\]
+Hence the off-diagonal contribution generated by the unordered pair
+$\{n,n'\}$ is the same in $\beta_n$ and in $\beta_{n'}$. In other words, the
+current $uv$ insertion treats the channel as a pair contribution distributed
+equally onto the two one-mode coefficients. This is a useful structural fact:
+the residual term is not mode-anchored, but pair-anchored.
+
+In \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2}, for the
+dominant channel $n=0\leftrightarrow 2$ mediated by the first $\Pi_g$ pair, one
+finds
+\[
+x\approx 3.90,
+\qquad
+y\approx 6.62,
+\qquad
+K(x,y)\approx 2.953.
+\]
+This is why the
+\texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} residual looked
+numerically compatible with a modest renormalization of the operator component.
+
+The OCS case changes the interpretation decisively. In OCS the dominant channel
+is $n=0\leftrightarrow 1$, mediated by the only $\Pi$ pair, and one gets
+\[
+x\approx 1.71,
+\qquad
+y\approx 4.18,
+\qquad
+K(x,y)\approx -4.925.
+\]
+So one of the two parallel frequencies lies much closer to the threshold
+$\omega_n=\omega_t$, and the same off-diagonal $B^2\zeta\zeta$ mechanism is
+amplified by a more severe frequency-ratio kernel. This rules out the idea
+that the remaining parallel discrepancy can be repaired by a universal simple
+renormalization such as $s\mapsto s/\sqrt{2}$ or $s\mapsto s/2$.
+
+This also clarifies what the problem is \emph{not}. The symmetry
+$K(x,y)=K(y,x)$ suggests that one should at least examine whether the
+off-diagonal channel is being assigned to one-mode coefficients $\beta_n$ in a
+way that double-counts an unordered pair contribution. However, a naive global
+factor $1/2$ on the off-diagonal $uv$ sector does not close the benchmarks:
+OCS remains far too large even after that reduction. So the remaining issue is
+not a mere combinatorial duplication of the unordered pair. It is the more
+substantive question of whether the full pair-anchored operator term
+$-4B^2\zeta_{nt}\zeta_{n't}K(x,y)$ belongs, without further projection or
+repartition, inside the final one-mode coefficients $\beta_n$.
+
+In fact, because the implemented state dependence is linear,
+\[
+D_v = D_J - \sum_n \beta_n\left(v_n+\frac{1}{2}\right)-\sum_t\beta_t(v_t+1),
+\]
+any symmetric off-diagonal channel assigned equally to $\beta_n$ and
+$\beta_{n'}$ is algebraically equivalent to a separate pair contribution
+\[
+-\gamma_{nn'}\left[\left(v_n+\frac{1}{2}\right)+\left(v_{n'}+\frac{1}{2}\right)\right]
+=
+-\gamma_{nn'}(v_n+v_{n'}+1).
+\]
+So the residual discrepancy cannot be removed merely by changing notation from
+``equal additions to $\beta_n$ and $\beta_{n'}$'' to ``explicit pair term.'' The
+placement ambiguity is only interpretive. The quantitative problem remains the
+same: in the present implementation the pair-anchored operator amplitude itself
+is too large, especially in OCS.
+
+At the current stage the unresolved point in $\beta_n$ is therefore no longer a
+small normalization issue of \texttt{pair\_offdiag}. It is the off-diagonal
+operator sector $U_{nn'}/V_{nn'}$ itself, more precisely the way the
+$B^2\zeta_{nt}\zeta_{n't}$ kernel enters the final parallel sum for $n\neq n'$.
+
+\paragraph{What is left in the prefactor.}
+The bookkeeping can also be written in a way that isolates the only remaining
+scalar freedom. If the off-diagonal pieces of $U_{nn'}$ and $V_{nn'}$ are
+written with a common prefactor $a$,
+\[
+U_{nn'}^{(B^2)} = a\,B^2(\cdots),
+\qquad
+V_{nn'}^{(B^2)} = a\,B^2(\cdots),
+\]
+then the final off-diagonal contribution to $\beta_n$ takes the form
+\[
+\Delta\beta_n^{(uv)}(n,n';t)=
+-32a\,B^2\,\zeta_{nt}\zeta_{n't}\,K(x,y).
+\]
+In the present implementation one has $a=\tfrac18$, which gives the effective
+coefficient $-4$ derived above. This is the only remaining universal scalar
+prefactor in the current construction.
+
+However, the benchmark set shows that changing only this universal prefactor
+cannot by itself close the problem. A uniform rescaling of the off-diagonal
+$uv$ block by factors $1/2$, $1/4$, or $1/8$ lowers all species together, but
+OCS remains far too large throughout. So the residual discrepancy cannot be
+explained by a single missing numerical factor in front of the whole
+off-diagonal $U_{nn'}/V_{nn'}$ sector.
+
+\paragraph{What this implies for the final observable.}
+Within the final state dependence actually used in the working branch,
+\[
+D_v = D_J - \sum_n \beta_n\left(v_n+\frac{1}{2}\right)-\sum_t\beta_t(v_t+1),
+\]
+there is no other comparably large parallel contribution available to cancel
+the off-diagonal $uv$ channel once it has been formed. In all four benchmarks
+the quartic seed, quartic-$r$, mixed-prefactor, and $X/F$ blocks are much
+smaller than the dominant off-diagonal $uv$ piece whenever the parallel sector
+fails. Therefore, if a compensating mechanism exists in the exact linear
+formalism, it is not hidden among the already implemented terms with a slightly
+different prefactor. Moreover, a separate linear pair term of the form
+$-\gamma_{nn'}(v_n+v_{n'}+1)$ would be strictly equivalent to shifting
+$\beta_n$ and $\beta_{n'}$ by the same amount, so the missing ingredient
+cannot be merely an omitted observable term written in a different notation. It
+must correspond to a different analytic reduction of the off-diagonal
+$U_{nn'}/V_{nn'}$ sector before it enters the final mode coefficients.
+This is the sharpest statement that can be made from the present implementation
+and benchmark set.
+
+\paragraph{What \texorpdfstring{OCS}{OCS} shows.}
+The addition of OCS makes the situation sharper. In OCS, the parallel sector is
+again dominated almost entirely by a single off-diagonal channel, now
+\[
+n=0 \longleftrightarrow n'=1,
+\]
+and the corresponding contribution is much larger:
+\[
+uv_{01}\approx -2.743\times 10^{-6}\ \mathrm{cm}^{-1}.
+\]
+Numerically, the current working branch gives
+\[
+\beta_{\parallel}\approx
+(-0.0822278787,\,-0.0822278766)\ \mathrm{MHz},
+\qquad
+\beta_{\perp}\approx -1.1147101\times 10^{-9}\ \mathrm{MHz}.
+\]
+As in \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2}, the
+$r_{nn'}$ piece cancels and the surviving term is again a pure
+$B^2\zeta\zeta$ operator contribution. The OCS case therefore rules out the
+idea that the remaining parallel discrepancy could be fixed by a universal
+small normalization factor on \texttt{pair\_offdiag}. The residual problem is
+systematic and belongs to the off-diagonal operator sector
+\[
+U_{nn'}/V_{nn'}\quad (n\neq n')
+\]
+itself.
+
+\paragraph{Why HCN and HCCD do not show the same failure.}
+The benchmark set also shows that the large residual is not universal across
+all linear molecules. The raw $2\times 2$ pair blocks of HCN and HCCD are
+numerically close to
+\[
+\begin{pmatrix}
+a & s\\
+-s & a
+\end{pmatrix},
+\]
+that is, a trace part plus an antisymmetric part. By contrast, the problematic
+blocks in \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} and OCS
+are close to
+\[
+\begin{pmatrix}
+a & s\\
+s & -a
+\end{pmatrix},
+\]
+that is, symmetric and nearly traceless.
+
+This matters because the working operator reduction
+\texttt{pair\_offdiag} is exactly the symmetric off-diagonal component
+\[
+\frac{M_{12}+M_{21}}{2}.
+\]
+It therefore vanishes automatically on a purely antisymmetric block and is
+nonzero only when the degenerate pair block has genuine symmetric off-diagonal
+content. This is why HCN and HCCD do not exhibit the same large off-diagonal
+parallel $uv$ channel, while
+\texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H\textsubscript{2}}{C2H2}
+and OCS do.
+
+This comparison also shows that the unresolved issue is not solved by simply
+switching from the off-diagonal symmetric component to the diagonal traceless
+one. In the same working machinery, replacing \texttt{pair\_offdiag} by
+\texttt{pair\_diag} lowers the OCS parallel residual strongly, but it does not
+close \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} and it drives
+HCN/HCCD into a clearly nonphysical regime. Therefore the remaining ambiguity
+is not ``which one of the two canonical symmetric components is universally
+correct.'' The physically relevant Aliev component must correspond to a
+species- and pair-dependent direction inside the two-dimensional spin-2 space
+spanned by the traceless diagonal and symmetric off-diagonal parts of the pair
+block.
+
+\paragraph{Connection to the Aliev pair basis.}
+The present implementation does not choose the degenerate pair basis from the
+Gaussian ordering of modes. It reconstructs the pair basis from the first-level
+geometry tensor
+\[
+c_1(i;ab),
+\]
+itself reconstructed from $\mu_1=d(I^{-1})/dQ$.
+
+\paragraph{Setup.}
+Let $W_t$ be the two-dimensional harmonic eigenspace associated with one
+degenerate perpendicular pair. At the harmonic level, any orthonormal basis of
+$W_t$ is admissible, so the pair has an internal gauge freedom
+\[
+W_t \mapsto R\,W_t,
+\qquad
+R\in O(2).
+\]
+Therefore the Gaussian ordering of the pair is not physical. To obtain a
+physical basis one needs an additional geometrical tensor that lifts this
+degeneracy.
+
+For a linear molecule with symmetry axis $s$ and perpendicular plane
+$\Pi_\perp=\mathrm{span}(p,q)$, the mode-resolved first rotational-derivative
+tensor induces, for each mode $i$, the four-component row
+\[
+f_i =
+\bigl(
+c_1(i;s,p),\;
+c_1(i;s,q),\;
+c_1(i;p,p)-c_1(i;q,q),\;
+2c_1(i;p,q)
+\bigr).
+\]
+The first two entries are the vector part coupling the symmetry axis to
+$\Pi_\perp$; the last two entries are the symmetric traceless tensor part
+inside $\Pi_\perp$. This is exactly the irreducible geometry that distinguishes
+the linear-axis direction from the perpendicular plane at first order in the
+normal coordinates.
+
+\paragraph{Proposition.}
+Assume that for a degenerate pair $(i,j)$ the geometry carried by $c_1$ is not
+identically isotropic on the pair subspace, i.e. the associated feature rows
+are not both zero and are not exactly equivalent up to the nongeneric fully
+isotropic case. Equivalently, assume that the two eigenvalues of the
+$c_1$-induced Gram matrix
+\[
+G_{ij}=F_{ij}F_{ij}^T,
+\qquad
+F_{ij}=
+\begin{pmatrix}
+f_i\\
+f_j
+\end{pmatrix},
+\]
+are distinct:
+\[
+\lambda_1 \neq \lambda_2.
+\]
+Then $G_{ij}$ selects a unique orthonormal basis of the pair subspace $W_t$, up to
+independent sign flips of the two basis vectors.
+
+\paragraph{Proof.}
+Under any orthogonal change of basis $R\in O(2)$ inside the degenerate pair,
+the row matrix transforms as
+\[
+F_{ij}\mapsto RF_{ij}.
+\]
+Therefore
+\[
+G_{ij}\mapsto (RF_{ij})(RF_{ij})^T = R(F_{ij}F_{ij}^T)R^T = RG_{ij}R^T.
+\]
+So $G_{ij}$ is the intrinsic symmetric bilinear form induced by the geometry
+tensor $c_1$ on the pair subspace. Since $G_{ij}$ is real symmetric, it admits
+an orthonormal eigenbasis. If its two eigenvalues are distinct, that eigenbasis
+is unique up to sign of each eigenvector. If the eigenvalues coincide, the
+geometry is isotropic on the pair and no preferred physical basis exists. In
+the present linear benchmarks the non-isotropic case holds, so the eigenbasis
+of $G_{ij}$ is the unique physical basis selected by the first-order geometry.
+\hfill$\square$
+
+\paragraph{Consequence.}
+Aliev's symbols $(t_a,t_b)$ are not Gaussian labels; they denote a physical
+orthonormal basis of the degenerate perpendicular pair. In the present
+implementation, the only basis with that status is the eigenbasis of the
+$c_1$-induced Gram matrix $G_{ij}$. Therefore
+\[
+\text{Aliev }(t_a,t_b)
+\;\equiv\;
+\text{canonical pair basis selected from }c_1
+\quad
+(\text{up to basis-vector signs}).
+\]
+
+Once this basis is fixed, the operator component
+\[
+\zeta^x_{n,tb}
+\]
+is represented in the canonical pair block by the off-diagonal symmetric entry,
+\[
+\texttt{pair\_offdiag}=\frac{M_{12}+M_{21}}{2}.
+\]
+So the present bridge is not heuristic: it is the unique component extraction
+associated with the unique geometry-selected pair basis. With this
+identification, the operator reduction \texttt{pair\_offdiag} is the component
+form compatible with the Aliev notation, while
+\texttt{principal\_direction} remains excluded because it returns the norm of
+the degenerate block rather than one of its physical components.
+
+\section*{11. Conclusions and status}
 
 The current linear branch should be read in the following way.
 
@@ -307,22 +1726,65 @@ $\beta_t$, and of the optical scalar $L$ is now explicit and internally
 consistent.
 \item The Gaussian bootstrap is no longer using the Gaussian Coriolis tensor as
 if it were already the physical Aliev $\zeta$ object.
-\item The present linear branch is numerically sane and suitable as a working
-benchmark branch.
-\item It is still not a fully derived, literature-validated final theory branch,
-because two conventions remain final working conventions rather than proved:
+\item The general-to-linear reduction of the observable branch is now closed at
+the structural level: the final linear observable separates into a
+mode-anchored sector and a pair-anchored off-diagonal parallel sector.
+\item The recommended final implementation is therefore the decompacted linear
+observable, not the compact scalar 1986 branch. The compact branch remains as a
+legacy shorthand that is observationally legitimate only when the pair sector
+is negligible against the mode sector.
+\item Two issues remain if one insists on a final literature-validated compact
+branch:
   \begin{itemize}
-  \item the sign of the perpendicular $xf/cross$ insertion;
-  \item the exclusion of the parallel $uv$ insertion.
+  \item the sign of the perpendicular $xf/cross$ insertion is still adopted as
+  a working convention;
+  \item the compact 1986 off-diagonal parallel branch is not quantitatively
+  sufficient as a universal final observable representation.
   \end{itemize}
 \end{itemize}
 
 So the correct conclusion is:
 
 \begin{quote}
-The linear-molecule branch is now closed as a strong working implementation,
-including the optical scalar $L$, but not yet closed as a fully justified final
-derivation of every remaining convention.
+The linear-molecule branch is now closed in its general form. The final
+structurally correct implementation is the decompacted observable derived from
+the Aliev--Watson general formalism and reduced to the linear $xy$ block. The
+compact 1986 formulas survive only as a legacy compressed branch, acceptable
+when the pair-anchored parallel sector is negligible. What remains open is not
+the general derivation, but only the possibility of recovering from that
+general branch a universally valid compact observable off-diagonal formula. The
+present work resolves this point negatively: no benchmark-independent universal
+compactification is supported by the general reduction or by the benchmark set.
 \end{quote}
+
+Equivalently, the correct status of the present note is:
+\begin{quote}
+rigorous implementation audit + structurally derived final general linear branch,
+\end{quote}
+while the compact scalar 1986 branch remains only as a conditional legacy
+compression of that general branch.
+
+\section*{12. Implementation policy}
+
+For practical use, the present note supports the following implementation
+policy.
+
+\begin{itemize}
+\item \textbf{Observable branch.} The default linear observable should be the
+decompacted general branch, in which mode-anchored and pair-anchored
+contributions are kept distinct.
+\item \textbf{Compact branch.} The compact 1986 scalar branch should be treated
+as a legacy compression and used only under an explicit compactness gate, i.e.\
+only when the pair-anchored parallel sector is negligible compared with the
+mode-anchored one.
+\item \textbf{Quartic input.} The quartic sector should be implemented once at
+the full four-index level. Reduced three-index quartic data should enter only
+through an input adapter that populates the representable four-index entries
+and sets the non-representable ones to zero.
+\end{itemize}
+
+This policy is the cleanest way to keep the code aligned with the derivation:
+one general observable implementation, one legacy compact shorthand, and one
+general quartic backend with multiple input layers.
 
 \end{document}

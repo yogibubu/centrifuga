@@ -328,10 +328,26 @@ Gaussian-to-Aliev mapping.
 However, this does **not** prove that the true theoretical value is exactly
 zero. It proves only:
 
-- the currently implemented parallel `uv` block is not acceptable as a final
-  physical contribution
-- setting `uv_parallel = 0` is a frozen diagnostic convention, not a derived
-  theorem
+- the catastrophic `uv_parallel` blowup was not caused by the mere presence of
+  the `U_(n n')/V_(n n')` block
+- it was caused by feeding that operator block with the wrong degenerate-pair
+  scalar Coriolis reduction
+
+The decisive discriminator is now numerical and structural:
+
+- with `principal_direction`, the off-diagonal `U_(n n')/V_(n n')` term blows
+  up to about `10^-3` on `C2H2` and `10^-7` on `HCN`
+- with `pair_offdiag`, the same block drops to about `10^-8` on `C2H2` and
+  `10^-12 ... 10^-14` on `HCN`
+
+So the real issue was not ``uv_parallel must be zero''. The real issue was:
+
+- the operator sector `X/F/U/V` was being fed with a degenerate-subspace
+  reduction (`principal_direction`) that is not admissible for the parallel
+  `U_(n n')/V_(n n')` block
+
+Under the current working branch, `uv_parallel` is therefore active again, but
+the operator terms use `pair_offdiag` as the Coriolis reduction.
 
 ### Operational meaning
 
@@ -340,8 +356,9 @@ So the correct rigorous reading of the current linear branch is:
 - perpendicular branch:
   - sign of the full `xf/cross` insertion is fixed operationally at `-1`
 - parallel branch:
-  - `uv_parallel` is fixed operationally at zero because the currently mapped
-    object is not physically acceptable
+  - `uv_parallel` is retained
+  - the operator sector uses `pair_offdiag`, because `principal_direction`
+    produces a non-physical off-diagonal `U_(n n')/V_(n n')` blowup
 
 This closes the implementation as a **working branch**.
 It does not yet close the linear theory as a publishable derivation.

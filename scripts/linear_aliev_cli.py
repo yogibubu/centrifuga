@@ -32,7 +32,9 @@ if str(ROOT) not in sys.path:
 from linear_dv_aliev_terms import (
     build_explicit_aliev_L_model,
     build_explicit_aliev_betas,
-    build_explicit_aliev_dv_model,
+    build_explicit_aliev_dv_compact_model_if_safe,
+    build_explicit_aliev_dv_general_model,
+    build_explicit_aliev_dv_legacy_compact_model,
     make_linear_aliev_explicit_inputs_from_mapping,
     resolve_linear_aliev_quartic_mode,
 )
@@ -50,9 +52,21 @@ def main() -> int:
     ap.add_argument("input_json", help="JSON file with explicit linear-Aliev inputs.")
     ap.add_argument(
         "--quartic-mode",
-        choices=("auto", "full", "reduced", "none"),
+        choices=("auto", "full", "general_4index", "reduced", "reduced_input", "none"),
         default="auto",
-        help="How to interpret quartic input: full 4-index, reduced 3-index, none, or auto-detect.",
+        help="How to interpret quartic input: general 4-index, reduced-input 3-index, none, or auto-detect.",
+    )
+    ap.add_argument(
+        "--observable-branch",
+        choices=("general", "legacy_compact", "compact_if_safe"),
+        default="general",
+        help="Observable branch: general decompacted, legacy compact, or compact only if the pair sector is negligible.",
+    )
+    ap.add_argument(
+        "--compactness-tolerance",
+        type=float,
+        default=1.0,
+        help="Used only with --observable-branch compact_if_safe.",
     )
     ap.add_argument(
         "--state",
@@ -68,9 +82,15 @@ def main() -> int:
     )
     inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode=mode)
     betas = build_explicit_aliev_betas(inputs)
-    dv_model = build_explicit_aliev_dv_model(inputs)
+    if args.observable_branch == "general":
+        dv_model = build_explicit_aliev_dv_general_model(inputs)
+    elif args.observable_branch == "legacy_compact":
+        dv_model = build_explicit_aliev_dv_legacy_compact_model(inputs)
+    else:
+        dv_model = build_explicit_aliev_dv_compact_model_if_safe(inputs, tolerance=args.compactness_tolerance)
 
     print(f"quartic_mode = {mode}")
+    print(f"observable_branch = {args.observable_branch}")
     print(f"n_parallel = {len(inputs.omega_parallel)}")
     print(f"n_perpendicular = {len(inputs.omega_perpendicular)}")
     print()

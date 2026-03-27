@@ -133,6 +133,14 @@ class LinearAlievExplicitFamilies:
     V_nn: dict[tuple[int, int], sp.Expr]
     U_tt: dict[tuple[int, int], sp.Expr]
     V_tt: dict[tuple[int, int], sp.Expr]
+    pair_trace_nt: dict[tuple[int, int], sp.Expr]
+    pair_skew_nt: dict[tuple[int, int], sp.Expr]
+    pair_diag_asym_nt: dict[tuple[int, int], sp.Expr]
+    pair_offdiag_nt: dict[tuple[int, int], sp.Expr]
+    pair_scalar_dot_nn: dict[tuple[int, int, int], sp.Expr]
+    pair_scalar_wedge_nn: dict[tuple[int, int, int], sp.Expr]
+    pair_dot_nn: dict[tuple[int, int, int], sp.Expr]
+    pair_wedge_nn: dict[tuple[int, int, int], sp.Expr]
     L: sp.Expr | None
 
 
@@ -161,6 +169,40 @@ class LinearAlievExplicitUvBreakdown:
 
 
 @dataclass(frozen=True)
+class LinearAlievExplicitPairChannelBreakdown:
+    """Component-resolved off-diagonal pair diagnostics for the parallel sector.
+
+    For each unordered pair `(n,n')` and perpendicular pair `t`, this records the
+    canonical scalar/skew sector `(d,k)` and the traceless-symmetric sector
+    `(a,s)` together with the natural dot/wedge bilinears that any compact
+    off-diagonal reduction would have to use.
+    """
+
+    parallel: dict[tuple[int, int], dict[int, dict[str, sp.Expr]]]
+
+
+@dataclass(frozen=True)
+class LinearAlievExplicitH24ProvenanceBreakdown:
+    """Provisional provenance grouping for the parallel effective `H24` sector.
+
+    This object does not claim a completed derivation of the Aliev-Watson
+    contact-transformation genealogy. It is only a diagnostic regrouping of the
+    already-implemented `beta_n` blocks into the four structural contributions
+    discussed around the transformed `H24` block:
+
+    - `H24_bare_candidate`
+    - `[S03, H12]_candidate`
+    - `[S11^(R), H04]_candidate`
+    - `[S13^(R), H02]_candidate`
+
+    The mapping is intentionally explicit so it can be revised as the operator
+    derivation is tightened.
+    """
+
+    parallel: dict[int, dict[str, sp.Expr]]
+
+
+@dataclass(frozen=True)
 class LinearAlievExplicitDvModel:
     """Operational linear-`Dv` model built from the explicit Aliev beta families.
 
@@ -186,6 +228,74 @@ class LinearAlievExplicitDvModel:
     def value_for_state(self, quanta: Sequence[object]) -> sp.Expr:
         factors = self.state_factors(quanta)
         return self.dj_equilibrium - sum(beta * factor for beta, factor in zip(self.beta_by_mode, factors, strict=True))
+
+
+@dataclass(frozen=True)
+class LinearAlievExplicitDvDecompactedModel:
+    """Linear `Dv` model with explicit off-diagonal parallel pair channels.
+
+    This model is the honest generalization of the compact 1986 branch inside
+    the current codebase: mode-anchored terms stay mode-anchored, while the
+    unresolved off-diagonal parallel channels are exposed explicitly as pair
+    contributions instead of being hidden inside one-mode `beta_n`.
+    """
+
+    dj_equilibrium: sp.Expr
+    mode_kinds: tuple[str, ...]
+    beta_parallel_mode_terms: dict[int, sp.Expr]
+    beta_parallel_pair_terms: dict[tuple[int, int], sp.Expr]
+    beta_perpendicular: dict[int, sp.Expr]
+
+    def state_factors(self, quanta: Sequence[object]) -> tuple[sp.Expr, ...]:
+        if len(quanta) != len(self.mode_kinds):
+            raise ValueError(f"Expected {len(self.mode_kinds)} quanta, got {len(quanta)}.")
+        return tuple(
+            sp.sympify(v) + (sp.Rational(1, 2) if kind == "parallel" else sp.Integer(1))
+            for v, kind in zip(quanta, self.mode_kinds, strict=True)
+        )
+
+    def value_for_state(self, quanta: Sequence[object]) -> sp.Expr:
+        factors = self.state_factors(quanta)
+        n_parallel = len(self.beta_parallel_mode_terms)
+        parallel_factors = factors[:n_parallel]
+        perpendicular_factors = factors[n_parallel:]
+        value = self.dj_equilibrium
+        value -= sum(
+            self.beta_parallel_mode_terms[n] * parallel_factors[n]
+            for n in range(n_parallel)
+        )
+        value -= sum(
+            gamma * (parallel_factors[n] + parallel_factors[np_])
+            for (n, np_), gamma in self.beta_parallel_pair_terms.items()
+        )
+        value -= sum(
+            self.beta_perpendicular[t] * perpendicular_factors[t]
+            for t in range(len(perpendicular_factors))
+        )
+        return sp.simplify(value)
+
+
+@dataclass(frozen=True)
+class LinearAlievExplicitDvCompactnessAudit:
+    """Diagnostic summary of when the compact branch is observationally safe.
+
+    The compact 1986 branch is acceptable only when the pair-anchored parallel
+    sector is negligible compared with the genuinely mode-anchored parallel
+    terms. This object does not impose a physics threshold; it just exposes the
+    relevant magnitudes so callers can decide whether compactification is safe
+    for their target accuracy.
+    """
+
+    max_parallel_mode_term: sp.Expr
+    max_parallel_pair_term: sp.Expr
+    pair_to_mode_ratio: sp.Expr
+
+    def is_safe(self, tolerance: object) -> bool:
+        """Return whether compactification is safe under a chosen ratio tolerance."""
+
+        tol = sp.sympify(tolerance)
+        ratio = sp.N(self.pair_to_mode_ratio)
+        return bool(ratio <= sp.N(tol))
 
 
 @dataclass(frozen=True)
@@ -226,9 +336,21 @@ def resolve_linear_aliev_quartic_mode(
     k4_reduced: object | None = None,
     quartic_mode: str = "auto",
 ) -> str:
-    """Resolve which quartic branch the linear-Aliev builder should use."""
+    """Resolve which quartic branch the linear-Aliev builder should use.
+
+    Accepted user-facing aliases:
+    - ``full`` or ``general_4index``
+    - ``reduced`` or ``reduced_input``
+    - ``auto``
+    - ``none``
+    """
 
     mode = str(quartic_mode).strip().lower()
+    aliases = {
+        "general_4index": "full",
+        "reduced_input": "reduced",
+    }
+    mode = aliases.get(mode, mode)
     valid = {"auto", "full", "reduced", "none"}
     if mode not in valid:
         raise ValueError(f"Unsupported quartic mode {quartic_mode!r}. Expected one of {sorted(valid)}.")
@@ -494,6 +616,44 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
             F_upper_tt[(t, tp)] = sp.simplify(B**2 * acc_upper)
             F_lower_tt[(t, tp)] = sp.simplify(r_tt[(t, tp)] + B**2 * acc_lower)
 
+    pair_trace_nt: dict[tuple[int, int], sp.Expr] = {}
+    pair_skew_nt: dict[tuple[int, int], sp.Expr] = {}
+    pair_diag_asym_nt: dict[tuple[int, int], sp.Expr] = {}
+    pair_offdiag_nt: dict[tuple[int, int], sp.Expr] = {}
+    pair_scalar_dot_nn: dict[tuple[int, int, int], sp.Expr] = {}
+    pair_scalar_wedge_nn: dict[tuple[int, int, int], sp.Expr] = {}
+    pair_dot_nn: dict[tuple[int, int, int], sp.Expr] = {}
+    pair_wedge_nn: dict[tuple[int, int, int], sp.Expr] = {}
+    if inputs.coriolis_pair_blocks is not None:
+        for n in range(n_parallel):
+            for t in range(n_perp):
+                block = inputs.coriolis_pair_blocks[n][t]
+                d_nt = sp.simplify((block[0][0] + block[1][1]) / 2)
+                k_nt = sp.simplify((block[0][1] - block[1][0]) / 2)
+                a_nt = sp.simplify((block[0][0] - block[1][1]) / 2)
+                s_nt = sp.simplify((block[0][1] + block[1][0]) / 2)
+                pair_trace_nt[(n, t)] = d_nt
+                pair_skew_nt[(n, t)] = k_nt
+                pair_diag_asym_nt[(n, t)] = a_nt
+                pair_offdiag_nt[(n, t)] = s_nt
+        for n in range(n_parallel):
+            for np_ in range(n_parallel):
+                if n == np_:
+                    continue
+                for t in range(n_perp):
+                    d_n = pair_trace_nt[(n, t)]
+                    d_np = pair_trace_nt[(np_, t)]
+                    k_n = pair_skew_nt[(n, t)]
+                    k_np = pair_skew_nt[(np_, t)]
+                    a_n = pair_diag_asym_nt[(n, t)]
+                    a_np = pair_diag_asym_nt[(np_, t)]
+                    s_n = pair_offdiag_nt[(n, t)]
+                    s_np = pair_offdiag_nt[(np_, t)]
+                    pair_scalar_dot_nn[(n, np_, t)] = sp.simplify(d_n * d_np + k_n * k_np)
+                    pair_scalar_wedge_nn[(n, np_, t)] = sp.simplify(d_n * k_np - k_n * d_np)
+                    pair_dot_nn[(n, np_, t)] = sp.simplify(a_n * a_np + s_n * s_np)
+                    pair_wedge_nn[(n, np_, t)] = sp.simplify(a_n * s_np - s_n * a_np)
+
     U_nn: dict[tuple[int, int], sp.Expr] = {}
     V_nn: dict[tuple[int, int], sp.Expr] = {}
     for n in range(n_parallel):
@@ -543,8 +703,8 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
                 u_sum += common * u_num / u_den
                 if t != tp:
                     v_num = (
-                        (wt + wtp) ** 2 * (wtp + wn) ** 2 * (wt + wtp - 2 * wn)
-                        - (wt - wtp) ** 2 * (wtp - wn) ** 2 * (wt + wtp + 2 * wn)
+                        (wt + wn) ** 2 * (wtp + wn) ** 2 * (wt + wtp - 2 * wn)
+                        - (wt - wn) ** 2 * (wtp - wn) ** 2 * (wt + wtp + 2 * wn)
                     )
                     v_den = (wt**2 - wn**2) * (wtp**2 - wn**2) * (wt - wtp)
                     v_sum += common * v_num / v_den
@@ -593,6 +753,14 @@ def build_explicit_aliev_families(inputs: LinearAlievExplicitInputs) -> LinearAl
         V_nn=V_nn,
         U_tt=U_tt,
         V_tt=V_tt,
+        pair_trace_nt=pair_trace_nt,
+        pair_skew_nt=pair_skew_nt,
+        pair_diag_asym_nt=pair_diag_asym_nt,
+        pair_offdiag_nt=pair_offdiag_nt,
+        pair_scalar_dot_nn=pair_scalar_dot_nn,
+        pair_scalar_wedge_nn=pair_scalar_wedge_nn,
+        pair_dot_nn=pair_dot_nn,
+        pair_wedge_nn=pair_wedge_nn,
         L=L,
     )
 
@@ -661,7 +829,11 @@ def build_explicit_aliev_betas(inputs: LinearAlievExplicitInputs) -> LinearAliev
             for np_ in range(n_parallel)
             for t in range(n_perp)
         )
-        uv_block = sp.Integer(0)
+        uv_block = -16 * sum(
+            fam.U_nn[(n, np_)] * (omega_n[n] + omega_n[np_])
+            + fam.V_nn[(n, np_)] * (omega_n[np_] - omega_n[n])
+            for np_ in range(n_parallel)
+        )
         beta_n[n] = direct + quartic_seed + quartic_r_block + mixed_prefactor_block + xf_block + cross_block + uv_block
 
     beta_t: dict[int, sp.Expr] = {}
@@ -778,7 +950,11 @@ def build_explicit_aliev_beta_breakdown(
             for np_ in range(n_parallel)
             for t in range(n_perp)
         )
-        uv_block = sp.Integer(0)
+        uv_block = -16 * sum(
+            fam.U_nn[(n, np_)] * (omega_n[n] + omega_n[np_])
+            + fam.V_nn[(n, np_)] * (omega_n[np_] - omega_n[n])
+            for np_ in range(n_parallel)
+        )
         total = sp.simplify(direct + quartic_seed + quartic_r_block + mixed_prefactor_block + xf_block + cross_block + uv_block)
         beta_n[n] = {
             "direct": sp.simplify(direct),
@@ -921,10 +1097,129 @@ def build_explicit_aliev_uv_breakdown(
     return LinearAlievExplicitUvBreakdown(parallel=parallel, perpendicular=perpendicular)
 
 
+def build_explicit_aliev_h24_provenance_breakdown(
+    inputs: LinearAlievExplicitInputs,
+) -> LinearAlievExplicitH24ProvenanceBreakdown:
+    """Regroup the implemented parallel `beta_n` blocks by provisional `H24` origin.
+
+    Current diagnostic mapping:
+
+    - `direct_observable_piece`:
+      already-projected `B/D_J` contribution carried directly by `beta_n`;
+    - `H24_bare_candidate`:
+      quartic and quartic-`r` pieces, i.e. the anharmonic seed feeding the
+      effective `(2,4)` block;
+    - `[S03,H12]_candidate`:
+      current `uv_block`, i.e. the explicit `U_nn/V_nn` insertion;
+    - `[S11^(R),H04]_candidate`:
+      current `xf + cross` operatorial dressing;
+    - `[S13^(R),H02]_candidate`:
+      current `mixed_prefactor_block`.
+
+    This is a bookkeeping device only. It should be read as a controlled
+    hypothesis to be checked against the full Aliev-Watson derivation.
+    """
+
+    by_term = build_explicit_aliev_beta_breakdown(inputs).parallel
+    parallel: dict[int, dict[str, sp.Expr]] = {}
+    for n, terms in by_term.items():
+        direct = sp.simplify(terms["direct"])
+        h24_bare = sp.simplify(terms["quartic_seed"] + terms["quartic_r_block"])
+        comm_s03_h12 = sp.simplify(terms["uv_block"])
+        comm_s11r_h04 = sp.simplify(terms["xf_block"] + terms["cross_block"])
+        comm_s13r_h02 = sp.simplify(terms["mixed_prefactor_block"])
+        reconstructed = sp.simplify(direct + h24_bare + comm_s03_h12 + comm_s11r_h04 + comm_s13r_h02)
+        parallel[n] = {
+            "direct_observable_piece": direct,
+            "H24_bare_candidate": h24_bare,
+            "[S03,H12]_candidate": comm_s03_h12,
+            "[S11^(R),H04]_candidate": comm_s11r_h04,
+            "[S13^(R),H02]_candidate": comm_s13r_h02,
+            "reconstructed_total": reconstructed,
+            "beta_total": sp.simplify(terms["total"]),
+            "reconstruction_residual": sp.simplify(reconstructed - terms["total"]),
+        }
+    return LinearAlievExplicitH24ProvenanceBreakdown(parallel=parallel)
+
+
+def build_explicit_aliev_pair_channel_breakdown(
+    inputs: LinearAlievExplicitInputs,
+) -> LinearAlievExplicitPairChannelBreakdown:
+    """Expose the decompacted off-diagonal parallel pair channels.
+
+    This helper does not change the working `beta_n` model. It simply makes
+    explicit the component-resolved content hidden by the compact off-diagonal
+    linear notation: scalar/skew components `(d,k)`, traceless-symmetric
+    components `(a,s)`, and the natural spin-2 dot/wedge bilinears for each
+    parallel pair `(n,n')` and perpendicular pair `t`.
+    """
+
+    fam = build_explicit_aliev_families(inputs)
+    B = sp.sympify(inputs.B)
+    n_parallel = len(inputs.omega_parallel)
+    n_perp = len(inputs.omega_perpendicular)
+    parallel: dict[tuple[int, int], dict[int, dict[str, sp.Expr]]] = {}
+    for n in range(n_parallel):
+        for np_ in range(n_parallel):
+            if n >= np_:
+                continue
+            by_t: dict[int, dict[str, sp.Expr]] = {}
+            for t in range(n_perp):
+                wn = sp.sympify(inputs.omega_parallel[n])
+                wnp = sp.sympify(inputs.omega_parallel[np_])
+                wt = sp.sympify(inputs.omega_perpendicular[t])
+                u_num = (wn + wt) ** 2 * (wnp - wt) ** 2 + (wn - wt) ** 2 * (wnp + wt) ** 2
+                u_den = (wn**2 - wt**2) * (wnp**2 - wt**2)
+                v_num = (
+                    (wn + wt) ** 2 * (wnp + wt) ** 2 * (wn + wnp - 2 * wt)
+                    - (wn - wt) ** 2 * (wnp - wt) ** 2 * (wn + wnp + 2 * wt)
+                )
+                v_den = (wn**2 - wt**2) * (wnp**2 - wt**2) * (wn - wnp)
+                common_pref = sp.simplify(B**2 / (8 * wt * sp.sqrt(wn * wnp)))
+                u_kernel = sp.simplify(common_pref * u_num / u_den)
+                v_kernel = sp.simplify(common_pref * v_num / v_den)
+                scalar_dot = fam.pair_scalar_dot_nn.get((n, np_, t), sp.Integer(0))
+                scalar_wedge = fam.pair_scalar_wedge_nn.get((n, np_, t), sp.Integer(0))
+                spin2_dot = fam.pair_dot_nn.get((n, np_, t), sp.Integer(0))
+                spin2_wedge = fam.pair_wedge_nn.get((n, np_, t), sp.Integer(0))
+                working = sp.simplify(inputs.coriolis_nt[n][t] * inputs.coriolis_nt[np_][t])
+                by_t[t] = {
+                    "trace_n": fam.pair_trace_nt.get((n, t), sp.Integer(0)),
+                    "trace_np": fam.pair_trace_nt.get((np_, t), sp.Integer(0)),
+                    "skew_n": fam.pair_skew_nt.get((n, t), sp.Integer(0)),
+                    "skew_np": fam.pair_skew_nt.get((np_, t), sp.Integer(0)),
+                    "diag_asym_n": fam.pair_diag_asym_nt.get((n, t), sp.Integer(0)),
+                    "diag_asym_np": fam.pair_diag_asym_nt.get((np_, t), sp.Integer(0)),
+                    "offdiag_n": fam.pair_offdiag_nt.get((n, t), sp.Integer(0)),
+                    "offdiag_np": fam.pair_offdiag_nt.get((np_, t), sp.Integer(0)),
+                    "scalar_dot": scalar_dot,
+                    "scalar_wedge": scalar_wedge,
+                    "spin2_dot": spin2_dot,
+                    "spin2_wedge": spin2_wedge,
+                    "working_scalar_product": working,
+                    "u_kernel": u_kernel,
+                    "v_kernel": v_kernel,
+                    "u_from_working": sp.simplify(working * u_kernel),
+                    "u_from_scalar_dot": sp.simplify(scalar_dot * u_kernel),
+                    "u_from_spin2_dot": sp.simplify(spin2_dot * u_kernel),
+                    "v_from_working": sp.simplify(working * v_kernel),
+                    "v_from_scalar_wedge": sp.simplify(scalar_wedge * v_kernel),
+                    "v_from_spin2_wedge": sp.simplify(spin2_wedge * v_kernel),
+                }
+            parallel[(n, np_)] = by_t
+    return LinearAlievExplicitPairChannelBreakdown(parallel=parallel)
+
+
 def build_explicit_aliev_dv_model(
     inputs: LinearAlievExplicitInputs,
 ) -> LinearAlievExplicitDvModel:
-    """Return the explicit linear-molecule `Dv` model from the Aliev beta families."""
+    """Return the legacy compact 1986-style linear-`Dv` model.
+
+    This helper preserves the historical scalar implementation in which the
+    off-diagonal parallel sector is packed into one-mode ``beta_n`` objects.
+    It is kept for backward compatibility and direct comparison against the
+    compact formulas, not as the recommended general observable branch.
+    """
 
     betas = build_explicit_aliev_betas(inputs)
     mode_kinds = ("parallel",) * len(inputs.omega_parallel) + ("perpendicular",) * len(inputs.omega_perpendicular)
@@ -938,6 +1233,125 @@ def build_explicit_aliev_dv_model(
         beta_parallel=betas.beta_parallel,
         beta_perpendicular=betas.beta_perpendicular,
     )
+
+
+def build_explicit_aliev_dv_decompacted_model(
+    inputs: LinearAlievExplicitInputs,
+) -> LinearAlievExplicitDvDecompactedModel:
+    """Return the decompacted linear `Dv` model with explicit pair channels.
+
+    The compact 1986 implementation packs the unresolved off-diagonal parallel
+    channels into the one-mode `beta_n`. This helper makes those channels
+    explicit as unordered pair contributions `(n,n')`, while leaving all
+    genuinely mode-anchored and perpendicular terms untouched.
+    """
+
+    fam = build_explicit_aliev_families(inputs)
+    breakdown = build_explicit_aliev_beta_breakdown(inputs)
+    omega_n = tuple(sp.sympify(x) for x in inputs.omega_parallel)
+    n_parallel = len(omega_n)
+
+    beta_parallel_mode_terms: dict[int, sp.Expr] = {}
+    beta_parallel_pair_terms: dict[tuple[int, int], sp.Expr] = {}
+    for n in range(n_parallel):
+        uv_diag = sp.simplify(-16 * fam.U_nn[(n, n)] * (omega_n[n] + omega_n[n]))
+        beta_parallel_mode_terms[n] = sp.simplify(
+            breakdown.parallel[n]["direct"]
+            + breakdown.parallel[n]["quartic_seed"]
+            + breakdown.parallel[n]["quartic_r_block"]
+            + breakdown.parallel[n]["mixed_prefactor_block"]
+            + breakdown.parallel[n]["xf_block"]
+            + breakdown.parallel[n]["cross_block"]
+            + uv_diag
+        )
+    for n in range(n_parallel):
+        for np_ in range(n_parallel):
+            if n >= np_:
+                continue
+            gamma = sp.simplify(
+                -16 * fam.U_nn[(n, np_)] * (omega_n[n] + omega_n[np_])
+                - 16 * fam.V_nn[(n, np_)] * (omega_n[np_] - omega_n[n])
+            )
+            beta_parallel_pair_terms[(n, np_)] = gamma
+
+    return LinearAlievExplicitDvDecompactedModel(
+        dj_equilibrium=inputs.D_J,
+        mode_kinds=("parallel",) * n_parallel + ("perpendicular",) * len(inputs.omega_perpendicular),
+        beta_parallel_mode_terms=beta_parallel_mode_terms,
+        beta_parallel_pair_terms=beta_parallel_pair_terms,
+        beta_perpendicular=build_explicit_aliev_betas(inputs).beta_perpendicular,
+    )
+
+
+def build_explicit_aliev_dv_legacy_compact_model(
+    inputs: LinearAlievExplicitInputs,
+) -> LinearAlievExplicitDvModel:
+    """Backward-compatible alias for the scalar compact 1986-style branch."""
+
+    return build_explicit_aliev_dv_model(inputs)
+
+
+def build_explicit_aliev_dv_general_model(
+    inputs: LinearAlievExplicitInputs,
+) -> LinearAlievExplicitDvDecompactedModel:
+    """Return the recommended general linear-`Dv` observable model.
+
+    The linear 1986 compact formulas are retained as a legacy scalar branch.
+    The decompacted model is the honest general observable branch because it
+    exposes unresolved parallel off-diagonal channels explicitly as pair terms.
+    """
+
+    return build_explicit_aliev_dv_decompacted_model(inputs)
+
+
+def build_explicit_aliev_dv_compactness_audit(
+    inputs: LinearAlievExplicitInputs,
+) -> LinearAlievExplicitDvCompactnessAudit:
+    """Return a quantitative compact-vs-general diagnostic for the linear branch.
+
+    The compact scalar branch is observationally safe only when the
+    pair-anchored off-diagonal parallel terms are negligible against the
+    genuinely mode-anchored parallel terms.
+    """
+
+    model = build_explicit_aliev_dv_decompacted_model(inputs)
+    mode_abs = [sp.Abs(sp.simplify(term)) for term in model.beta_parallel_mode_terms.values()]
+    pair_abs = [sp.Abs(sp.simplify(term)) for term in model.beta_parallel_pair_terms.values()]
+    max_mode = sp.simplify(max(mode_abs, default=sp.Integer(0), key=lambda x: sp.default_sort_key(x)))
+    max_pair = sp.simplify(max(pair_abs, default=sp.Integer(0), key=lambda x: sp.default_sort_key(x)))
+    if max_mode == 0:
+        ratio = sp.oo if max_pair != 0 else sp.Integer(0)
+    else:
+        ratio = sp.simplify(max_pair / max_mode)
+    return LinearAlievExplicitDvCompactnessAudit(
+        max_parallel_mode_term=max_mode,
+        max_parallel_pair_term=max_pair,
+        pair_to_mode_ratio=ratio,
+    )
+
+
+def build_explicit_aliev_dv_compact_model_if_safe(
+    inputs: LinearAlievExplicitInputs,
+    *,
+    tolerance: object,
+) -> LinearAlievExplicitDvModel:
+    """Return the compact scalar branch only when compactification is justified.
+
+    Parameters
+    ----------
+    tolerance:
+        Upper bound on ``max_parallel_pair_term / max_parallel_mode_term``. If
+        the measured ratio is larger, the compact branch is rejected because the
+        pair-anchored sector is not negligible.
+    """
+
+    audit = build_explicit_aliev_dv_compactness_audit(inputs)
+    if not audit.is_safe(tolerance):
+        raise ValueError(
+            "Compact 1986 branch rejected: pair-anchored parallel sector is not negligible "
+            f"(pair/mode ratio = {sp.N(audit.pair_to_mode_ratio)} > tolerance = {sp.N(sp.sympify(tolerance))})."
+        )
+    return build_explicit_aliev_dv_model(inputs)
 
 
 def build_explicit_aliev_L_model(
