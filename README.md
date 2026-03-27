@@ -6,7 +6,7 @@ Cartesian Hessians, and optional Gaussian/GDV anharmonic data.
 
 The repository now also contains the first `RV3` scaffold:
 
-- [`rv3.py`](./rv3.py)
+- [`RV3.py`](./RV3.py)
 
 where `RV3` stands for **Ro-Vibrational Van Vleck**. The purpose of this module
 is to become the single staged program over the existing backend, rather than a

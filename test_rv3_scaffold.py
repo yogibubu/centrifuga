@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from rv3 import RV3Request, RV3Source, run_rv3
+from RV3 import RV3Request, RV3Source, run_rv3
 
 
 REPO = Path(__file__).resolve().parent
