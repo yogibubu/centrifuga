@@ -41,6 +41,7 @@ The current scaffold already wires:
 - quartic order-2 constants
 - cubic Gaussian-log loading plus sextic/H22 diagnostics
 - linear order-4 migration through the existing general/decompacted Aliev branch
+- manual quartic and sextic transform routes through JSON requests
 
 The current scaffold deliberately does **not** pretend that the full RV3
 program is finished. It fixes the API and stage ownership so the remaining work

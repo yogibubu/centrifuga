@@ -35,6 +35,26 @@ import numpy as np
 import sympy as sp
 
 from compare_gaussian_sextic import sextic_cubic_hierarchy_hz, sextic_h22_linear_candidate_hz, sextic_linear_source_formula_hz
+from ceditt_gui import (
+    _M4,
+    _flip_handedness_abc,
+    _flip_tau_last_two_axes,
+    _norm_reduction,
+    _norm_rep,
+    _quartic_forward_constants,
+    _quartic_reduced_3plus2_from_tau,
+    _quartic_spectral_invariants_from_tau,
+    _rotate_abc,
+    _sextic_condition_metrics,
+    _sextic_decomposition,
+    _sextic_physical_subspace_residual,
+    compute_T_over_B,
+    compute_s111,
+    quartic_transform_matrix,
+    stability_metrics,
+    transform_quartic_tensor,
+    transform_sextic_tensor,
+)
 from distortion_workflow import compute_order2_quartic
 from gaussian_vpt_parser import (
     align_gaussian_cubic_force_constants,
@@ -155,6 +175,51 @@ class RV3Result:
 
 
 @dataclass(frozen=True)
+class RV3ManualQuarticRequest:
+    A_mhz: float
+    B_mhz: float
+    C_mhz: float
+    rep_in: str
+    reduction: str
+    constants: list[float]
+
+
+@dataclass
+class RV3ManualQuarticResult:
+    request: dict[str, Any]
+    outputs: dict[str, dict[str, Any]]
+    tau_input: list[float]
+    spectral_invariants: dict[str, Any]
+    reduced_3plus2: dict[str, Any]
+    handedness_flip: dict[str, Any]
+
+    def to_jsonable(self) -> dict[str, Any]:
+        return _sanitize_jsonable(asdict(self))
+
+
+@dataclass(frozen=True)
+class RV3ManualSexticRequest:
+    A_mhz: float
+    B_mhz: float
+    C_mhz: float
+    rep_in: str
+    reduction_in: str
+    reduction_out: str
+    constants: list[float]
+
+
+@dataclass
+class RV3ManualSexticResult:
+    request: dict[str, Any]
+    outputs: dict[str, dict[str, Any]]
+    physical_subspace_input: dict[str, Any]
+    handedness_flip: dict[str, Any]
+
+    def to_jsonable(self) -> dict[str, Any]:
+        return _sanitize_jsonable(asdict(self))
+
+
+@dataclass(frozen=True)
 class _LoadedGeometry:
     molecule: Molecule
     source_path: str
@@ -186,6 +251,130 @@ def _sanitize_jsonable(obj: Any) -> Any:
     if isinstance(obj, (np.integer, int)):
         return int(obj)
     return obj
+
+
+def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQuarticResult:
+    rep_in = _norm_rep(request.rep_in)
+    red = _norm_reduction(request.reduction)
+    A = float(request.A_mhz)
+    B = float(request.B_mhz)
+    C = float(request.C_mhz)
+    d_in = np.asarray(request.constants, dtype=float).reshape(5)
+    rotor_type = rotor_type_for_symmetry(np.asarray([A, B, C], dtype=float), np.asarray([1.0, 2.0, 3.0], dtype=float))
+    if rotor_type != "asymmetric":
+        raise ValueError(
+            "Manual quartic transform is reserved for asymmetric-top transforms. "
+            "Use the harmonic RV3 route for exact symmetric-top or linear limits."
+        )
+
+    rep_outs = [rep for rep in ("I", "II", "III") if rep != rep_in]
+    m_in = _M4(A, B, C, red)
+    tau_in = np.linalg.pinv(m_in) @ d_in
+    spec_in = _quartic_spectral_invariants_from_tau(tau_in)
+    red5_in = _quartic_reduced_3plus2_from_tau(tau_in, A, B, C)
+    outputs: dict[str, dict[str, Any]] = {}
+    for rep_out in rep_outs:
+        d_out = transform_quartic_tensor(d_in, A, B, C, rep_in, rep_out, red)
+        A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_out)
+        tmat = quartic_transform_matrix(A, B, C, rep_in, rep_out, red, "tensor")
+        metrics = stability_metrics(tmat, A, B, C)
+        m_out = _M4(A2, B2, C2, red)
+        tau_out = np.linalg.pinv(m_out) @ d_out
+        outputs[rep_out] = {
+            "A_mhz": A2,
+            "B_mhz": B2,
+            "C_mhz": C2,
+            "constants": [float(x) for x in d_out],
+            "tensor_roundtrip_max_error": float(np.max(np.abs(transform_quartic_tensor(d_out, A2, B2, C2, rep_out, rep_in, red) - d_in))),
+            "stability_metrics": metrics,
+            "s111": compute_s111(A2, B2, C2, d_out, red),
+            "T_over_B": compute_T_over_B(B2, d_out),
+            "spectral_invariants": spec_in if rep_out == rep_in else _quartic_spectral_invariants_from_tau(tau_out),
+            "reduced_3plus2": _quartic_reduced_3plus2_from_tau(tau_out, A2, B2, C2),
+        }
+    flip_abc = _flip_handedness_abc(A, B, C)
+    tau_flip = _flip_tau_last_two_axes(tau_in)
+    d_flip = _quartic_forward_constants(red, tau_flip, *flip_abc)
+    return RV3ManualQuarticResult(
+        request={
+            "A_mhz": A,
+            "B_mhz": B,
+            "C_mhz": C,
+            "rep_in": rep_in,
+            "reduction": red,
+            "constants": [float(x) for x in d_in],
+        },
+        outputs=outputs,
+        tau_input=[float(x) for x in tau_in],
+        spectral_invariants=spec_in,
+        reduced_3plus2=red5_in,
+        handedness_flip={
+            "A_mhz": flip_abc[0],
+            "B_mhz": flip_abc[1],
+            "C_mhz": flip_abc[2],
+            "constants": [float(x) for x in d_flip],
+        },
+    )
+
+
+def run_manual_sextic_transform(request: RV3ManualSexticRequest) -> RV3ManualSexticResult:
+    rep_in = _norm_rep(request.rep_in)
+    red_in = _norm_reduction(request.reduction_in)
+    red_out = _norm_reduction(request.reduction_out)
+    A = float(request.A_mhz)
+    B = float(request.B_mhz)
+    C = float(request.C_mhz)
+    h_in = np.asarray(request.constants, dtype=float).reshape(7)
+    rotor_type = rotor_type_for_symmetry(np.asarray([A, B, C], dtype=float), np.asarray([1.0, 2.0, 3.0], dtype=float))
+    if rotor_type != "asymmetric":
+        raise ValueError(
+            "Manual sextic transform is reserved for asymmetric-top transforms. "
+            "Use the harmonic RV3 route for exact symmetric-top or linear limits."
+        )
+
+    rep_outs = [rep for rep in ("I", "II", "III") if rep != rep_in]
+    phys_in = _sextic_physical_subspace_residual(h_in, rep_in, red_in, A, B, C)
+    dec_in = _sextic_decomposition(h_in, rep_in, red_in, A, B, C)
+    outputs: dict[str, dict[str, Any]] = {}
+    for rep_out in rep_outs:
+        h_out = transform_sextic_tensor(h_in, A, B, C, rep_in, rep_out, red_in, red_out)
+        A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_out)
+        outputs[rep_out] = {
+            "A_mhz": A2,
+            "B_mhz": B2,
+            "C_mhz": C2,
+            "constants": [float(x) for x in h_out],
+            "physical_subspace_residual": _sextic_physical_subspace_residual(h_out, rep_out, red_out, A2, B2, C2),
+            "roundtrip_max_error": float(np.max(np.abs(transform_sextic_tensor(h_out, A2, B2, C2, rep_out, rep_in, red_out, red_in) - h_in))),
+            "decomposition": _sextic_decomposition(h_out, rep_out, red_out, A2, B2, C2),
+            "condition_metrics": _sextic_condition_metrics(rep_in, rep_out),
+        }
+    flip_abc = _flip_handedness_abc(A, B, C)
+    return RV3ManualSexticResult(
+        request={
+            "A_mhz": A,
+            "B_mhz": B,
+            "C_mhz": C,
+            "rep_in": rep_in,
+            "reduction_in": red_in,
+            "reduction_out": red_out,
+            "constants": [float(x) for x in h_in],
+        },
+        outputs=outputs,
+        physical_subspace_input={
+            "residual": phys_in,
+            "decomposition": dec_in,
+        },
+        handedness_flip={
+            "A_mhz": flip_abc[0],
+            "B_mhz": flip_abc[1],
+            "C_mhz": flip_abc[2],
+            "note": (
+                "The fixed-representation r<->l axis swap does not define an independently "
+                "validated opposite-handed sextic target inside the current 5D transport."
+            ),
+        },
+    )
 
 
 def _infer_format(source: RV3Source, *, role: str) -> str:
@@ -530,7 +719,15 @@ def run_rv3(request: RV3Request) -> RV3Result:
 
 def _build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--max-derivative-order", type=int, required=True, choices=RV3_ALLOWED_ORDERS)
+    ap.add_argument(
+        "--manual-quartic-json",
+        help="Run the manual quartic transform route from a JSON file and exit.",
+    )
+    ap.add_argument(
+        "--manual-sextic-json",
+        help="Run the manual sextic transform route from a JSON file and exit.",
+    )
+    ap.add_argument("--max-derivative-order", type=int, choices=RV3_ALLOWED_ORDERS)
     ap.add_argument("--geometry", help="Geometry source path (xyz/log/fchk).")
     ap.add_argument("--geometry-format", default="auto")
     ap.add_argument("--hessian", help="Hessian source path (fchk or Der2).")
@@ -566,6 +763,20 @@ def _format_human_summary(result: RV3Result) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = _build_arg_parser()
     ns = ap.parse_args(argv)
+    if ns.manual_quartic_json and ns.manual_sextic_json:
+        raise ValueError("Choose only one of --manual-quartic-json or --manual-sextic-json.")
+    if ns.manual_quartic_json:
+        payload = json.loads(Path(ns.manual_quartic_json).read_text())
+        result = run_manual_quartic_transform(RV3ManualQuarticRequest(**payload))
+        print(json.dumps(result.to_jsonable(), indent=2, sort_keys=True))
+        return 0
+    if ns.manual_sextic_json:
+        payload = json.loads(Path(ns.manual_sextic_json).read_text())
+        result = run_manual_sextic_transform(RV3ManualSexticRequest(**payload))
+        print(json.dumps(result.to_jsonable(), indent=2, sort_keys=True))
+        return 0
+    if ns.max_derivative_order is None:
+        raise ValueError("--max-derivative-order is required unless a manual transform JSON route is selected.")
     request = RV3Request(
         max_derivative_order=ns.max_derivative_order,
         geometry=None if ns.geometry is None else RV3Source(ns.geometry, ns.geometry_format),

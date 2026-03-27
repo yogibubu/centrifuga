@@ -5,7 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from RV3 import RV3Request, RV3Source, run_rv3
+from RV3 import (
+    RV3ManualQuarticRequest,
+    RV3ManualSexticRequest,
+    RV3Request,
+    RV3Source,
+    run_manual_quartic_transform,
+    run_manual_sextic_transform,
+    run_rv3,
+)
 
 
 REPO = Path(__file__).resolve().parent
@@ -65,5 +73,40 @@ def test_rv3_order4_hcn_linear_branch_smoke() -> None:
     assert result.quartic_stage.linear_legacy_compact_observable is not None
     assert result.quartic_stage.linear_compactness_audit is not None
     assert result.quartic_stage.linear_optical_constant is not None
+    text = json.dumps(result.to_jsonable(), allow_nan=False)
+    assert "NaN" not in text
+
+
+def test_rv3_manual_quartic_transform_smoke() -> None:
+    result = run_manual_quartic_transform(
+        RV3ManualQuarticRequest(
+            A_mhz=10000.0,
+            B_mhz=5000.0,
+            C_mhz=3000.0,
+            rep_in="I",
+            reduction="A",
+            constants=[1.0, 2.0, 3.0, 4.0, 5.0],
+        )
+    )
+    assert set(result.outputs) == {"II", "III"}
+    assert all("tensor_roundtrip_max_error" in payload for payload in result.outputs.values())
+    text = json.dumps(result.to_jsonable(), allow_nan=False)
+    assert "NaN" not in text
+
+
+def test_rv3_manual_sextic_transform_smoke() -> None:
+    result = run_manual_sextic_transform(
+        RV3ManualSexticRequest(
+            A_mhz=10000.0,
+            B_mhz=5000.0,
+            C_mhz=3000.0,
+            rep_in="I",
+            reduction_in="S",
+            reduction_out="S",
+            constants=[1.0, 2.0, 3.0, 4.0, 5.0, 0.5, 0.25],
+        )
+    )
+    assert set(result.outputs) == {"II", "III"}
+    assert all("roundtrip_max_error" in payload for payload in result.outputs.values())
     text = json.dumps(result.to_jsonable(), allow_nan=False)
     assert "NaN" not in text
