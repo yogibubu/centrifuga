@@ -23,8 +23,9 @@ This note records the current linear-molecule implementation of the Aliev
 framework, including the optical scalar $L$, the Gaussian bootstrap used to
 construct the input layer, and the derivation of the final general linear
 observable from the Aliev--Watson formalism. The main conclusion is that the
-compact 1986 off-diagonal parallel formulas are not sufficient as a universal
-final observable representation. The structurally correct final branch is the
+compact 1986 off-diagonal parallel formulas do not appear sufficient as a
+universal final observable representation in the benchmarked cases. The
+structurally correct final branch is the
 decompacted linear observable, in which genuinely mode-anchored terms remain in
 one-mode coefficients while the unresolved parallel off-diagonal sector is
 carried explicitly by unordered pair contributions. The compact 1986 branch is
@@ -669,6 +670,22 @@ The implemented perpendicular coefficient is
 - 16\sum_{t'} \left[U_{tt'}(\omega_t+\omega_{t'}) + V_{tt'}(\omega_{t'}-\omega_t)\right].
 \end{aligned}
 \end{equation}
+
+Here
+\[
+k^{(4)}_{\beta_t}(t;n,n')
+\]
+denotes the quartic seed object entering the perpendicular branch. In the
+present notation this means
+\[
+k^{(4)}_{\beta_t}(t;n,n')=
+\begin{cases}
+k'_{ttnn'}, & \text{full four-index branch},\\[0.4em]
+\texttt{k4\_reduced}(t,n,n'), & \text{reduced-input branch whenever that access is represented}.
+\end{cases}
+\]
+So the quartic term in $\beta_t$ is a single symbolic formula with two storage
+backends, exactly as in the parallel branch.
 
 Here the term multiplying $r_n$ is \emph{cubic}, not quartic. In the code this
 object is the pair-resolved cubic input carried by
@@ -1602,7 +1619,7 @@ one. In the same working machinery, replacing \texttt{pair\_offdiag} by
 close \texorpdfstring{C\textsubscript{2}H\textsubscript{2}}{C2H2} and it drives
 HCN/HCCD into a clearly nonphysical regime. Therefore the remaining ambiguity
 is not ``which one of the two canonical symmetric components is universally
-correct.'' The physically relevant Aliev component must correspond to a
+correct.'' The physically relevant Aliev component appears to correspond to a
 species- and pair-dependent direction inside the two-dimensional spin-2 space
 spanned by the traceless diagonal and symmetric off-diagonal parts of the pair
 block.
@@ -1700,6 +1717,9 @@ $c_1$-induced Gram matrix $G_{ij}$. Therefore
 \quad
 (\text{up to basis-vector signs}).
 \]
+Equivalently, the mapping from the code-side degenerate basis to the Aliev
+basis is obtained by fixing the harmonic $O(2)$ gauge freedom with the
+$c_1$-induced Gram eigenbasis.
 
 Once this basis is fixed, the operator component
 \[
@@ -1738,8 +1758,9 @@ branch:
   \begin{itemize}
   \item the sign of the perpendicular $xf/cross$ insertion is still adopted as
   a working convention;
-  \item the compact 1986 off-diagonal parallel branch is not quantitatively
-  sufficient as a universal final observable representation.
+  \item the compact 1986 off-diagonal parallel branch does not appear
+  quantitatively sufficient as a universal final observable representation in
+  the present benchmark set.
   \end{itemize}
 \end{itemize}
 
