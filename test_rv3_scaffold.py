@@ -10,6 +10,7 @@ from RV3 import (
     RV3ManualSexticRequest,
     RV3Request,
     RV3Source,
+    build_rv3_integrated_report,
     run_manual_quartic_transform,
     run_manual_sextic_transform,
     run_rv3,
@@ -96,6 +97,23 @@ def test_rv3_order4_hcn_linear_branch_smoke() -> None:
     assert result.quartic_stage.linear_optical_constant is not None
     text = json.dumps(result.to_jsonable(), allow_nan=False)
     assert "NaN" not in text
+
+
+def test_rv3_integrated_report_smoke() -> None:
+    request = RV3Request(
+        max_derivative_order=4,
+        geometry=RV3Source(str(REPO / "hcn.fchk")),
+        hessian=RV3Source(str(REPO / "hcn.fchk")),
+        cubic=RV3Source(str(REPO / "hcn.log")),
+        quartic=RV3Source(str(REPO / "hcn.log")),
+        representation="I",
+    )
+    result = run_rv3(request)
+    report = build_rv3_integrated_report(result)
+    assert "[Standard Quartics]" in report
+    assert "[Alpha From Harmonic + Cubic]" in report
+    assert "[Sextic H22 Linear Diagnostic]" in report
+    assert "[Linear Order-4]" in report
 
 
 def test_rv3_manual_quartic_transform_smoke() -> None:

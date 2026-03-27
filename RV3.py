@@ -66,6 +66,7 @@ from gaussian_vpt_parser import (
     parse_gaussian_fchk_harmonic_data,
     parse_gaussian_harmonic_data,
 )
+from h22_reference import project_h22_ceditt3_reference_path
 from linear_dv_aliev_terms import (
     build_explicit_aliev_L_model,
     build_explicit_aliev_betas,
@@ -156,6 +157,13 @@ class RV3CubicStage:
 
 
 @dataclass
+class RV3QuarticH22Stage:
+    fchk_path: str
+    log_path: str
+    projection_mhz: dict[str, float]
+
+
+@dataclass
 class RV3AlphaParserStage:
     source_path: str
     source_format: str
@@ -207,6 +215,7 @@ class RV3Result:
     geometry_stage: RV3GeometryStage
     harmonic_stage: RV3HarmonicStage | None
     cubic_stage: RV3CubicStage | None
+    quartic_h22_stage: RV3QuarticH22Stage | None
     alpha_parser_stage: RV3AlphaParserStage | None
     alpha_internal_stage: RV3AlphaInternalStage | None
     quartic_stage: RV3QuarticStage | None
@@ -319,6 +328,10 @@ def _sanitize_jsonable(obj: Any) -> Any:
     if isinstance(obj, (np.integer, int)):
         return int(obj)
     return obj
+
+
+def _format_compact(obj: Any) -> str:
+    return json.dumps(_sanitize_jsonable(obj), sort_keys=True)
 
 
 def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQuarticResult:
@@ -807,6 +820,27 @@ def _alpha_internal_stage_from_sources(
     )
 
 
+def _quartic_h22_stage_from_sources(
+    *,
+    harmonic_fchk_path: str | None,
+    benchmark_log_source: RV3Source | None,
+) -> RV3QuarticH22Stage | None:
+    if harmonic_fchk_path is None or benchmark_log_source is None:
+        return None
+    if _infer_format(benchmark_log_source, role="quartic") != "log":
+        return None
+    log_path = str(benchmark_log_source.resolved_path())
+    try:
+        proj = project_h22_ceditt3_reference_path(harmonic_fchk_path, log_path)
+    except Exception:
+        return None
+    return RV3QuarticH22Stage(
+        fchk_path=str(harmonic_fchk_path),
+        log_path=log_path,
+        projection_mhz={str(k): float(v) for k, v in proj.items()},
+    )
+
+
 def _quartic_stage_from_source(
     model: HarmonicInertiaModel,
     source: RV3Source,
@@ -911,6 +945,7 @@ def run_rv3(request: RV3Request) -> RV3Result:
 
     harmonic_stage = None
     cubic_stage = None
+    quartic_h22_stage = None
     alpha_parser_stage = None
     alpha_internal_stage = None
     quartic_stage = None
@@ -927,6 +962,11 @@ def run_rv3(request: RV3Request) -> RV3Result:
             hessian=hessian_loaded,
             representation=request.representation,
             point_group=geometry_stage.point_group,
+        )
+        benchmark_log_source = request.quartic or request.cubic or request.alpha_log
+        quartic_h22_stage = _quartic_h22_stage_from_sources(
+            harmonic_fchk_path=hessian_loaded.source_path if hessian_loaded.source_format == "fchk" else None,
+            benchmark_log_source=benchmark_log_source,
         )
         if request.max_derivative_order >= 3:
             assert request.cubic is not None
@@ -970,6 +1010,7 @@ def run_rv3(request: RV3Request) -> RV3Result:
         geometry_stage=geometry_stage,
         harmonic_stage=harmonic_stage,
         cubic_stage=cubic_stage,
+        quartic_h22_stage=quartic_h22_stage,
         alpha_parser_stage=alpha_parser_stage,
         alpha_internal_stage=alpha_internal_stage,
         quartic_stage=quartic_stage,
@@ -1006,6 +1047,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Optional 1-based alpha mode exclusion list, e.g. 1,3-5.",
     )
     ap.add_argument("--representation", default="I", choices=("I", "II", "III"))
+    ap.add_argument("--integrated-report", action="store_true", help="Emit the integrated vibro-rotational report instead of the short summary.")
     ap.add_argument("--json", action="store_true", help="Emit JSON instead of a human summary.")
     return ap
 
@@ -1019,6 +1061,8 @@ def _format_human_summary(result: RV3Result) -> str:
     ]
     if result.harmonic_stage is not None:
         lines.append(f"  harmonic modes: {result.harmonic_stage.n_modes} in representation {result.harmonic_stage.representation}")
+    if result.quartic_h22_stage is not None:
+        lines.append(f"  quartic H22 reference (MHz): {result.quartic_h22_stage.projection_mhz}")
     if result.cubic_stage is not None:
         lines.append(f"  cubic source aligned with mapping: {result.cubic_stage.mode_reorder_map}")
     if result.alpha_parser_stage is not None:
@@ -1030,6 +1074,95 @@ def _format_human_summary(result: RV3Result) -> str:
         if result.quartic_stage.linear_compactness_audit is not None:
             ratio = result.quartic_stage.linear_compactness_audit["pair_to_mode_ratio"]
             lines.append(f"  linear compactness ratio: {ratio}")
+    return "\n".join(lines)
+
+
+def build_rv3_integrated_report(result: RV3Result) -> str:
+    lines = [
+        "Integrated Vibro-Rotational Analysis",
+        f"geometry={result.geometry_stage.source_path}",
+        f"point_group={result.geometry_stage.point_group}; rotor_type={result.geometry_stage.rotor_type}; sigma={result.geometry_stage.rotational_symmetry_number}",
+        f"ABC_MHz=({result.geometry_stage.abc_mhz[0]}, {result.geometry_stage.abc_mhz[1]}, {result.geometry_stage.abc_mhz[2]})",
+    ]
+    if result.harmonic_stage is not None:
+        lines.extend(
+            [
+                "",
+                "[Standard Quartics]",
+                f"representation={result.harmonic_stage.representation}",
+                f"n_modes={result.harmonic_stage.n_modes}",
+                "watson_S_mhz="
+                + ", ".join(f"{k}={v}" for k, v in result.harmonic_stage.watson_s_mhz.items()),
+            ]
+        )
+    if result.quartic_h22_stage is not None:
+        lines.extend(
+            [
+                "",
+                "[Validated Quartic H22]",
+                f"fchk={result.quartic_h22_stage.fchk_path}",
+                f"log={result.quartic_h22_stage.log_path}",
+                f"projection_mhz={_format_compact(result.quartic_h22_stage.projection_mhz)}",
+            ]
+        )
+    if result.alpha_parser_stage is not None:
+        lines.extend(
+            [
+                "",
+                "[Gaussian Alpha Parser]",
+                f"log={result.alpha_parser_stage.source_path}",
+                f"excluded_modes={result.alpha_parser_stage.excluded_modes or '(none)'}",
+                f"total_alpha_mhz={_format_compact(result.alpha_parser_stage.total_alpha_mhz)}",
+                f"kept_alpha_mhz={_format_compact(result.alpha_parser_stage.kept_alpha_mhz)}",
+                f"removed_alpha_mhz={_format_compact(result.alpha_parser_stage.removed_alpha_mhz)}",
+            ]
+        )
+    if result.alpha_internal_stage is not None:
+        lines.extend(
+            [
+                "",
+                "[Alpha From Harmonic + Cubic]",
+                f"source={result.alpha_internal_stage.source_path}",
+                f"cubic_origin={result.alpha_internal_stage.cubic_matrix_origin}",
+                f"excluded_modes={result.alpha_internal_stage.excluded_modes or '(none)'}",
+                f"alpha_total_sum_mhz={_format_compact(result.alpha_internal_stage.alpha_total_sum_mhz)}",
+                f"alpha_component_sums_mhz={_format_compact(result.alpha_internal_stage.alpha_component_sums_mhz)}",
+            ]
+        )
+        if result.alpha_internal_stage.special_limit_summary_mhz is not None:
+            lines.append(f"special_limit_summary_mhz={_format_compact(result.alpha_internal_stage.special_limit_summary_mhz)}")
+        if result.alpha_internal_stage.benchmark_total_sum_mhz is not None:
+            lines.append(f"gaussian_alpha_benchmark_mhz={_format_compact(result.alpha_internal_stage.benchmark_total_sum_mhz)}")
+            lines.append(f"gaussian_alpha_difference_mhz={_format_compact(result.alpha_internal_stage.benchmark_difference_mhz)}")
+    if result.cubic_stage is not None:
+        lines.extend(
+            [
+                "",
+                "[Sextic H22 Linear Diagnostic]",
+                f"source={result.cubic_stage.source_path}",
+                f"mode_reorder_map={result.cubic_stage.mode_reorder_map}",
+                f"h22_linear_candidate_hz={_format_compact(result.cubic_stage.sextic_h22_linear_candidate_hz)}",
+                "",
+                "[Harmonic/Cubic Sextic Hierarchy]",
+                f"hierarchy_hz={_format_compact(result.cubic_stage.sextic_cubic_hierarchy_hz)}",
+            ]
+        )
+    if result.quartic_stage is not None:
+        lines.extend(
+            [
+                "",
+                "[Linear Order-4]",
+                f"status={result.quartic_stage.linear_branch_status}",
+            ]
+        )
+        if result.quartic_stage.linear_general_observable is not None:
+            lines.append(f"general_observable={_format_compact(result.quartic_stage.linear_general_observable)}")
+        if result.quartic_stage.linear_legacy_compact_observable is not None:
+            lines.append(f"legacy_compact={_format_compact(result.quartic_stage.linear_legacy_compact_observable)}")
+        if result.quartic_stage.linear_compactness_audit is not None:
+            lines.append(f"compactness_audit={_format_compact(result.quartic_stage.linear_compactness_audit)}")
+        if result.quartic_stage.linear_optical_constant is not None:
+            lines.append(f"optical_constant={_format_compact(result.quartic_stage.linear_optical_constant)}")
     return "\n".join(lines)
 
 
@@ -1068,6 +1201,8 @@ def main(argv: list[str] | None = None) -> int:
     result = run_rv3(request)
     if ns.json:
         print(json.dumps(result.to_jsonable(), indent=2, sort_keys=True))
+    elif ns.integrated_report:
+        print(build_rv3_integrated_report(result))
     else:
         print(_format_human_summary(result))
     return 0

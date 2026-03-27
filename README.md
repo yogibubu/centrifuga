@@ -44,6 +44,8 @@ The current scaffold already wires:
 - internal alpha route from the harmonic model plus semi-diagonal cubic input
 - linear order-4 migration through the existing general/decompacted Aliev branch
 - manual quartic and sextic transform routes through JSON requests
+- an integrated vibro-rotational report that combines quartic, alpha, sextic,
+  and linear order-4 summaries in one CLI output
 
 The current scaffold deliberately does **not** pretend that the full RV3
 program is finished. It fixes the API and stage ownership so the remaining work
