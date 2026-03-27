@@ -35,7 +35,7 @@ The intended staged workflow is:
 The current scaffold already wires:
 
 - geometry loaders from `xyz`, Gaussian `log`, Gaussian `fchk`
-- Hessian loading from Gaussian `fchk`
+- Hessian loading from Gaussian `fchk` and text Cartesian Hessians through `xyz + hessian`
 - harmonic model construction
 - point-group and normal-mode symmetry assignment
 - quartic order-2 constants
@@ -46,6 +46,9 @@ The current scaffold already wires:
 - manual quartic and sextic transform routes through JSON requests
 - an integrated vibro-rotational report that combines quartic, alpha, sextic,
   and linear order-4 summaries in one CLI output
+- file exports for JSON / integrated report / flat summary CSV
+- a thin GUI launcher:
+  - [`RV3_gui.py`](./RV3_gui.py)
 
 The current scaffold deliberately does **not** pretend that the full RV3
 program is finished. It fixes the API and stage ownership so the remaining work

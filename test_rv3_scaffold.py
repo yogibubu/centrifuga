@@ -5,12 +5,15 @@ from pathlib import Path
 
 import pytest
 
+from gaussian_vpt_parser import parse_gaussian_fchk_harmonic_data
 from RV3 import (
     RV3ManualQuarticRequest,
     RV3ManualSexticRequest,
     RV3Request,
     RV3Source,
     build_rv3_integrated_report,
+    build_rv3_summary_csv,
+    export_rv3_outputs,
     run_manual_quartic_transform,
     run_manual_sextic_transform,
     run_rv3,
@@ -41,6 +44,30 @@ def test_rv3_order2_h2o_fchk_smoke() -> None:
     assert result.harmonic_stage is not None
     assert result.harmonic_stage.n_modes == 3
     assert "DJ" in result.harmonic_stage.watson_s_mhz
+
+
+def test_rv3_order2_h2o_xyz_hessian_smoke(tmp_path: Path) -> None:
+    fchk = parse_gaussian_fchk_harmonic_data(REPO / "gaussian" / "h2o.fchk")
+    xyz_path = tmp_path / "h2o.xyz"
+    xyz_lines = [str(len(fchk.atomic_numbers)), "h2o from fchk"]
+    symbols = ["H" if z == 1 else "O" for z in fchk.atomic_numbers]
+    coords_ang = fchk.coords_bohr / 1.8897261254578281
+    for sym, row in zip(symbols, coords_ang):
+        xyz_lines.append(f"{sym} {row[0]:.12f} {row[1]:.12f} {row[2]:.12f}")
+    xyz_path.write_text("\n".join(xyz_lines) + "\n", encoding="utf-8")
+    hessian_path = tmp_path / "h2o.hess"
+    flat = " ".join(f"{float(x):.16e}" for x in fchk.cartesian_force_constants.reshape(-1))
+    hessian_path.write_text(flat + "\n", encoding="utf-8")
+    request = RV3Request(
+        max_derivative_order=2,
+        geometry=RV3Source(str(xyz_path)),
+        hessian=RV3Source(str(hessian_path)),
+        representation="I",
+    )
+    result = run_rv3(request)
+    assert result.geometry_stage.point_group == "C2v"
+    assert result.harmonic_stage is not None
+    assert result.harmonic_stage.n_modes == 3
 
 
 def test_rv3_order3_h2o_log_fchk_smoke() -> None:
@@ -114,6 +141,28 @@ def test_rv3_integrated_report_smoke() -> None:
     assert "[Alpha From Harmonic + Cubic]" in report
     assert "[Sextic H22 Linear Diagnostic]" in report
     assert "[Linear Order-4]" in report
+
+
+def test_rv3_exports_smoke(tmp_path: Path) -> None:
+    request = RV3Request(
+        max_derivative_order=3,
+        geometry=RV3Source(str(REPO / "gaussian" / "h2o.fchk")),
+        hessian=RV3Source(str(REPO / "gaussian" / "h2o.fchk")),
+        cubic=RV3Source(str(REPO / "gaussian" / "h2o.log")),
+        representation="I",
+    )
+    result = run_rv3(request)
+    report_text = build_rv3_integrated_report(result)
+    csv_text = build_rv3_summary_csv(result)
+    assert "Integrated Vibro-Rotational Analysis" in report_text
+    assert "field,value" in csv_text
+    json_path = tmp_path / "rv3.json"
+    report_path = tmp_path / "rv3.txt"
+    csv_path = tmp_path / "rv3.csv"
+    export_rv3_outputs(result, json_path=json_path, report_path=report_path, csv_path=csv_path)
+    assert json.loads(json_path.read_text(encoding="utf-8"))["geometry_stage"]["point_group"] == "C2v"
+    assert "Integrated Vibro-Rotational Analysis" in report_path.read_text(encoding="utf-8")
+    assert "field,value" in csv_path.read_text(encoding="utf-8")
 
 
 def test_rv3_manual_quartic_transform_smoke() -> None:

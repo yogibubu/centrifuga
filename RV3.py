@@ -28,10 +28,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import tkinter as tk
 import warnings
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+from tkinter import filedialog, scrolledtext, ttk
 
 import numpy as np
 import sympy as sp
@@ -83,6 +85,7 @@ from rovib_distortion import (
     Molecule,
     harmonic_inertia_model_from_geometry_hessian,
     inertia_tensor,
+    read_hessian,
     read_xyz,
     rotational_constants,
 )
@@ -469,6 +472,8 @@ def _infer_format(source: RV3Source, *, role: str) -> str:
         return "log"
     if suffix == ".fchk":
         return "fchk"
+    if suffix in {".txt", ".dat", ".hess"} and role == "hessian":
+        return "der2"
     if role == "hessian":
         return "der2"
     if role == "cubic":
@@ -516,7 +521,7 @@ def _load_geometry(source: RV3Source) -> _LoadedGeometry:
     raise ValueError(f"Unsupported geometry format {fmt!r}.")
 
 
-def _load_hessian(source: RV3Source) -> _LoadedHessian:
+def _load_hessian(source: RV3Source, *, geometry: _LoadedGeometry | None = None) -> _LoadedHessian:
     fmt = _infer_format(source, role="hessian")
     path = source.resolved_path()
     if fmt == "fchk":
@@ -530,7 +535,18 @@ def _load_hessian(source: RV3Source) -> _LoadedHessian:
             symbols=symbols_from_atomic_numbers(harm.atomic_numbers),
         )
     if fmt == "der2":
-        raise NotImplementedError("Der2 parsing is reserved for the RV3 follow-up implementation.")
+        if geometry is None:
+            raise ValueError("Text Hessian input requires an explicit geometry source (xyz/log/fchk).")
+        mol = geometry.molecule
+        hessian = read_hessian(path, mol.n_atoms)
+        return _LoadedHessian(
+            source_path=str(path),
+            source_format=fmt,
+            masses_amu=np.asarray(mol.masses_amu, dtype=float),
+            coords_ang=np.asarray(mol.coords_ang, dtype=float),
+            hessian=np.asarray(hessian, dtype=float),
+            symbols=list(mol.symbols),
+        )
     raise ValueError(f"Unsupported Hessian format {fmt!r}.")
 
 
@@ -956,7 +972,7 @@ def run_rv3(request: RV3Request) -> RV3Result:
 
     if request.max_derivative_order >= 2:
         assert request.hessian is not None
-        hessian_loaded = _load_hessian(request.hessian)
+        hessian_loaded = _load_hessian(request.hessian, geometry=geometry_loaded)
         model, harmonic_stage = _harmonic_stage_from_sources(
             geometry=geometry_loaded,
             hessian=hessian_loaded,
@@ -1049,6 +1065,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--representation", default="I", choices=("I", "II", "III"))
     ap.add_argument("--integrated-report", action="store_true", help="Emit the integrated vibro-rotational report instead of the short summary.")
     ap.add_argument("--json", action="store_true", help="Emit JSON instead of a human summary.")
+    ap.add_argument("--output-json", help="Optional path where the full RV3 JSON payload will be written.")
+    ap.add_argument("--output-report", help="Optional path where the integrated report text will be written.")
+    ap.add_argument("--output-csv", help="Optional path where the flat summary CSV will be written.")
+    ap.add_argument("--gui", action="store_true", help="Launch the RV3 GUI.")
     return ap
 
 
@@ -1166,9 +1186,187 @@ def build_rv3_integrated_report(result: RV3Result) -> str:
     return "\n".join(lines)
 
 
+def build_rv3_summary_csv(result: RV3Result) -> str:
+    rows: list[tuple[str, Any]] = [
+        ("order", result.request["max_derivative_order"]),
+        ("geometry_source", result.geometry_stage.source_path),
+        ("point_group", result.geometry_stage.point_group),
+        ("rotor_type", result.geometry_stage.rotor_type),
+        ("sigma", result.geometry_stage.rotational_symmetry_number),
+    ]
+    for i, val in enumerate(result.geometry_stage.abc_mhz):
+        rows.append((f"ABC_MHz_{i}", val))
+    if result.harmonic_stage is not None:
+        rows.append(("representation", result.harmonic_stage.representation))
+        rows.append(("n_modes", result.harmonic_stage.n_modes))
+        for key, val in result.harmonic_stage.watson_s_mhz.items():
+            rows.append((f"quartic_{key}_MHz", val))
+    if result.quartic_h22_stage is not None:
+        for key, val in result.quartic_h22_stage.projection_mhz.items():
+            rows.append((f"quartic_h22_{key}_MHz", val))
+    if result.alpha_parser_stage is not None:
+        for i, val in enumerate(result.alpha_parser_stage.total_alpha_mhz):
+            rows.append((f"alpha_parser_total_MHz_{i}", val))
+    if result.alpha_internal_stage is not None:
+        for i, val in enumerate(result.alpha_internal_stage.alpha_total_sum_mhz):
+            rows.append((f"alpha_internal_total_MHz_{i}", val))
+        for key, arr in result.alpha_internal_stage.alpha_component_sums_mhz.items():
+            for i, val in enumerate(arr):
+                rows.append((f"alpha_{key}_MHz_{i}", val))
+    if result.cubic_stage is not None:
+        rows.append(("cubic_mode_reorder_map", " ".join(str(x) for x in result.cubic_stage.mode_reorder_map)))
+    if result.quartic_stage is not None:
+        rows.append(("linear_branch_status", result.quartic_stage.linear_branch_status))
+        if result.quartic_stage.linear_compactness_audit is not None:
+            for key, val in result.quartic_stage.linear_compactness_audit.items():
+                rows.append((f"linear_compactness_{key}", val))
+        if result.quartic_stage.linear_optical_constant is not None:
+            rows.append(("linear_optical_L_cm", result.quartic_stage.linear_optical_constant.get("L_cm")))
+    lines = ["field,value"]
+    for key, val in rows:
+        sval = _sanitize_jsonable(val)
+        if isinstance(sval, (dict, list)):
+            sval = json.dumps(sval, sort_keys=True)
+        lines.append(f"{key},{sval}")
+    return "\n".join(lines) + "\n"
+
+
+def export_rv3_outputs(
+    result: RV3Result,
+    *,
+    json_path: str | Path | None = None,
+    report_path: str | Path | None = None,
+    csv_path: str | Path | None = None,
+) -> None:
+    if json_path is not None:
+        Path(json_path).write_text(json.dumps(result.to_jsonable(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if report_path is not None:
+        Path(report_path).write_text(build_rv3_integrated_report(result) + "\n", encoding="utf-8")
+    if csv_path is not None:
+        Path(csv_path).write_text(build_rv3_summary_csv(result), encoding="utf-8")
+
+
+def launch_rv3_gui() -> int:
+    root = tk.Tk()
+    root.title("RV3")
+    root.geometry("1100x850")
+
+    vars: dict[str, tk.StringVar] = {
+        "order": tk.StringVar(value="3"),
+        "representation": tk.StringVar(value="I"),
+        "geometry": tk.StringVar(),
+        "hessian": tk.StringVar(),
+        "cubic": tk.StringVar(),
+        "quartic": tk.StringVar(),
+        "alpha_log": tk.StringVar(),
+        "alpha_cubic_two_index": tk.StringVar(),
+        "alpha_excluded_modes": tk.StringVar(),
+    }
+
+    top = ttk.Frame(root, padding=8)
+    top.pack(fill=tk.X)
+    ttk.Label(top, text="Order").grid(row=0, column=0, sticky="w")
+    ttk.Combobox(top, textvariable=vars["order"], values=[str(x) for x in RV3_ALLOWED_ORDERS], width=6, state="readonly").grid(row=0, column=1, sticky="w", padx=4)
+    ttk.Label(top, text="Representation").grid(row=0, column=2, sticky="w", padx=(12, 0))
+    ttk.Combobox(top, textvariable=vars["representation"], values=["I", "II", "III"], width=6, state="readonly").grid(row=0, column=3, sticky="w", padx=4)
+
+    fields = [
+        ("Geometry", "geometry"),
+        ("Hessian", "hessian"),
+        ("Cubic", "cubic"),
+        ("Quartic", "quartic"),
+        ("Alpha log", "alpha_log"),
+        ("Alpha 2-index", "alpha_cubic_two_index"),
+    ]
+    form = ttk.Frame(root, padding=8)
+    form.pack(fill=tk.X)
+    for r, (label, key) in enumerate(fields, start=1):
+        ttk.Label(form, text=label).grid(row=r, column=0, sticky="w")
+        ttk.Entry(form, textvariable=vars[key], width=100).grid(row=r, column=1, sticky="we", padx=4)
+        ttk.Button(
+            form,
+            text="Browse",
+            command=lambda k=key: vars[k].set(
+                filedialog.askopenfilename(title=f"Select {k.replace('_', ' ')}") or vars[k].get()
+            ),
+        ).grid(row=r, column=2, sticky="w")
+    ttk.Label(form, text="Alpha excluded").grid(row=len(fields) + 1, column=0, sticky="w")
+    ttk.Entry(form, textvariable=vars["alpha_excluded_modes"], width=30).grid(row=len(fields) + 1, column=1, sticky="w", padx=4)
+    form.columnconfigure(1, weight=1)
+
+    report = scrolledtext.ScrolledText(root, wrap="word", height=32)
+    report.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+
+    last_result: dict[str, RV3Result | None] = {"value": None}
+
+    def _build_request() -> RV3Request:
+        def src(key: str) -> RV3Source | None:
+            value = vars[key].get().strip()
+            return None if not value else RV3Source(value, "auto")
+        return RV3Request(
+            max_derivative_order=int(vars["order"].get()),
+            geometry=src("geometry"),
+            hessian=src("hessian"),
+            cubic=src("cubic"),
+            quartic=src("quartic"),
+            alpha_log=src("alpha_log"),
+            alpha_cubic_two_index=src("alpha_cubic_two_index"),
+            alpha_excluded_modes=tuple(sorted(_parse_mode_selection(vars["alpha_excluded_modes"].get()))),
+            representation=vars["representation"].get(),
+        )
+
+    def _run(kind: str) -> None:
+        try:
+            result = run_rv3(_build_request())
+            last_result["value"] = result
+            if kind == "json":
+                text = json.dumps(result.to_jsonable(), indent=2, sort_keys=True)
+            elif kind == "report":
+                text = build_rv3_integrated_report(result)
+            else:
+                text = _format_human_summary(result)
+            report.delete("1.0", tk.END)
+            report.insert(tk.END, text)
+        except Exception as exc:
+            report.delete("1.0", tk.END)
+            report.insert(tk.END, f"RV3 error:\n{exc}\n")
+
+    def _export(kind: str) -> None:
+        result = last_result["value"]
+        if result is None:
+            report.insert(tk.END, "\nRun RV3 first.\n")
+            return
+        if kind == "json":
+            path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+            if path:
+                export_rv3_outputs(result, json_path=path)
+        elif kind == "report":
+            path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text", "*.txt"), ("All files", "*.*")])
+            if path:
+                export_rv3_outputs(result, report_path=path)
+        else:
+            path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV", "*.csv"), ("All files", "*.*")])
+            if path:
+                export_rv3_outputs(result, csv_path=path)
+
+    actions = ttk.Frame(root, padding=8)
+    actions.pack(fill=tk.X)
+    ttk.Button(actions, text="Run Summary", command=lambda: _run("summary")).pack(side=tk.LEFT)
+    ttk.Button(actions, text="Run Integrated Report", command=lambda: _run("report")).pack(side=tk.LEFT, padx=(8, 0))
+    ttk.Button(actions, text="Run JSON", command=lambda: _run("json")).pack(side=tk.LEFT, padx=(8, 0))
+    ttk.Button(actions, text="Export JSON", command=lambda: _export("json")).pack(side=tk.LEFT, padx=(24, 0))
+    ttk.Button(actions, text="Export Report", command=lambda: _export("report")).pack(side=tk.LEFT, padx=(8, 0))
+    ttk.Button(actions, text="Export CSV", command=lambda: _export("csv")).pack(side=tk.LEFT, padx=(8, 0))
+
+    root.mainloop()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = _build_arg_parser()
     ns = ap.parse_args(argv)
+    if ns.gui:
+        return launch_rv3_gui()
     if ns.manual_quartic_json and ns.manual_sextic_json:
         raise ValueError("Choose only one of --manual-quartic-json or --manual-sextic-json.")
     if ns.manual_quartic_json:
@@ -1199,6 +1397,12 @@ def main(argv: list[str] | None = None) -> int:
         representation=ns.representation,
     )
     result = run_rv3(request)
+    export_rv3_outputs(
+        result,
+        json_path=ns.output_json,
+        report_path=ns.output_report,
+        csv_path=ns.output_csv,
+    )
     if ns.json:
         print(json.dumps(result.to_jsonable(), indent=2, sort_keys=True))
     elif ns.integrated_report:
