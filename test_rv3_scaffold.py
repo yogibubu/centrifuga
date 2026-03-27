@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -46,3 +47,23 @@ def test_rv3_order3_h2o_log_fchk_smoke() -> None:
     assert result.cubic_stage is not None
     assert result.cubic_stage.phi3_reduced_shape == [3, 3, 3]
     assert len(result.cubic_stage.mode_reorder_map) == 3
+
+
+def test_rv3_order4_hcn_linear_branch_smoke() -> None:
+    request = RV3Request(
+        max_derivative_order=4,
+        geometry=RV3Source(str(REPO / "hcn.fchk")),
+        hessian=RV3Source(str(REPO / "hcn.fchk")),
+        cubic=RV3Source(str(REPO / "hcn.log")),
+        quartic=RV3Source(str(REPO / "hcn.log")),
+        representation="I",
+    )
+    result = run_rv3(request)
+    assert result.quartic_stage is not None
+    assert result.quartic_stage.linear_branch_status == "linear_order4_general_branch_live"
+    assert result.quartic_stage.linear_general_observable is not None
+    assert result.quartic_stage.linear_legacy_compact_observable is not None
+    assert result.quartic_stage.linear_compactness_audit is not None
+    assert result.quartic_stage.linear_optical_constant is not None
+    text = json.dumps(result.to_jsonable(), allow_nan=False)
+    assert "NaN" not in text

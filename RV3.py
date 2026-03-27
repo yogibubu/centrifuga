@@ -26,11 +26,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import warnings
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import sympy as sp
 
 from compare_gaussian_sextic import sextic_cubic_hierarchy_hz, sextic_h22_linear_candidate_hz, sextic_linear_source_formula_hz
 from distortion_workflow import compute_order2_quartic
@@ -41,6 +43,15 @@ from gaussian_vpt_parser import (
     parse_gaussian_fchk_harmonic_data,
     parse_gaussian_harmonic_data,
 )
+from linear_dv_aliev_terms import (
+    build_explicit_aliev_L_model,
+    build_explicit_aliev_betas,
+    build_explicit_aliev_dv_compactness_audit,
+    build_explicit_aliev_dv_general_model,
+    build_explicit_aliev_dv_legacy_compact_model,
+    make_linear_aliev_explicit_inputs_from_mapping,
+    resolve_linear_aliev_quartic_mode,
+)
 from rovib_distortion import (
     ANGSTROM_TO_BOHR,
     HarmonicInertiaModel,
@@ -50,6 +61,7 @@ from rovib_distortion import (
     read_xyz,
     rotational_constants,
 )
+from scripts.build_linear_aliev_payload_from_gaussian import build_payload as build_linear_aliev_payload
 from symmetry_metadata import assign_normal_mode_irreps, point_group_from_geometry, rotor_type_for_symmetry, symbols_from_atomic_numbers
 
 
@@ -122,6 +134,10 @@ class RV3QuarticStage:
     mode_reorder_map: list[int]
     phi4_reduced_shape: list[int]
     linear_branch_status: str
+    linear_general_observable: dict[str, Any] | None = None
+    linear_legacy_compact_observable: dict[str, Any] | None = None
+    linear_compactness_audit: dict[str, Any] | None = None
+    linear_optical_constant: dict[str, Any] | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -135,7 +151,7 @@ class RV3Result:
     pending_work: list[str]
 
     def to_jsonable(self) -> dict[str, Any]:
-        return asdict(self)
+        return _sanitize_jsonable(asdict(self))
 
 
 @dataclass(frozen=True)
@@ -153,6 +169,23 @@ class _LoadedHessian:
     coords_ang: np.ndarray
     hessian: np.ndarray
     symbols: list[str]
+
+
+def _sanitize_jsonable(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_jsonable(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [_sanitize_jsonable(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return _sanitize_jsonable(obj.tolist())
+    if isinstance(obj, (np.floating, float)):
+        val = float(obj)
+        return val if np.isfinite(val) else None
+    if isinstance(obj, (np.integer, int)):
+        return int(obj)
+    return obj
 
 
 def _infer_format(source: RV3Source, *, role: str) -> str:
@@ -327,9 +360,11 @@ def _cubic_stage_from_source(model: HarmonicInertiaModel, source: RV3Source) -> 
     mapping, phi3_reduced_cm, _phi3_raw = align_gaussian_cubic_force_constants(anh, np.asarray(model.vib_freq_cm, dtype=float))
     axes = _axes_from_model(model)
     rotor_type = rotor_type_for_symmetry(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
-    h22 = sextic_h22_linear_candidate_hz(model, axes)
-    hierarchy = sextic_cubic_hierarchy_hz(model, phi3_reduced_cm, axes)
-    linear_source = sextic_linear_source_formula_hz(model, phi3_reduced_cm) if rotor_type == "linear" else None
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module=r"compare_gaussian_sextic")
+        h22 = sextic_h22_linear_candidate_hz(model, axes)
+        hierarchy = sextic_cubic_hierarchy_hz(model, phi3_reduced_cm, axes)
+        linear_source = sextic_linear_source_formula_hz(model, phi3_reduced_cm) if rotor_type == "linear" else None
     notes = [
         "Mode ordering aligned by harmonic frequency matching.",
         "This stage validates cubic-source consistency with the harmonic normal-mode basis.",
@@ -346,22 +381,94 @@ def _cubic_stage_from_source(model: HarmonicInertiaModel, source: RV3Source) -> 
     )
 
 
-def _quartic_stage_from_source(model: HarmonicInertiaModel, source: RV3Source) -> RV3QuarticStage:
+def _quartic_stage_from_source(
+    model: HarmonicInertiaModel,
+    source: RV3Source,
+    *,
+    harmonic_fchk_path: str | None,
+) -> RV3QuarticStage:
     fmt, path, anh = _load_anharmonic(source, role="quartic")
     mapping = frequency_reorder_map(anh.frequencies_cm, np.asarray(model.vib_freq_cm, dtype=float))
     phi4_reduced_cm = _reorder_quartic_force_constants(np.asarray(anh.phi4_reduced_cm, dtype=float), mapping)
     rotor_type = rotor_type_for_symmetry(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
     notes = [
         "Mode ordering aligned by harmonic frequency matching.",
-        "The existing linear order-4 backend still lives in the dedicated linear-Aliev workflow and should be migrated behind RV3 next.",
+        "Quartic source consistency is validated against the internally built harmonic basis.",
     ]
-    branch_status = "linear_backend_available_but_not_yet_migrated" if rotor_type == "linear" else "nonlinear_order4_pending"
+    branch_status = "nonlinear_order4_pending"
+    linear_general_observable = None
+    linear_legacy_compact_observable = None
+    linear_compactness_audit = None
+    linear_optical_constant = None
+    if rotor_type == "linear":
+        if harmonic_fchk_path is None:
+            raise ValueError("Linear order-4 RV3 branch currently requires the harmonic Hessian source to be an fchk.")
+        payload = build_linear_aliev_payload(
+            fchk_path=harmonic_fchk_path,
+            log_path=path,
+            zeta_reduction="pair_offdiag",
+            force_constant_source="reduced",
+            pair_seed_source="gaussian_qe_source",
+        )
+        quartic_mode = resolve_linear_aliev_quartic_mode(
+            k4_parallel=payload.get("k4_parallel"),
+            k4_reduced=payload.get("k4_reduced"),
+            quartic_mode="auto",
+        )
+        inputs = make_linear_aliev_explicit_inputs_from_mapping(payload, quartic_mode=quartic_mode)
+        betas = build_explicit_aliev_betas(inputs)
+        general_model = build_explicit_aliev_dv_general_model(inputs)
+        legacy_model = build_explicit_aliev_dv_legacy_compact_model(inputs)
+        audit = build_explicit_aliev_dv_compactness_audit(inputs)
+        l_model = build_explicit_aliev_L_model(inputs)
+        n_parallel = len(inputs.omega_parallel)
+        ground_state = tuple(0 for _ in general_model.mode_kinds)
+        linear_general_observable = {
+            "quartic_mode": quartic_mode,
+            "mode_kinds": list(general_model.mode_kinds),
+            "ground_state_dv_cm": float(sp.N(general_model.value_for_state(ground_state))),
+            "beta_parallel_mode_terms_cm": {
+                str(idx): float(sp.N(val)) for idx, val in general_model.beta_parallel_mode_terms.items()
+            },
+            "beta_parallel_pair_terms_cm": {
+                f"{i},{j}": float(sp.N(val)) for (i, j), val in general_model.beta_parallel_pair_terms.items()
+            },
+            "beta_perpendicular_cm": {
+                str(idx): float(sp.N(val)) for idx, val in general_model.beta_perpendicular.items()
+            },
+        }
+        linear_legacy_compact_observable = {
+            "ground_state_dv_cm": float(sp.N(legacy_model.value_for_state(ground_state))),
+            "beta_parallel_cm": {str(idx): float(sp.N(val)) for idx, val in betas.beta_parallel.items()},
+            "beta_perpendicular_cm": {str(idx): float(sp.N(val)) for idx, val in betas.beta_perpendicular.items()},
+        }
+        linear_compactness_audit = {
+            "max_parallel_mode_term_cm": float(sp.N(audit.max_parallel_mode_term)),
+            "max_parallel_pair_term_cm": float(sp.N(audit.max_parallel_pair_term)),
+            "pair_to_mode_ratio": float(sp.N(audit.pair_to_mode_ratio)),
+        }
+        linear_optical_constant = {
+            "L_cm": float(sp.N(l_model.value)),
+            "shared_offset_cm": float(sp.N(l_model.shared_offset)),
+            "mode_contributions_cm": [float(sp.N(x)) for x in l_model.mode_contributions],
+            "mode_contributions_with_shared_offset_cm": [
+                float(sp.N(x)) for x in l_model.mode_contributions_with_shared_offset
+            ],
+        }
+        branch_status = "linear_order4_general_branch_live"
+        notes.append(
+            "For linear molecules RV3 now calls the existing general/decompacted linear-Aliev observable branch."
+        )
     return RV3QuarticStage(
         source_path=path,
         source_format=fmt,
         mode_reorder_map=[int(x) for x in mapping],
         phi4_reduced_shape=[int(x) for x in phi4_reduced_cm.shape],
         linear_branch_status=branch_status,
+        linear_general_observable=linear_general_observable,
+        linear_legacy_compact_observable=linear_legacy_compact_observable,
+        linear_compactness_audit=linear_compactness_audit,
+        linear_optical_constant=linear_optical_constant,
         notes=notes,
     )
 
@@ -398,7 +505,11 @@ def run_rv3(request: RV3Request) -> RV3Result:
             cubic_stage = _cubic_stage_from_source(model, request.cubic)
         if request.max_derivative_order >= 4:
             assert request.quartic is not None
-            quartic_stage = _quartic_stage_from_source(model, request.quartic)
+            quartic_stage = _quartic_stage_from_source(
+                model,
+                request.quartic,
+                harmonic_fchk_path=hessian_loaded.source_path if hessian_loaded.source_format == "fchk" else None,
+            )
 
     return RV3Result(
         request={
@@ -446,6 +557,9 @@ def _format_human_summary(result: RV3Result) -> str:
         lines.append(f"  cubic source aligned with mapping: {result.cubic_stage.mode_reorder_map}")
     if result.quartic_stage is not None:
         lines.append(f"  quartic stage: {result.quartic_stage.linear_branch_status}")
+        if result.quartic_stage.linear_compactness_audit is not None:
+            ratio = result.quartic_stage.linear_compactness_audit["pair_to_mode_ratio"]
+            lines.append(f"  linear compactness ratio: {ratio}")
     return "\n".join(lines)
 
 
