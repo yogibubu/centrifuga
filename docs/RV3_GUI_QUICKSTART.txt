@@ -1,0 +1,31 @@
+RV3 GUI Quickstart
+
+1. Launch RV3.app.
+2. Choose:
+   - order
+   - representation
+   - geometry
+   - hessian
+   - cubic and quartic logs if available
+   - optional alpha log / alpha 2-index matrix
+3. Use:
+   - Run Summary
+   - Run Integrated Report
+   - Run JSON
+4. Export with:
+   - Export JSON
+   - Export Report
+   - Export CSV
+
+Recommended current routes:
+- order 2:
+  - fchk
+  - or xyz + text Cartesian Hessian
+- order 3:
+  - fchk + Gaussian anharmonic log
+- order 4 linear:
+  - fchk + Gaussian anharmonic log
+
+Current limitation:
+- Der2 / Der3 / Der4 external readers are still pending.
+

@@ -9,6 +9,7 @@ APP_VERSION="${APP_VERSION:-3.0.0}"
 APP_BUNDLE_ID="${APP_BUNDLE_ID:-com.vincenzobarone.ceditt}"
 ICON_PATH="${ICON_PATH:-$BASE_DIR/assets/icons/app_icon.icns}"
 PYI_CONFIG_DIR="${PYI_CONFIG_DIR:-$BASE_DIR/.pyinstaller}"
+ENTRY_SCRIPT="${ENTRY_SCRIPT:-ceditt_gui.py}"
 
 PY_BIN="${PY_BIN:-$(command -v python3)}"
 if [[ -z "$PY_BIN" || ! -x "$PY_BIN" ]]; then
@@ -34,7 +35,7 @@ PYINSTALLER_CONFIG_DIR="$PYI_CONFIG_DIR" \
   --icon "$ICON_PATH" \
   --osx-bundle-identifier "$APP_BUNDLE_ID" \
   --contents-directory "_internal" \
-  ceditt_gui.py
+  "$ENTRY_SCRIPT"
 
 APP_PATH="$BASE_DIR/dist/${APP_NAME}.app"
 if [[ ! -d "$APP_PATH" ]]; then
