@@ -122,14 +122,42 @@ def _linear_gaussian_source_aux_data(model, gaussian_log_path: str):
 def _linear_gaussian_exact_source_blocks(gaussian_log_path: str) -> dict[str, object]:
     from gaussian_vpt_parser import (
         _resolve_gaussian_path,
+        _find_c1_matrix,
+        _find_c2_tensor,
+        _find_last_section_index,
+        _find_tau_tensor,
         parse_gaussian_alpha_data,
         parse_gaussian_anharmonic_force_data,
         parse_gaussian_linear_ltype_constants,
+        parse_gaussian_sextic_benchmark,
     )
 
     lines = _resolve_gaussian_path(gaussian_log_path).read_text(encoding="utf-8").splitlines()
     alpha = parse_gaussian_alpha_data(gaussian_log_path)
     anh = parse_gaussian_anharmonic_force_data(gaussian_log_path)
+    try:
+        sextic = parse_gaussian_sextic_benchmark(gaussian_log_path)
+        sextic_tau_cm = None if sextic.tau_cm is None else np.asarray(sextic.tau_cm, dtype=float)
+        sextic_c1 = None if sextic.c1 is None else np.asarray(sextic.c1, dtype=float)
+        sextic_c2 = None if sextic.c2 is None and sextic.c2_reordered_to_print is None else np.asarray(
+            sextic.c2_reordered_to_print if sextic.c2_reordered_to_print is not None else sextic.c2,
+            dtype=float,
+        )
+    except Exception:
+        try:
+            sextic_start = _find_last_section_index(lines, "Dump from SEXTIC")
+            tau_start = _find_last_section_index(lines, "Quartic Centrifugal Distortion Constants Tau (in cm^-1)")
+            c1_start = _find_last_section_index(lines, "Dimensionless C_i^ab Matrix")
+            c2_start = _find_last_section_index(lines, "Dimensionless C_i^abc Matrix")
+            if tau_start < sextic_start:
+                raise ValueError("Could not locate sextic Tau block after 'Dump from SEXTIC'.")
+            sextic_tau_cm = _find_tau_tensor(lines, tau_start)
+            sextic_c1 = _find_c1_matrix(lines, c1_start)
+            sextic_c2 = _find_c2_tensor(lines, c2_start)
+        except Exception:
+            sextic_tau_cm = None
+            sextic_c1 = None
+            sextic_c2 = None
     qconst = parse_gaussian_linear_ltype_constants(gaussian_log_path)
 
     axis_pat = re.compile(r"\(([xyz])\)", re.IGNORECASE)
@@ -189,6 +217,9 @@ def _linear_gaussian_exact_source_blocks(gaussian_log_path: str) -> dict[str, ob
         "didq_amu_sqrt_ang": didq,
         "zeta_xyz": zeta_xyz,
         "phi3_raw_au": np.asarray(anh.phi3_raw_au, dtype=float),
+        "sextic_tau_cm": None if sextic_tau_cm is None else np.asarray(sextic_tau_cm, dtype=float),
+        "sextic_c1": None if sextic_c1 is None else np.asarray(sextic_c1, dtype=float),
+        "sextic_c2": None if sextic_c2 is None else np.asarray(sextic_c2, dtype=float),
         "qconst": qconst,
         "representative_indices": rep_indices,
         "degenerate_indices": sorted(set(deg_indices)),
@@ -487,14 +518,19 @@ def _linear_gaussian_exact_source_h_hz(
     didq_src = np.asarray(gaussian_source_blocks["didq_amu_sqrt_ang"], dtype=float)
     zeta_src = np.asarray(gaussian_source_blocks["zeta_xyz"], dtype=float)
     phi3_src = np.asarray(gaussian_source_blocks["phi3_raw_au"], dtype=float)
+    tau_src = gaussian_source_blocks.get("sextic_tau_cm")
+    c1_src = gaussian_source_blocks.get("sextic_c1")
+    c2_src = gaussian_source_blocks.get("sextic_c2")
 
-    # Align Gaussian printed source blocks to the current model convention
-    # through frequency matching and mode-sign search on dIdQ.
-    order = frequency_reorder_map(freq_src, np.abs(np.asarray(model.vib_freq_cm, dtype=float)))
-    freq = freq_src[np.asarray(order, dtype=int)].copy()
-    didq = didq_src[np.asarray(order, dtype=int)].copy()
-    zeta = zeta_src[:, np.asarray(order, dtype=int)][:, :, np.asarray(order, dtype=int)].copy()
-    phi3_raw = phi3_src[np.ix_(np.asarray(order, dtype=int), np.asarray(order, dtype=int), np.asarray(order, dtype=int))].copy()
+    # Align Gaussian printed source blocks to the current model convention.
+    # ``frequency_reorder_map`` returns source -> target; we need the inverse
+    # permutation to reorder source-indexed arrays into target order.
+    source_to_target = frequency_reorder_map(freq_src, np.abs(np.asarray(model.vib_freq_cm, dtype=float)))
+    target_order = np.argsort(np.asarray(source_to_target, dtype=int))
+    freq = freq_src[target_order].copy()
+    didq = didq_src[target_order].copy()
+    zeta = zeta_src[:, target_order][:, :, target_order].copy()
+    phi3_raw = phi3_src[np.ix_(target_order, target_order, target_order)].copy()
 
     model_didq = _didq_from_model(model)
     sign_vec = np.ones(freq.size, dtype=float)
@@ -504,55 +540,74 @@ def _linear_gaussian_exact_source_h_hz(
     didq *= sign_vec[:, None]
     zeta *= sign_vec[None, :, None] * sign_vec[None, None, :]
     phi3_raw *= sign_vec[:, None, None] * sign_vec[None, :, None] * sign_vec[None, None, :]
+    c1 = None
+    if c1_src is not None:
+        c1 = np.asarray(c1_src, dtype=float)[target_order].copy()
+        c1 *= sign_vec[:, None, None]
+    c2 = None
+    if c2_src is not None:
+        c2 = np.asarray(c2_src, dtype=float)[target_order].copy()
+        c2 *= sign_vec[:, None, None, None]
+    tau = None if tau_src is None else np.asarray(tau_src, dtype=float).copy()
 
     moments_xyz, rot_xyz_cm = _representation_axis_values(model)
     abc_to_xyz = {label: i for i, label in enumerate(model.xyz_to_abc)}
     sym_xyz = abc_to_xyz.get(sym_axis, 0)
     perp_xyz = [i for i in range(3) if i != sym_xyz]
-    d_cm = float(d_hz / CMINV_TO_HZ)
+    rot_xyz_safe = np.asarray(rot_xyz_cm, dtype=float).copy()
+    rot_xyz_safe[~np.isfinite(rot_xyz_safe)] = 0.0
 
     def _idx_tm(a: int, b: int) -> int:
         pair = (max(a, b), min(a, b))
         return {(0, 0): 0, (1, 0): 1, (1, 1): 2, (2, 0): 3, (2, 1): 4, (2, 2): 5}[pair]
 
     n_modes = freq.size
-    c1 = np.zeros((n_modes, 3, 3), dtype=float)
-    for i in range(n_modes):
-        fi = abs(float(freq[i]))
-        if fi <= 1.0e-12:
-            continue
-        x = np.sqrt((FACTG * fi) ** 3)
-        for ix in range(3):
-            for jx in range(3):
-                den = 2.0 * moments_xyz[ix] * moments_xyz[jx] * x
-                c1[i, ix, jx] = 0.0 if abs(den) <= 1.0e-30 else float(didq[i, _idx_tm(ix, jx)] / den)
-
-    c2 = np.zeros((n_modes, 3, 3, 3), dtype=float)
-    for i in range(n_modes):
-        fi = abs(float(freq[i]))
-        if fi <= 1.0e-12:
-            continue
-        for j in range(n_modes):
-            fj = abs(float(freq[j]))
-            if fj <= 1.0e-12:
+    if c1 is None:
+        c1 = np.zeros((n_modes, 3, 3), dtype=float)
+        for i in range(n_modes):
+            fi = abs(float(freq[i]))
+            if fi <= 1.0e-12:
                 continue
-            kernel = (2.0 / 3.0) * (fi**2 + 2.0 * fj**2) / np.sqrt(abs(fi**5 * fj))
+            x = np.sqrt((FACTG * fi) ** 3)
             for ix in range(3):
                 for jx in range(3):
-                    for kx in range(3):
-                        c2[i, ix, jx, kx] += kernel * (
-                            rot_xyz_cm[ix] * zeta[ix, i, j] * c1[j, jx, kx]
-                            + rot_xyz_cm[jx] * zeta[jx, i, j] * c1[j, kx, ix]
-                            + rot_xyz_cm[kx] * zeta[kx, i, j] * c1[j, ix, jx]
-                        )
+                    den = 2.0 * moments_xyz[ix] * moments_xyz[jx] * x
+                    c1[i, ix, jx] = 0.0 if abs(den) <= 1.0e-30 else float(didq[i, _idx_tm(ix, jx)] / den)
+
+    if c2 is None:
+        c2 = np.zeros((n_modes, 3, 3, 3), dtype=float)
+        for i in range(n_modes):
+            fi = abs(float(freq[i]))
+            if fi <= 1.0e-12:
+                continue
+            for j in range(n_modes):
+                fj = abs(float(freq[j]))
+                if fj <= 1.0e-12:
+                    continue
+                kernel = (2.0 / 3.0) * (fi**2 + 2.0 * fj**2) / np.sqrt(abs(fi**5 * fj))
+                for ix in range(3):
+                    for jx in range(3):
+                        for kx in range(3):
+                            c2[i, ix, jx, kx] += kernel * (
+                                rot_xyz_safe[ix] * zeta[ix, i, j] * c1[j, jx, kx]
+                                + rot_xyz_safe[jx] * zeta[jx, i, j] * c1[j, kx, ix]
+                                + rot_xyz_safe[kx] * zeta[kx, i, j] * c1[j, ix, jx]
+                            )
 
     components_hz: dict[str, float] = {}
     pieces_hz: dict[str, dict[str, float]] = {}
     xyz_to_abc = {i: label for i, label in enumerate(model.xyz_to_abc)}
     for ix in perp_xyz:
-        # For linear tops, only the transverse diagonal quartic component survives:
-        # Tau(ix,ix,ix,ix) = 4 D and cross-transverse terms vanish.
-        x1_cm = 3.0 * (4.0 * d_cm) ** 2 / (16.0 * rot_xyz_cm[ix])
+        x1_cm = 0.0
+        if tau is not None:
+            for jx in perp_xyz:
+                if abs(rot_xyz_safe[jx]) <= 1.0e-30:
+                    continue
+                x1_cm += float(tau[ix, ix, ix, jx]) ** 2 / float(rot_xyz_safe[jx])
+            x1_cm *= 3.0 / 16.0
+        elif d_hz is not None:
+            d_cm = float(d_hz / CMINV_TO_HZ)
+            x1_cm = 3.0 * (4.0 * d_cm) ** 2 / (16.0 * rot_xyz_cm[ix])
         x2_cm = sum(float(freq[i]) * c2[i, ix, ix, ix] ** 2 for i in range(n_modes)) / 2.0
         x3_cm = 0.0
         for i in range(n_modes):

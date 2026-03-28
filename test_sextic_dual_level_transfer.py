@@ -54,3 +54,15 @@ def test_hdo_dual_level_transfer_tracks_full_dpcs3() -> None:
     assert abs(dual[4] - full[4]) / full[4] < 0.02
     assert abs(dual[2] - full[2]) / full[2] < 0.05
     assert abs(dual[3] - full[3]) / full[3] < 0.05
+
+
+def test_nno_dual_level_transfer_is_finite_and_nontrivial() -> None:
+    overlap, dual, full = _dual_level_summary(
+        "/Users/vincenzobarone/centrifugal/nno_HPCS2",
+        "/Users/vincenzobarone/centrifugal/nno_DPCS3",
+    )
+    assert overlap["min_abs_overlap"] > 0.95
+    assert overlap["max_offdiag_abs_overlap"] > 0.2
+    assert dual[0] == full[0] == "bbc"
+    assert np.isfinite(dual[4])
+    assert np.isfinite(full[4])

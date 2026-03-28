@@ -1,0 +1,108 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.0cm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,array,longtable}
+
+\title{Complete Term Map: Printed Watson--Aliev Linear Reduction}
+\author{}
+\date{2026-03-28}
+
+\begin{document}
+\maketitle
+
+\section*{Scope}
+
+This checklist records the status of every printed sector of the Watson--Aliev linear-relevant branch used in the present reduction. Each printed term is assigned one of:
+\[
+\text{implemented},\qquad
+\text{vanishes in the exact linear limit},\qquad
+\text{not derivable from the printed form}.
+\]
+
+\section*{A. Printed linear-relevant sectors from Watson--Aliev}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{6.6cm}}
+\toprule
+Printed sector & Status & Exact outcome \\
+\midrule
+\endfirsthead
+\toprule
+Printed sector & Status & Exact outcome \\
+\midrule
+\endhead
+\(H_{24}^{\mathrm{bare}}(UV)\) & implemented & Reduces exactly to the \(V\)-only channel:
+\[
+-8[(2\omega_t+\omega_n+\omega_{n'})MM+(2\omega_t-\omega_n-\omega_{n'})NN]
+=-4(\omega_{n'}-\omega_n)V_{nn'}^{(0)}.
+\]
+\\
+\(H_{24}^{\mathrm{bare}}(UV)\to U\) & not derivable & No \(U\)-channel is produced by the printed bare \(UV\) sector. \\
+Printed \(X/F\) sector of bare \(H_{24}\) & implemented & Present in the current equations as `xf_block + cross_block`. Its exact degree structure is incompatible with the missing pure \(B^2\zeta^2\) residue of the compact \(U\)-channel. \\
+Printed \(R\)-type terms of bare \(H_{24}\) & implemented & Present through the current \(r\)-driven blocks. No printed \(R\)-term has the pure \((0,2,0)\) grade required to generate the missing compact \(U\)-channel. \\
+Eq.~(101) \(C^2\) term & implemented & Present as the direct harmonic-rotational block. \\
+Eq.~(101) \(k_4\) term & implemented & Present as `quartic_seed`. \\
+Eq.~(101) first \(\zeta^2\) line & implemented & Included through the present \(V\)-derivable branch. \\
+Eq.~(101) second \(\zeta^2\) line & implemented & Included through the present \(V\)-derivable branch. \\
+Any third printed \(\zeta^2\) line in Eq.~(101) & vanishes as a possibility & The vector PDF shows the closing bracket and equation number; Eq.~(101) contains exactly two \(\zeta^2\) lines. \\
+Eq.~(106): \(i[S_{03},H_{12}]\) & implemented / nonconstructive for \(U\) & Does not have the grade needed to create the missing pure \(U\)-channel. \\
+Eq.~(106): \(i[S_{11}^{(R)},H_{04}]\) & partially implemented structurally & This is the only constructive source of \(U\). In the regular branch it vanishes in the exact linear limit. A nonzero \(U\) requires the singular branch \(S_{11}^{(R)}\sim(B_y-B_x)^{-1}\). \\
+Eq.~(106): \(i[S_{13}^{(R)},H_{02}]\) & unresolved / nonindependent & Depends on the already unresolved off-diagonal \(H_{24}\) structure and does not supply an independent printed derivation of the compact \(U\)-channel. \\
+\bottomrule
+\end{longtable}
+
+\section*{B. Observable entry points}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{6.6cm}}
+\toprule
+Observable piece & Status & Exact outcome \\
+\midrule
+\endfirsthead
+\toprule
+Observable piece & Status & Exact outcome \\
+\midrule
+\endhead
+\(\beta_\parallel\) direct \(C^2\) piece & implemented & Present as `direct`. \\
+\(\beta_\parallel\) quartic \(k_4\) seed & implemented & Present as `quartic_seed`. \\
+\(\beta_\parallel\) quartic-\(r\) block & implemented & Present as `quartic_r_block`. \\
+\(\beta_\parallel\) mixed prefactor block & implemented & Present as `mixed_prefactor_block`. \\
+\(\beta_\parallel\) \(X/F\) block & implemented & Present as `xf_block + cross_block`. \\
+\(\beta_\parallel\) \(V\)-channel & implemented & Present inside `uv_block` and derivable from printed `Paper1`. \\
+\(\beta_\parallel\) compact \(U\)-channel of `Paper2` & not derivable & Survives quadratically in the observable:
+\[
+\mathrm{Term7}_\parallel=-16[U_{ij}^2(\omega_i+\omega_j)+V_{ij}^2(\omega_j-\omega_i)].
+\]
+\\
+\(\beta_\perp\) quartic seed & implemented & Present as `quartic_seed`. \\
+\(\beta_\perp\) pair seed & implemented & Present as `pair_seed`. \\
+\(\beta_\perp\) linear \(r\)-block & implemented & Present as `linear_r_block`. \\
+\(\beta_\perp\) mixed prefactor block & implemented & Present as `mixed_prefactor_block`. \\
+\(\beta_\perp\) \(X/F\) block & implemented & Present as `xf_block + cross_block`. \\
+\(\beta_\perp\) \(V\)-channel & implemented & Present inside `uv_block`. \\
+\(\beta_\perp\) compact \(U\)-channel of `Paper2` & not derivable & Survives quadratically in the observable:
+\[
+\mathrm{Term7}_\perp=-16[U_{tj}^2(\omega_t+\omega_j)+V_{tj}^2(\omega_j-\omega_t)].
+\]
+\\
+\bottomrule
+\end{longtable}
+
+\section*{C. Final audit conclusion}
+
+The exact symbolic audit supports the following statement:
+
+\[
+\boxed{
+\text{No printed term of Watson--Aliev has been identified as missing from the present non-compact equations.}
+}
+\]
+
+The only unresolved object is not an omitted printed term. It is the compact Aliev \(U\)-channel, which does not follow from the printed Watson--Aliev formulas.
+
+Equivalently:
+
+\[
+\boxed{
+\text{the present non-compact equations are, at the current symbolic level, the full set of terms derivable from the printed form of Watson--Aliev.}
+}
+\]
+
+\end{document}

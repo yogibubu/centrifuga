@@ -36,6 +36,7 @@ if str(ROOT) not in sys.path:
 from ceditt_gui import _build_harmonic_model_from_inputs
 from compare_gaussian_sextic import CMINV_TO_MHZ, _classify_rotor_limit, _degenerate_mode_metadata
 from compare_gaussian_sextic import DIDQ_AU_PER_AMU_SQRT_ANG, FACTG
+from distortion_workflow import compute_order2_quartic
 from gaussian_force_constant_units import (
     gaussian_bxx_to_aliev,
     raw_cubic_to_reduced_cm,
@@ -51,6 +52,7 @@ from gaussian_vpt_parser import (
 )
 from linear_aliev_rotder_zeta import build_linear_aliev_rotder_zeta
 from symmetry_metadata import assign_normal_mode_irreps
+from vibrot_alpha import alpha_matrix_from_harmonic_and_cubic_cm
 
 
 def _abc_axis_columns(alpha_axis_labels: tuple[str, ...]) -> dict[str, int]:
@@ -415,6 +417,29 @@ def _build_k4_reduced(phi4_cm: np.ndarray, parallel_indices: list[int]) -> list[
     return out
 
 
+def _reorder_quartic_force_constants(phi4: np.ndarray, source_to_target: np.ndarray) -> np.ndarray:
+    mapping = np.asarray(source_to_target, dtype=int)
+    out = np.zeros_like(phi4)
+    for i in range(mapping.size):
+        for j in range(mapping.size):
+            for k in range(mapping.size):
+                for l in range(mapping.size):
+                    out[mapping[i], mapping[j], mapping[k], mapping[l]] = phi4[i, j, k, l]
+    return out
+
+
+def _apply_mode_signs_to_quartic_force_constants(phi4: np.ndarray, mode_signs: np.ndarray) -> np.ndarray:
+    signs = np.asarray(mode_signs, dtype=float)
+    out = np.asarray(phi4, dtype=float).copy()
+    n_modes = signs.size
+    for i in range(n_modes):
+        for j in range(n_modes):
+            for k in range(n_modes):
+                for l in range(n_modes):
+                    out[i, j, k, l] *= signs[i] * signs[j] * signs[k] * signs[l]
+    return out
+
+
 def build_payload(
     *,
     fchk_path: str,
@@ -550,6 +575,151 @@ def build_payload(
                 "The optional rotder_seed_gram branch is a diagnostic seed built from the canonical pair-basis rotational-derivative scaffold; it is not yet validated as the physical Aliev seed.",
                 "Under the Gaussian q^e bridge, the v4/v5 comparison is qualitative only: q^e drives the pairwise l-type J0 layer and is not a quantitative Delta D_t target.",
             ],
+        },
+    }
+    return payload
+
+
+def build_payload_same_modes_approx(
+    *,
+    harmonic_fchk_path: str,
+    anharmonic_log_path: str,
+    anharmonic_fchk_path: str | None = None,
+    cn_source: str = "alpha_perp_with_Bxx_equals_minus_alpha_perp",
+    force_constant_source: str = "raw_au_reconverted",
+    zeta_reduction: str = "pair_offdiag",
+    pair_seed_source: str = "gaussian_qe_source",
+    beta_t_xf_cross_sign: int | None = None,
+    align_permutation_and_sign: bool = True,
+) -> dict[str, object]:
+    """Build a linear-Aliev payload under the standard same-normal-modes approximation.
+
+    The harmonic model is taken from ``harmonic_fchk_path``. Cubic and quartic
+    force constants are read from ``anharmonic_log_path`` and injected without
+    any dense-mode re-expansion between levels. The only optional adjustment is
+    a permutation/sign alignment inferred from the overlap between
+    ``anharmonic_fchk_path`` and ``harmonic_fchk_path``.
+    """
+
+    model, _ = _build_harmonic_model_from_inputs("I", fchk_path=harmonic_fchk_path)
+    rotor_limit = _classify_rotor_limit(np.asarray(model.abc_mhz, dtype=float), np.asarray(model.moments_amu_a2, dtype=float))
+    if rotor_limit.get("kind") != "linear":
+        raise ValueError("This bootstrap currently supports only linear molecules.")
+
+    pair_meta = _degenerate_mode_metadata(model, rotor_limit)
+    parallel_indices = _parallel_mode_indices(int(len(model.vib_freq_cm)), pair_meta)
+    anh = parse_gaussian_anharmonic_force_data(anharmonic_log_path)
+
+    phi3_raw = np.asarray(anh.phi3_raw_au, dtype=float)
+    phi4_raw = np.asarray(anh.phi4_raw_au, dtype=float)
+    overlap_audit: dict[str, object] | None = None
+    if anharmonic_fchk_path is not None:
+        from ceditt_gui import _mode_overlap_mapping_from_fchks
+        from gaussian_vpt_parser import apply_mode_signs_to_cubic_force_constants, reorder_cubic_force_constants
+
+        overlap_audit = _mode_overlap_mapping_from_fchks(anharmonic_fchk_path, harmonic_fchk_path)
+        if align_permutation_and_sign:
+            phi3_raw = reorder_cubic_force_constants(phi3_raw, overlap_audit["mapping"])
+            phi3_raw = apply_mode_signs_to_cubic_force_constants(phi3_raw, overlap_audit["target_signs"])
+            phi4_raw = _reorder_quartic_force_constants(phi4_raw, overlap_audit["mapping"])
+            phi4_raw = _apply_mode_signs_to_quartic_force_constants(phi4_raw, overlap_audit["target_signs"])
+
+    fc_source = str(force_constant_source).strip().lower()
+    if fc_source not in {"reduced", "raw_au_reconverted"}:
+        raise ValueError("force_constant_source must be 'reduced' or 'raw_au_reconverted'.")
+    if fc_source == "reduced":
+        phi3_gaussian = np.asarray(anh.phi3_reduced_cm, dtype=float)
+        phi4_gaussian = np.asarray(anh.phi4_reduced_cm, dtype=float)
+        if anharmonic_fchk_path is not None and align_permutation_and_sign and overlap_audit is not None:
+            raise ValueError("force_constant_source='reduced' is incompatible with permutation/sign alignment; use raw_au_reconverted.")
+    else:
+        phi3_gaussian = raw_cubic_to_reduced_cm(phi3_raw, np.asarray(model.vib_freq_cm, dtype=float))
+        phi4_gaussian = raw_quartic_to_reduced_cm(phi4_raw, np.asarray(model.vib_freq_cm, dtype=float))
+
+    phi3_for_bootstrap, phi4_for_bootstrap = _normalize_force_constants_to_aliev(
+        phi3_gaussian,
+        phi4_gaussian,
+        np.asarray(model.vib_freq_cm, dtype=float),
+    )
+
+    alpha_from_composite = alpha_matrix_from_harmonic_and_cubic_cm(model, phi3_gaussian)
+    if cn_source in {
+        "alpha_perp_with_Bxx_equals_minus_alpha_perp",
+        "alpha_perp_with_Bxx_equals_minus_half_alpha_perp",
+    }:
+        alpha_axis_labels = tuple(str(lbl) for lbl in ("A", "B", "C"))
+        bxx_parallel_gaussian = _build_bxx_parallel_from_alpha(
+            np.asarray(alpha_from_composite["alpha_total_cm_abc"], dtype=float),
+            alpha_axis_labels,
+            parallel_indices,
+            rotor_limit,
+            cn_source=cn_source,
+        )
+    elif cn_source == "didq_linear_v_iscr":
+        bxx_parallel_gaussian = _build_bxx_parallel_from_didq(model, parallel_indices, rotor_limit)
+    else:
+        raise ValueError(f"Unsupported C_n bootstrap source {cn_source!r}.")
+    bxx_parallel = _normalize_bxx_parallel_to_aliev(bxx_parallel_gaussian, model, parallel_indices)
+
+    pair_seed_src = str(pair_seed_source).strip().lower()
+    if pair_seed_src not in {"gaussian_qe_source", "rotder_seed_gram"}:
+        raise ValueError("pair_seed_source must be 'gaussian_qe_source' or 'rotder_seed_gram'.")
+    beta_t_xf_cross_sign_value = -1 if beta_t_xf_cross_sign is None and pair_seed_src == "rotder_seed_gram" else (1 if beta_t_xf_cross_sign is None else int(beta_t_xf_cross_sign))
+    pair_seed_perpendicular = None
+    if pair_seed_src == "gaussian_qe_source":
+        pair_seed_perpendicular = _build_pair_seed_perpendicular_from_gaussian_qe(
+            anharmonic_log_path,
+            n_pairs=len(pair_meta),
+        )
+    rotder_zeta = build_linear_aliev_rotder_zeta(model)
+    omega_parallel_cm = [float(abs(model.vib_freq_cm[i])) for i in parallel_indices]
+    omega_perpendicular_cm = [float(meta["freq_cm"]) for meta in pair_meta]
+    if pair_seed_src == "rotder_seed_gram":
+        pair_seed_perpendicular = _build_pair_seed_perpendicular_from_rotder_seed_gram(
+            B_cm=_perpendicular_rotational_constant_cm(model, rotor_limit),
+            omega_parallel_cm=omega_parallel_cm,
+            omega_perpendicular_cm=omega_perpendicular_cm,
+            rotder_seed_gram=rotder_zeta.zeta_seed_gram,
+        )
+    coriolis_nt = _build_zeta_nt_with_reduction(model, pair_meta, parallel_indices, reduction=zeta_reduction)
+
+    d_order2 = compute_order2_quartic(model)["special_quartic_projection"]["quartic_mhz"]["D"] / CMINV_TO_MHZ
+    payload = {
+        "B": _perpendicular_rotational_constant_cm(model, rotor_limit),
+        "D_J": float(d_order2),
+        "omega_parallel": omega_parallel_cm,
+        "omega_perpendicular": omega_perpendicular_cm,
+        "coriolis_nt": coriolis_nt,
+        "coriolis_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
+        "zeta_nt": coriolis_nt,
+        "zeta_pair_blocks": _build_coriolis_pair_blocks(model, pair_meta, parallel_indices),
+        "rotder_zeta_pair_vectors": rotder_zeta.zeta_pair_vectors.tolist(),
+        "rotder_zeta_seed_gram": rotder_zeta.zeta_seed_gram.tolist(),
+        "rotder_canonical_pair_rotations": [
+            [[float(x) for x in row] for row in rot] for rot in rotder_zeta.canonical_pair_rotations
+        ],
+        "rotder_symmetry_axis_index": int(rotder_zeta.symmetry_axis_index),
+        "rotder_degenerate_axis_indices": [int(x) for x in rotder_zeta.degenerate_axis_indices],
+        "bxx_parallel": [float(x) for x in bxx_parallel],
+        "pair_seed_perpendicular": None if pair_seed_perpendicular is None else [float(x) for x in pair_seed_perpendicular],
+        "beta_t_xf_cross_sign": int(beta_t_xf_cross_sign_value),
+        "k3_parallel": _build_k3_parallel(phi3_for_bootstrap, parallel_indices),
+        "k3_perp_pair": _build_k3_perp_pair(phi3_for_bootstrap, pair_meta, parallel_indices),
+        "k4_reduced": _build_k4_reduced(phi4_for_bootstrap, parallel_indices),
+        "metadata": {
+            "source": "gaussian_to_aliev_linear_same_modes_approx",
+            "quartic_mode": "reduced",
+            "coordinate_normalization": "aliev",
+            "force_constant_source": fc_source,
+            "harmonic_fchk_path": str(harmonic_fchk_path),
+            "anharmonic_log_path": str(anharmonic_log_path),
+            "anharmonic_fchk_path": None if anharmonic_fchk_path is None else str(anharmonic_fchk_path),
+            "same_modes_approximation": True,
+            "align_permutation_and_sign": bool(align_permutation_and_sign),
+            "overlap_audit": overlap_audit,
+            "cn_source": cn_source,
+            "pair_seed_source": pair_seed_source,
+            "zeta_reduction": zeta_reduction,
         },
     }
     return payload

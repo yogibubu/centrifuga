@@ -1193,13 +1193,21 @@ def _find_quartic_force_constants(lines: list[str], n_modes: int) -> tuple[np.nd
 
 
 def _parse_fchk_array(lines: list[str], label: str, kind: str) -> np.ndarray:
+    def _parse_fchk_token(token: str) -> float:
+        normalized = token.replace("D", "E")
+        if "E" not in normalized and "e" not in normalized:
+            m = re.match(r"^([+-]?(?:\d+(?:\.\d*)?|\.\d+))([+-]\d+)$", normalized)
+            if m:
+                normalized = f"{m.group(1)}E{m.group(2)}"
+        return float(normalized)
+
     for i, line in enumerate(lines):
         if line.startswith(label) and f" {kind}   N=" in line:
             n_vals = int(line.split("=")[-1])
             values: list[float] = []
             j = i + 1
             while len(values) < n_vals and j < len(lines):
-                values.extend(float(tok.replace("D", "E")) for tok in lines[j].split())
+                values.extend(_parse_fchk_token(tok) for tok in lines[j].split())
                 j += 1
             if len(values) != n_vals:
                 raise ValueError(f"Could not parse full fchk array for {label}.")

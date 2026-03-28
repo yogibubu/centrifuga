@@ -517,6 +517,7 @@ def _quartic_tau_from_model(model) -> tuple[np.ndarray, np.ndarray]:
     didq = _didq_from_model(model)
     freq_cm = np.abs(model.vib_freq_cm)
     pmom, _ = _representation_axis_values(model)
+    tol = 1.0e-30
     tau = np.zeros((3, 3, 3, 3), dtype=float)
     for a in range(3):
         for b in range(3):
@@ -527,6 +528,8 @@ def _quartic_tau_from_model(model) -> tuple[np.ndarray, np.ndarray]:
                     val = 0.0
                     for k in range(freq_cm.size):
                         denom = freq_cm[k] ** 2 * pmom[a] * pmom[b] * pmom[c] * pmom[d]
+                        if (not np.isfinite(denom)) or abs(denom) <= tol:
+                            continue
                         val += didq[ab, k] * didq[cd, k] / denom
                     tau[a, b, c, d] = -0.5 * QCENT_CONST1 * val
 
@@ -924,11 +927,14 @@ def sextic_linear_source_formula_hz(
     sym_idx = abc_to_xyz.get("a", 0)
     perp = [i for i in range(3) if i != sym_idx]
     idx_to_abc = {i: label for label, i in abc_to_xyz.items()}
+    tol = 1.0e-12
 
     comp_hz: dict[str, float] = {}
     for ix in perp:
         x1 = 0.0
         for jx in perp:
+            if (not np.isfinite(rot_cm[jx])) or abs(rot_cm[jx]) <= tol:
+                continue
             x1 += tau[ix, ix, ix, jx] ** 2 / rot_cm[jx]
         x1 *= 3.0 / 16.0
 
@@ -982,6 +988,8 @@ def sextic_breakdown_from_c1_hz(
 ) -> dict[str, dict[str, float]]:
     """Return selected sextic-term breakdowns from precomputed c1/c2/tau."""
     tol = 1.0e-12
+    rot_safe = np.asarray(rot_cm, dtype=float).copy()
+    rot_safe[~np.isfinite(rot_safe)] = 0.0
 
     def component_key(indices: tuple[int, int, int]) -> str:
         counts = {axes["a"]: 0, axes["b"]: 0, axes["c"]: 0}
@@ -999,7 +1007,15 @@ def sextic_breakdown_from_c1_hz(
     out: dict[str, dict[str, float]] = {}
 
     for ix in range(3):
-        x1 = sum(tau[ix, ix, ix, jx] ** 2 / rot_cm[jx] for jx in range(3)) * 3.0 / 16.0
+        x1 = (
+            sum(
+                tau[ix, ix, ix, jx] ** 2 / rot_safe[jx]
+                for jx in range(3)
+                if abs(rot_safe[jx]) > tol
+            )
+            * 3.0
+            / 16.0
+        )
         x2 = 0.5 * sum(freq_cm[i] * c2[i, ix, ix, ix] ** 2 for i in range(freq_cm.size))
         x3 = 0.0
         for i in range(freq_cm.size):
@@ -1011,7 +1027,7 @@ def sextic_breakdown_from_c1_hz(
         for jx in range(3):
             if jx == ix:
                 continue
-            den = rot_cm[ix] - rot_cm[jx]
+            den = rot_safe[ix] - rot_safe[jx]
             if abs(den) > tol:
                 x4 += tau[jx, ix, ix, ix] ** 2 / den
         x4 /= 4.0
@@ -1032,7 +1048,9 @@ def sextic_breakdown_from_c1_hz(
             for kx in range(3):
                 t1 = tau[ix, ix, jx, kx] + 2.0 * tau[ix, jx, ix, kx]
                 t2 = tau[jx, jx, ix, kx] + 2.0 * tau[ix, jx, jx, kx]
-                y1 += (t1**2 + 2.0 * tau[ix, ix, ix, kx] * t2) / rot_cm[kx]
+                if abs(rot_safe[kx]) <= tol:
+                    continue
+                y1 += (t1**2 + 2.0 * tau[ix, ix, ix, kx] * t2) / rot_safe[kx]
             y1 *= 3.0 / 32.0
 
             y2 = 0.0
@@ -1047,7 +1065,7 @@ def sextic_breakdown_from_c1_hz(
             y3 /= 4.0
 
             y4 = 0.0
-            den = 8.0 * (rot_cm[ix] - rot_cm[jx])
+            den = 8.0 * (rot_safe[ix] - rot_safe[jx])
             if abs(den) > tol:
                 y4 = tau[ix, ix, ix, jx] * (4.0 * tau[jx, jx, jx, ix] - 3.0 * tau[ix, ix, ix, jx]) / den
 
@@ -1056,15 +1074,15 @@ def sextic_breakdown_from_c1_hz(
             for kx in range(3):
                 if kx == ix or kx == jx:
                     continue
-                den1 = 4.0 * (rot_cm[ix] - rot_cm[kx]) ** 2
+                den1 = 4.0 * (rot_safe[ix] - rot_safe[kx]) ** 2
                 if den1 > tol:
-                    t1 = (rot_cm[ix] - rot_cm[kx]) * (tau[jx, jx, ix, kx] + 2.0 * tau[jx, ix, jx, kx])
-                    t2 = (rot_cm[ix] - rot_cm[jx]) * (tau[kx, kx, kx, ix] - tau[ix, ix, ix, kx])
+                    t1 = (rot_safe[ix] - rot_safe[kx]) * (tau[jx, jx, ix, kx] + 2.0 * tau[jx, ix, jx, kx])
+                    t2 = (rot_safe[ix] - rot_safe[jx]) * (tau[kx, kx, kx, ix] - tau[ix, ix, ix, kx])
                     y5 += tau[ix, ix, ix, kx] * (t1 + t2) / den1
-                den2 = 8.0 * (rot_cm[jx] - rot_cm[kx]) ** 2
+                den2 = 8.0 * (rot_safe[jx] - rot_safe[kx]) ** 2
                 if den2 > tol:
-                    t1 = (rot_cm[jx] - rot_cm[kx]) * (tau[ix, ix, jx, kx] + 2.0 * tau[ix, jx, ix, kx])
-                    t2 = 2.0 * (rot_cm[ix] - rot_cm[jx]) * (tau[jx, jx, jx, kx] - tau[kx, kx, kx, jx])
+                    t1 = (rot_safe[jx] - rot_safe[kx]) * (tau[ix, ix, jx, kx] + 2.0 * tau[ix, jx, ix, kx])
+                    t2 = 2.0 * (rot_safe[ix] - rot_safe[jx]) * (tau[jx, jx, jx, kx] - tau[kx, kx, kx, jx])
                     t3 = tau[ix, ix, jx, kx] + 2.0 * tau[ix, jx, ix, kx]
                     y6 += t3 * (t1 + t2) / den2
             out[name] = {
@@ -1117,10 +1135,10 @@ def sextic_breakdown_from_c1_hz(
             for kx in range(3):
                 if kx == ix or kx == jx:
                     continue
-                den = 4.0 * (rot_cm[jx] - rot_cm[kx]) ** 2
+                den = 4.0 * (rot_safe[jx] - rot_safe[kx]) ** 2
                 if den > tol:
-                    t1 = (rot_cm[kx] - rot_cm[ix]) * tau[jx, jx, jx, kx]
-                    t2 = (rot_cm[ix] - rot_cm[jx]) * tau[kx, kx, kx, jx]
+                    t1 = (rot_safe[kx] - rot_safe[ix]) * tau[jx, jx, jx, kx]
+                    t2 = (rot_safe[ix] - rot_safe[jx]) * tau[kx, kx, kx, jx]
                     y4 += (tau[jx, jx, jx, kx] - tau[kx, kx, kx, jx]) * (t1 + t2) / den
     y4 *= 3.0 / 2.0
     out[component_key((ia, ib, ic))] = {
