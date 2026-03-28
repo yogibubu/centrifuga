@@ -1,0 +1,150 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\title{Technical Note: Exact Octic Operator Hierarchy from Linear to Non-Linear Rotors}
+\author{Vincenzo Barone}
+\date{2026-03-28}
+
+\begin{document}
+\maketitle
+
+\section*{Scope}
+This note records the exact operator-level results obtained for the octic
+rotational sector. The goal is to isolate the part of the theory that is
+already rigorous independently of the unresolved compact formulas for the
+vibrational dependence of quartic centrifugal distortion constants.
+
+\section*{1. Linear audit of Paper 1 versus Paper 2}
+The symbolic audit of the printed Watson--Aliev source equations and of the
+compact Aliev linear formulas gives the following exact conclusions:
+\begin{enumerate}
+\item the compact channel $V$ is derivable from the printed bare $H_{24}$ block;
+\item the compact channel $U$ is not derivable from the printed form of
+Paper~1;
+\item both $\beta_{\parallel}$ and $\beta_{\perp}$ depend essentially on $U$;
+\item therefore the compact formulas of Paper~2 for $\beta_{\parallel}$ and
+$\beta_{\perp}$ are not derivable symbolically from the printed equations of
+Paper~1;
+\item the non-compact equations currently retained in the code coincide with
+what is derivable from the printed form of Paper~1.
+\end{enumerate}
+
+This isolates the unresolved problem to the compact $U$ channel and removes it
+from the octic branch.
+
+\section*{2. Exact octic operator hierarchy}
+Let $\mathcal O_8$ be the commuting rotational operator space of total degree
+eight in $J_x,J_y,J_z$.
+
+\subsection*{2.1 Asymmetric top}
+For an asymmetric top the commuting octic basis has dimension
+\[
+\dim \mathcal O_8^{\mathrm{asym}} = 15.
+\]
+The general operator is
+\[
+\mathcal O_8^{\mathrm{asym}}
+=
+\sum_{a+b+c=4} c_{2a,2b,2c}\,J_x^{2a}J_y^{2b}J_z^{2c}.
+\]
+
+\subsection*{2.2 Symmetric top}
+For a symmetric top with axis $a$ the operator space collapses to dimension
+\[
+\dim \mathcal O_8^{\mathrm{sym}} = 5
+\]
+with basis
+\[
+J^8,\qquad J^6J_a^2,\qquad J^4J_a^4,\qquad J^2J_a^6,\qquad J_a^8.
+\]
+Writing the corresponding coefficients as
+\[
+L_J^{(4)},\quad L_{J^3K},\quad L_{J^2K^2},\quad L_{JK^3},\quad L_K^{(4)},
+\]
+the exact projection from the cartesian commuting coefficients is
+\[
+L_J^{(4)}=c_{080},
+\]
+\[
+L_{J^3K}=-4c_{080}+c_{260},
+\]
+\[
+L_{J^2K^2}=6c_{080}-3c_{260}+c_{440},
+\]
+\[
+L_{JK^3}=-4c_{080}+3c_{260}-2c_{440}+c_{620},
+\]
+\[
+L_K^{(4)}=c_{080}-c_{260}+c_{440}-c_{620}+c_{800}.
+\]
+
+The exact cartesian image constraints for the $a$-axis symmetric-top subspace
+are
+\[
+c_{422}=2c_{440},\qquad
+c_{242}=3c_{260},\qquad
+c_{062}=4c_{080},\qquad
+c_{044}=6c_{080},
+\]
+together with the obvious $b\leftrightarrow c$ equalities
+\[
+c_{602}=c_{620},\qquad
+c_{404}=c_{440},\qquad
+c_{224}=c_{242},\qquad
+c_{026}=c_{062},\qquad
+c_{008}=c_{080}.
+\]
+
+\subsection*{2.3 Linear rotor}
+In the linear limit only one commuting degree-eight operator survives:
+\[
+\dim \mathcal O_8^{\mathrm{lin}} = 1.
+\]
+For axis $a$ this operator is
+\[
+(J_y^2+J_z^2)^4
+=
+J_y^8+4J_y^6J_z^2+6J_y^4J_z^4+4J_y^2J_z^6+J_z^8.
+\]
+Therefore the exact linear constraints on the cartesian coefficients are
+\[
+c_{800}=c_{620}=c_{602}=c_{440}=c_{422}=c_{404}=c_{260}=c_{242}=c_{224}=c_{206}=0,
+\]
+\[
+c_{080}=L,\qquad
+c_{062}=4L,\qquad
+c_{044}=6L,\qquad
+c_{026}=4L,\qquad
+c_{008}=L.
+\]
+Equivalently,
+\[
+L = c_{080} = L_J^{(4)}.
+\]
+
+\section*{3. Consequence for the next derivation step}
+The operator algebra is therefore closed. The remaining theoretical problem is
+not the projection machinery but the derivation of the cartesian octic
+coefficients $c_{2a,2b,2c}$ from the general Watson--Aliev Hamiltonian.
+
+At the current stage the rigorous target is:
+\[
+\text{Paper 1} \longrightarrow c_{2a,2b,2c} \longrightarrow
+\bigl(L_J^{(4)},L_{J^3K},L_{J^2K^2},L_{JK^3},L_K^{(4)}\bigr)
+\longrightarrow L.
+\]
+
+\section*{4. Data requirements}
+For this octic branch there is currently no evidence that third derivatives of
+the inverse inertia tensor are needed. The natural tensor hierarchy is instead
+the same one already identified for the quartic rotational tensor:
+\[
+\mu_1,\qquad \mu_2,\qquad \Phi_3.
+\]
+In particular, $\mu_3$ is not required by the operator analysis developed so
+far.
+
+\end{document}
