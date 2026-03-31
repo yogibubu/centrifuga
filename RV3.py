@@ -42,10 +42,9 @@ from compare_gaussian_sextic import sextic_cubic_hierarchy_hz, sextic_h22_linear
 from ceditt_gui import (
     _M4,
     _flip_handedness_abc,
-    _flip_tau_last_two_axes,
+    quartic_handedness_flip_constants,
     _norm_reduction,
     _norm_rep,
-    _quartic_forward_constants,
     _quartic_reduced_3plus2_from_tau,
     _quartic_spectral_invariants_from_tau,
     _rotate_abc,
@@ -399,8 +398,7 @@ def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQ
             "reduced_3plus2": _quartic_reduced_3plus2_from_tau(tau_out, A2, B2, C2),
         }
     flip_abc = _flip_handedness_abc(A, B, C)
-    tau_flip = _flip_tau_last_two_axes(tau_in)
-    d_flip = _quartic_forward_constants(red, tau_flip, *flip_abc)
+    d_flip = quartic_handedness_flip_constants(d_in, red)
     return RV3ManualQuarticResult(
         request={
             "A_mhz": A,

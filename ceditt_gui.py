@@ -196,6 +196,22 @@ def _flip_handedness_abc(A: float, B: float, C: float) -> tuple[float, float, fl
     return A, C, B
 
 
+def quartic_handedness_flip_constants(D: np.ndarray, reduction: str) -> np.ndarray:
+    """Return the exact fixed-representation quartic r<->l flip.
+
+    For quartic Watson constants the handedness change does not require a lift
+    to the 6D tensor slice. The operator-level action is diagonal on the
+    5-parameter set and therefore closes exactly under round-trip.
+    """
+    D = np.asarray(D, dtype=float).reshape(5)
+    red = _norm_reduction(reduction)
+    flipped = D.copy()
+    flipped[3] *= -1.0
+    if red == "A":
+        flipped[4] *= -1.0
+    return flipped
+
+
 def _flip_tau_last_two_axes(tau: np.ndarray) -> np.ndarray:
     """Swap the last two local axes in the compressed quartic tensor."""
     tau = np.asarray(tau, dtype=float).reshape(6)
@@ -2523,8 +2539,7 @@ class App(tk.Tk):
                     )
             self.q_report.insert(
                 tk.END,
-                "Quartic transform uses the corrected pseudoinverse tensor route "
-                "tau -> tau' -> T -> Watson constants.\n",
+                "Quartic transport on I/II/III uses the tensor route; the fixed-representation r<->l flip uses the exact operator-level quartic sign map.\n",
             )
             flip_abc = _flip_handedness_abc(A, B, C)
             self.q_report.insert(
@@ -2532,14 +2547,18 @@ class App(tk.Tk):
                 f"Fixed-representation handedness flip: {_rep_label(rep_in)} <-> {_norm_rep(rep_in)}l is obtained by swapping the last two axes, "
                 f"so ABC=({A:.6f}, {B:.6f}, {C:.6f}) MHz -> ({flip_abc[0]:.6f}, {flip_abc[1]:.6f}, {flip_abc[2]:.6f}) MHz.\n",
             )
-            tau_flip = _flip_tau_last_two_axes(tau_in)
-            D_flip = _quartic_forward_constants(red, tau_flip, *flip_abc)
+            D_flip = quartic_handedness_flip_constants(D_in, red)
             names = QUARTIC_A_NAMES if red == "A" else QUARTIC_S_NAMES
             self.q_report.insert(
                 tk.END,
                 f"Same-representation opposite-handedness constants ({_norm_rep(rep_in)}l): "
                 + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names, D_flip))
                 + "\n",
+            )
+            D_flip_back = quartic_handedness_flip_constants(D_flip, red)
+            self.q_report.insert(
+                tk.END,
+                f"Fixed-representation handedness round-trip max diff: {float(np.max(np.abs(D_flip_back - D_in))):.3e}\n",
             )
 
             # Stability diagnostics for each linear transform.

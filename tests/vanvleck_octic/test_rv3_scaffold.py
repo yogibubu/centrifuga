@@ -178,8 +178,23 @@ def test_rv3_manual_quartic_transform_smoke() -> None:
     )
     assert set(result.outputs) == {"II", "III"}
     assert all("tensor_roundtrip_max_error" in payload for payload in result.outputs.values())
+    assert result.handedness_flip["constants"] == [1.0, 2.0, 3.0, -4.0, -5.0]
     text = json.dumps(result.to_jsonable(), allow_nan=False)
     assert "NaN" not in text
+
+
+def test_rv3_manual_quartic_transform_handedness_flip_s_reduction() -> None:
+    result = run_manual_quartic_transform(
+        RV3ManualQuarticRequest(
+            A_mhz=10000.0,
+            B_mhz=5000.0,
+            C_mhz=3000.0,
+            rep_in="II",
+            reduction="S",
+            constants=[1.0, 2.0, 3.0, 4.0, 5.0],
+        )
+    )
+    assert result.handedness_flip["constants"] == [1.0, 2.0, 3.0, -4.0, 5.0]
 
 
 def test_rv3_manual_sextic_transform_smoke() -> None:
