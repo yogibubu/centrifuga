@@ -43,6 +43,7 @@ from ceditt_gui import (
     _M4,
     _flip_handedness_abc,
     quartic_handedness_flip_constants,
+    sextic_handedness_flip_constants,
     _norm_reduction,
     _norm_rep,
     _quartic_reduced_3plus2_from_tau,
@@ -454,6 +455,8 @@ def run_manual_sextic_transform(request: RV3ManualSexticRequest) -> RV3ManualSex
             "condition_metrics": _sextic_condition_metrics(rep_in, rep_out),
         }
     flip_abc = _flip_handedness_abc(A, B, C)
+    h_flip = sextic_handedness_flip_constants(h_in, A, B, C, red_in)
+    h_flip_back = sextic_handedness_flip_constants(h_flip, *flip_abc, red_in)
     return RV3ManualSexticResult(
         request={
             "A_mhz": A,
@@ -473,9 +476,11 @@ def run_manual_sextic_transform(request: RV3ManualSexticRequest) -> RV3ManualSex
             "A_mhz": flip_abc[0],
             "B_mhz": flip_abc[1],
             "C_mhz": flip_abc[2],
+            "constants": [float(x) for x in h_flip],
+            "roundtrip_max_error": float(np.max(np.abs(h_flip_back - h_in))),
             "note": (
-                "The fixed-representation r<->l axis swap does not define an independently "
-                "validated opposite-handed sextic target inside the current 5D transport."
+                "The fixed-representation r<->l sextic flip is applied exactly on the full 7D Watson space; "
+                "the separate 5D invariant transport still applies only to cyclic I/II/III changes."
             ),
         },
     )

@@ -211,5 +211,7 @@ def test_rv3_manual_sextic_transform_smoke() -> None:
     )
     assert set(result.outputs) == {"II", "III"}
     assert all("roundtrip_max_error" in payload for payload in result.outputs.values())
+    assert result.handedness_flip["constants"] == [1.0, 2.0, 3.0, 4.0, -5.0, 0.5, -0.25]
+    assert result.handedness_flip["roundtrip_max_error"] < 1.0e-12
     text = json.dumps(result.to_jsonable(), allow_nan=False)
     assert "NaN" not in text

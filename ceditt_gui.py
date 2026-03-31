@@ -212,6 +212,30 @@ def quartic_handedness_flip_constants(D: np.ndarray, reduction: str) -> np.ndarr
     return flipped
 
 
+def sextic_handedness_flip_constants(H: np.ndarray, A: float, B: float, C: float, reduction: str) -> np.ndarray:
+    """Return the exact fixed-representation sextic r<->l flip.
+
+    The full 7D Watson sextic operator basis is closed under swapping the last
+    two local axes. In S reduction this action is diagonal: the two odd
+    operators change sign while the even sector is unchanged. A reduction is
+    handled by explicit A<->S conversion before/after the flip.
+    """
+    H = np.asarray(H, dtype=float).reshape(7)
+    red = _norm_reduction(reduction)
+    if red == "S":
+        Hs = H.copy()
+    else:
+        Hs = _sextic_a_to_s_matrix(A, B, C) @ H
+
+    flip_s = np.diag([1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0])
+    Hs_flip = flip_s @ Hs
+
+    if red == "S":
+        return Hs_flip
+    A2, B2, C2 = _flip_handedness_abc(A, B, C)
+    return _sextic_s_to_a_matrix(A2, B2, C2) @ Hs_flip
+
+
 def _flip_tau_last_two_axes(tau: np.ndarray) -> np.ndarray:
     """Swap the last two local axes in the compressed quartic tensor."""
     tau = np.asarray(tau, dtype=float).reshape(6)
@@ -1839,7 +1863,7 @@ class App(tk.Tk):
         ).grid(row=4, column=1, columnspan=7, sticky="w")
         ttk.Label(
             ctrl,
-            text="The validated sextic transport currently covers cyclic right-handed representation changes; the fixed-representation r<->l flip does not preserve the validated 5D sextic subspace and is therefore reported explicitly but not generated as a separate numeric target.",
+            text="The validated sextic I/II/III transport still uses the canonical 5D subspace; the fixed-representation r<->l flip is now applied exactly on the full 7D Watson sextic space.",
         ).grid(row=5, column=1, columnspan=7, sticky="w")
         ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=6, column=1, columnspan=7, sticky="w")
         ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=7, column=1, columnspan=7, sticky="w", pady=(4, 0))
@@ -3358,11 +3382,18 @@ class App(tk.Tk):
                 f"Fixed-representation handedness flip: {_rep_label(rep_in)} <-> {_norm_rep(rep_in)}l is obtained by swapping the last two axes, "
                 f"so ABC=({A:.6f}, {B:.6f}, {C:.6f}) MHz -> ({flip_abc[0]:.6f}, {flip_abc[1]:.6f}, {flip_abc[2]:.6f}) MHz.\n",
             )
+            h_flip = sextic_handedness_flip_constants(H_in, A, B, C, red_in)
+            names_flip = SEXTIC_A_NAMES if red_in == "A" else SEXTIC_S_NAMES
             self.s_report.insert(
                 tk.END,
-                "Explicit opposite-handed sextic constants are not generated as a separate numeric target in the current validated 5D transport, "
-                "because the fixed-representation r<->l flip does not preserve that sextic physical subspace. "
-                "Use the reported axis swap together with the appendix table to reinterpret the handedness convention.\n",
+                f"Same-representation opposite-handedness sextic constants ({_norm_rep(rep_in)}l): "
+                + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names_flip, h_flip))
+                + "\n",
+            )
+            h_flip_back = sextic_handedness_flip_constants(h_flip, *flip_abc, red_in)
+            self.s_report.insert(
+                tk.END,
+                f"Fixed-representation sextic handedness round-trip max diff: {float(np.max(np.abs(h_flip_back - H_in))):.3e}\n",
             )
             self.s_report.insert(
                 tk.END,
