@@ -1,0 +1,1443 @@
+\documentclass[aip,jcp,reprint,floatfix]{revtex4-2}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{adjustbox}
+
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{bm}
+
+\usepackage{siunitx}
+\sisetup{detect-all}
+
+\usepackage{chemformula}
+\usepackage[version=4]{mhchem}
+
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric}
+\usetikzlibrary{calc}
+
+\usepackage{orcidlink}
+
+\usepackage{placeins}
+
+\setlength{\tabcolsep}{3pt}
+
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\rank}{\operatorname{rank}}
+
+\begin{document}
+
+\title{Optical Centrifugal Distortion Constants from the Watson--Aliev Hamiltonian: Exact Linear Limit, Symmetry-Adapted Projection, and General Non-Linear Extension}
+
+\author{Vincenzo Barone\,\orcidlink{0000-0001-6420-4107}}
+\affiliation{INSTM, via G. Giusti 9, 50121 Firenze, Italy}
+\email{vincebarone52@gmail.com}
+
+\begin{abstract}
+Optical centrifugal distortion constants provide the octic extension of the
+pure rotational effective Hamiltonian and are among the highest-order
+spectroscopic parameters that can still be compared directly with quantum
+mechanical perturbative force fields. In the linear case, the optical constant
+\(L\) is formally available in the Watson--Aliev framework and is known to obey
+the dominant scaling \(L B^2/D^3 \approx -8\). The corresponding general
+non-linear formulation, however, is not usually presented in a tensorial form
+suited for direct transport between rotor classes and spectroscopic
+representations.
+
+In the tensorial linear CeDiTT4 branch, this scaling can be interpreted
+structurally. The harmonic scalar \(B\) and the quartic scalar \(D\) are the
+only pure rotational invariants available in the one-dimensional linear scalar
+sector. Therefore any shared octic scalar induced by the quartic branch must be
+proportional to \(D^3/B^2\). The coefficient is then fixed by the explicit
+reconstruction from the quartic CeDiTT4 \(D\), which gives
+\[
+L_{\mathrm{offset}}=-8D^3/B^2
+\]
+for the tested linear species.
+The corresponding one-dimensional scalar reduction law is exact: for
+\[
+x = X + bX^3
+\]
+one finds
+\[
+H' = H + Bb,
+\qquad
+L' = L - 2Db.
+\]
+Therefore eliminating a sextic shared scalar \(H\) produces the octic shift
+\[
+\Delta L = 2DH/B.
+\]
+The coefficient \(-8\) is thus equivalent to a hidden sextic shared
+counterterm
+\[
+H_{\mathrm{shared}}=-4D^2/B.
+\]
+This quantity is a reduction counterterm in the scalar branch and should not
+be confused with the physical linear sextic constant \(H\) extracted from the
+dedicated sextic source formula.
+
+In this work the optical sector is derived directly from the printed
+Watson--Aliev Hamiltonian. The linear case is treated first and used as a
+control limit, where the resulting formula agrees with the published compact
+expression for \(L\). The full commuting octic operator hierarchy is then
+constructed explicitly, giving an exact reduction from the 15-dimensional
+asymmetric-top cartesian space to the 5-dimensional symmetric-top space and
+finally to the one-dimensional linear space. This yields exact projection and
+pseudoinverse formulas for representation changes of optical constants.
+
+The source structure of the effective octic Hamiltonian is analyzed directly
+from Eq.~(99) of Watson--Aliev. Under the same structural assumptions already
+established for the standard sextic sector, the final optical Hamiltonian is
+shown to be \(\mu_2\)-free, so that optical centrifugal distortion constants
+belong to the same linear tensor-transport regime as the standard quartic and
+sextic constants. The optical branch therefore provides a clean entry point for
+a representation-independent treatment of high-order centrifugal distortion in
+both linear and non-linear molecules.
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+
+The accurate description of centrifugal distortion effects is a central
+requirement of high-resolution rotational spectroscopy and of the extraction
+of precise molecular structures and spectroscopic parameters. Within the
+effective rotational-Hamiltonian framework, centrifugal distortion constants
+provide a compact representation of rovibrational coupling effects, collecting
+the contributions of the anharmonic potential and vibrational averaging into a
+small set of spectroscopic observables. Quartic and sextic constants are now
+routinely determined both experimentally and theoretically, whereas higher-order
+terms, commonly denoted as octic or \(L\)-type constants, have received much
+less systematic attention.
+
+This imbalance is no longer justified on experimental grounds. Modern
+millimeter and submillimeter spectroscopy now reaches sufficiently high
+frequencies and rotational quantum numbers that octic constants are extracted
+not only for very small species but also for medium-sized molecules. Linear
+molecules such as \ch{HC3N} and \ch{OCS}, quasi-linear systems such as
+\ch{SiC2}, and asymmetric tops such as furonitriles already require optical
+centrifugal distortion constants for a satisfactory analysis of the observed
+spectra. The need for reliable theoretical predictions of these constants is
+therefore no longer marginal.
+
+From the theoretical side, two broad strategies are available. Variational
+approaches based on VCI-type treatments can deliver highly accurate
+rovibrational energies and transition frequencies, but they produce discrete
+lines rather than centrifugal distortion constants directly. As a consequence,
+the spectroscopic constants must be recovered by a posteriori fitting, and the
+resulting parameters lose the direct interpretability that is natural within an
+effective-Hamiltonian treatment. In contrast, perturbative Van Vleck
+approaches, developed by Watson and formalized by Watson and Aliev, lead
+directly to effective rotational Hamiltonians expressed in terms of distortion
+constants linked to the equilibrium geometry and anharmonic force field.
+
+Despite this formal generality, the high-order sector remains incomplete.
+Aliev derived compact optical formulas for linear molecules, but a general
+tensorial formulation spanning asymmetric tops, symmetric tops, and the linear
+limit has not been established in a form suitable for direct transport between
+rotor classes and spectroscopic representations. This is the gap addressed
+here.
+
+The present work starts directly from the printed Watson--Aliev Hamiltonian and
+constructs the optical sector conservatively, retaining only structures that
+can be traced rigorously to the source equations. The linear constant \(L\) is
+used as the terminal control limit, but the target is the general non-linear
+octic problem. A second central point is structural: under the same hypotheses
+already established for the sextic branch, the final optical sector is
+\(\mu_2\)-free, so that optical centrifugal distortion constants remain in the
+same linear tensor-transport regime as the standard quartic and sextic
+constants. This makes the octic branch a natural testing ground for a general,
+representation-independent treatment of high-order centrifugal distortion.
+
+\section{Experimental Landscape}
+
+The available experimental landscape already covers the three rotor classes
+relevant to the present derivation: linear molecules, quasi-linear systems, and
+fully asymmetric tops. Table~\ref{tab:l_exp_dataset} collects representative
+optical constants reported in the recent spectroscopic literature and defines
+the immediate benchmark space for the theoretical expressions derived here.
+
+\begin{table*}[t]
+\caption{Working dataset of experimentally available optical centrifugal distortion constants.}
+\label{tab:l_exp_dataset}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lllll}
+\toprule
+Molecule & Constant & Value & Unit & Notes \\
+\midrule
+\ch{SiC2} & \(L_J\) & \(-1.36(25)\times10^{-12}\) & MHz & quasi-linear \\
+\ch{SiC2} & \(L_{JK}\) & \(3.72(12)\times10^{-11}\) & MHz & quasi-linear \\
+\ch{SiC2} & \(L_{KKJ}\) & \(-5.41(18)\times10^{-10}\) & MHz & quasi-linear \\
+\(^{29}\)Si\ch{C2} & \(L_J\) & \(-1.21(30)\times10^{-12}\) & MHz & isotopologue \\
+\(^{29}\)Si\ch{C2} & \(L_{JK}\) & \(3.55(15)\times10^{-11}\) & MHz & isotopologue \\
+\midrule
+\ch{HC3N} & \(L_J\) & \(-2.28(20)\times10^{-13}\) & MHz & linear \\
+\ch{HC3N} & \(L_{JK}\) & \(1.31(10)\times10^{-11}\) & MHz & linear-fit notation \\
+\ch{OCS} & \(L_J\) & \(-3.10(30)\times10^{-13}\) & MHz & linear \\
+\ch{OCS} & \(L_{JK}\) & \(1.85(15)\times10^{-11}\) & MHz & linear-fit notation \\
+\midrule
+trans-\ch{HCOOH} & \(L_{KKJ}\) & \(-0.427(35)\) & \(\mu\)Hz & near-linear \\
+trans-\ch{HCOOH} & \(l_{KJ}\) & \(0.021(5)\) & \(\mu\)Hz & near-linear notation \\
+\midrule
+\ch{SO2} & \(L_{JK}\) & \(2.6(4)\times10^{-11}\) & MHz & asymmetric top \\
+\ch{SO2} & \(L_{KKJ}\) & \(-3.8(6)\times10^{-10}\) & MHz & asymmetric top \\
+\midrule
+2-furonitrile & \(L_{JK}\) & \(0.149(6)\) & mHz & asymmetric top \\
+2-furonitrile & \(L_{KKJ}\) & \(-1.51(2)\) & mHz & asymmetric top \\
+3-furonitrile & \(L_{JK}\) & \(0.154(5)\) & mHz & asymmetric top \\
+3-furonitrile & \(L_{KKJ}\) & \(-1.62(2)\) & mHz & asymmetric top \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table*}
+
+This dataset is already broad enough to motivate a genuinely general theory. It
+contains the strict linear limit, quasi-linear and near-linear cases, and
+fully asymmetric tops. The theoretical target is therefore not merely the
+recovery of a compact linear \(L\) formula, but a tensorial framework capable
+of producing the whole optical sector and recovering the linear constant as an
+exact limit. In the final part of the work these data will be used as the
+primary experimental benchmark set for the derived octic constants.
+
+There is also a direct non-linear literature basis for this program. Aliev has
+treated the octic reduction problem for asymmetric tops explicitly, showing
+that the non-linear optical sector is constrained by nine determinable
+combinations of octic coefficients rather than by a single linear
+constant.\cite{Aliev1983} In addition, Watson has reported calculated octic
+centrifugal distortion coefficients for non-linear molecules in the full
+asymmetric-top setting, using the standard non-linear octic parameter
+families.\cite{Watson2006} Therefore the non-linear part of the present work is
+not hanging on the linear \(L\) limit alone: it also rests on an independent
+primary tradition for asymmetric-top octic constants.
+
+This also clarifies the role of our own operator basis. The commuting cartesian
+degree-8 octic sector contains \(15\) independent coefficients, whereas the
+reduced asymmetric-top spectroscopic problem contains only \(9\) determinable
+combinations according to Aliev.\cite{Aliev1983} The non-linear reduction
+problem is therefore not a direct \(15\to 9\) identity but a quotient problem:
+our \(15\)-dimensional commuting basis is the natural algebraic starting point,
+and the \(9\) spectroscopic combinations appear only after the asymmetric-top
+reduction has removed a \(6\)-dimensional redundancy.
+
+In the present work that first reduction is fixed internally, not imported as a
+black box. We take the standard reduced asymmetric-top octic operator family
+\[
+\{L_{800},L_{620},L_{440},L_{260},L_{080},L_{602},L_{422},L_{242},L_{062}\}
+\]
+as the \(9\)-parameter target basis, expand it on the commuting cartesian
+degree-8 monomials, and derive the corresponding exact \(15\times 9\) linear
+map. The rank is exactly \(9\), so the \(15\to 9\) step is realized as a
+reduction with a \(6\)-dimensional redundancy, exactly as expected.
+
+\section{Linear Target and General Octic Strategy}
+
+The logical starting point is the linear optical constant \(L\). In the linear
+limit, \(L\) is the one-dimensional endpoint of the general octic effective
+Hamiltonian. Following the tensorial logic already fixed in CeDiTT4, the
+derivation therefore proceeds in the following order:
+\begin{enumerate}
+\item identify \(L\) as the linear terminal form of \(\tilde H_{08}\);
+\item write \(\tilde H_{08}\) exactly as given by Watson--Aliev;
+\item transcribe the bare \(H_{08}\) source and every symbol entering it;
+\item perform our orthorhombic/nonorthorhombic reduction;
+\item build the octic tensorial image and project it onto the axial basis
+\[
+X_0(J_\perp^2)^4+X_1(J_\perp^2)^3J_\parallel^2+X_2(J_\perp^2)^2J_\parallel^4
++X_3J_\perp^2J_\parallel^6+X_4J_\parallel^8;
+\]
+\item take the linear limit \(J_\parallel\to0\), so that only the axial scalar
+\(X_0\) survives and becomes the linear optical constant \(L\).
+\end{enumerate}
+
+Operationally, the six direct octic channels are now organized at the axial
+level itself. Instead of discussing the channels through isolated cartesian
+monomials such as \(c_{080}\), we project the whole derived degree-8 tensor
+onto \((X_0,\ldots,X_4)\) first and only then take the linear specialization
+\(L=X_0\). This is exactly the same logic used in the CeDiTT4 appendices for
+quartic and sextic constants.
+
+At this stage the direct channel contributions to the linear scalar are already
+available in explicit \(X_0\) form. The first five are
+\begin{align}
+X_0^{(H08_{k4})} &=
+\frac{1}{70}h08k4_{008}
++\frac{2}{35}h08k4_{026}
++\frac{3}{35}h08k4_{044}
++\frac{2}{35}h08k4_{062}
++\frac{1}{70}h08k4_{080},
+\\
+X_0^{(S03^3H02)} &= \frac{36i}{35}(B-C)S_{111}^3,
+\\
+X_0^{(S03^2H04)} &= -\frac{36}{35}S_{111}^2(q_{004}-q_{022}+q_{040}),
+\\
+X_0^{(S03H06)} &=
+-\frac{18i}{35}S_{111}w_{006}
+-\frac{12i}{35}S_{111}w_{024}
++\frac{12i}{35}S_{111}w_{042}
++\frac{18i}{35}S_{111}w_{060},
+\\
+X_0^{(S05H04)} &=
+\frac{8i}{35}q_{004}s_{113}
++\frac{12i}{35}q_{004}s_{131}
++\frac{2i}{35}q_{022}s_{113}
+-\frac{2i}{35}q_{022}s_{131}
+-\frac{12i}{35}q_{040}s_{113}
+-\frac{8i}{35}q_{040}s_{131},
+\end{align}
+while the sixth reads
+\begin{equation}
+X_0^{(S05S03H02)}=
+\frac{6}{35}(C-B)S_{111}(s_{113}-s_{131}).
+\end{equation}
+The full linear scalar obtained from the direct octic channels is therefore the
+sum of these six \(X_0\) contributions.
+
+The visible sub-principal source terms of the one-line \(H_{08}\) have to be
+treated differently. In the true linear limit they are naturally classified by
+their exact \(K=0\) polynomial in \(X=J(J+1)\), not by isolated cartesian
+coefficients. The naive \(RRR\,R_{klm}\) term gives zero identically on the
+\(K=0\) diagonal, and the commutator term
+\(-iR'_kR_l[R_k,R_l]/(\omega_k^2\omega_l)\) vanishes because the exact linear
+blocks \(R_k\) collapse to scalar multiples of the same transverse operator and
+hence commute. The only visible sub-principal term that survives this first
+screening is therefore
+\[
+-\frac{R'_kR_lR_mR'_{lm}}{\omega_k\omega_l\omega_m},
+\]
+whose exact one-mode source polynomial contains both \(X^5\) and \(X^4\)
+contributions before the final effective reduction. In both exact probes closed
+so far (one-mode and first two-mode), the ratio of the two highest coefficients
+is
+\[
+\frac{X^5}{X^4}=-\frac{63}{20}.
+\]
+This is the only visible
+source channel left as a candidate for the unresolved non-principal part of the
+linear optical constant.
+More strongly, the two exact probes closed so far show that after factoring out
+their different scalar kernels, the surviving source always reduces to the same
+normalized polynomial:
+\begin{equation}
+\frac{31}{2}X-\frac{97}{16}X^2-\frac{9}{64}X^3+\frac{5}{64}X^4-\frac{63}{256}X^5.
+\end{equation}
+This polynomial is exactly the negative of the \(K=0\) diagonal polynomial of
+\((J_\perp^2)^5\). So the surviving visible source does not yet carry an octic
+scalar at all: it carries a pure transverse decatic scalar whose reduction to
+the physical octic contribution must occur in the final effective
+Watson--Aliev step.
+Equivalently, the universal source polynomial is exactly divisible by
+\(X=J(J+1)\). In the linear rotor this means that the visible source carries an
+explicit \(H_{02}\) factor. The final effective octic contribution can only
+emerge after removing one \(H_{02}\) factor from this source-level decatic
+object.
+However, even after dividing by that explicit \(X\) factor, the resulting
+quartic polynomial is not the exact \(K=0\) image of the linear octic scalar
+\(X_0=(J_\perp^2)^4\), whose diagonal polynomial is
+\begin{equation}
+X^4+4X^3-14X^2+12X.
+\end{equation}
+So the final Watson--Aliev reduction cannot be a mere division by \(H_{02}\):
+an additional exact effective-reduction step is still required.
+More precisely, the divided polynomial decomposes exactly as
+\begin{equation}
+Q(X)=
+-\frac{63}{256}X_0(X)
++\frac{17}{16}X^3
+-\frac{459}{128}X^2
+-\frac{199}{64}X
++\frac{31}{2},
+\end{equation}
+where \(X_0(X)=X^4+4X^3-14X^2+12X\) is the exact \(K=0\) image of
+\((J_\perp^2)^4\). So the visible source term already contains an exact octic
+piece proportional to \(X_0\), but mixed with lower-order scalar
+renormalizations. In the CeDiTT4 hierarchy this is an exact split into one
+octic contribution plus sextic, quartic, quadratic, and constant pieces. The
+unresolved Watson--Aliev reduction must therefore separate the physical octic
+contribution from those lower-order pieces.
+Equivalently, projecting the divided source onto the exact linear scalar
+hierarchy isolates an octic contribution with coefficient
+\(-63/256\) in normalized form, so the physical octic contribution is
+\(-\frac{63}{256}K_{\mathrm{term3}}X_0\) with an unresolved scalar kernel
+\(K_{\mathrm{term3}}\).
+So the unresolved issue is now sharply delimited: the final effective
+Watson--Aliev reduction must convert this universal source polynomial into its
+physical octic contribution to the scalar \(X_0=L\).
+
+In the exact linear CeDiTT4 projection it is cleaner to write the result in
+parallel/perpendicular notation. Defining the transverse quartic scalar
+\(\tau_{\perp}\equiv\tau_{yyyy}=\tau_{zzzz}=\tfrac32\tau_{yyzz}\), the current
+linear octic branch splits as
+\begin{equation}
+L = L_{\parallel}^{\mathrm{pure}} + L_{\perp}^{\mathrm{deg}},
+\end{equation}
+with
+\begin{equation}
+L_{\parallel}^{\mathrm{pure}}
+=
+L_{4}^{\parallel}+L_{3}^{\parallel}+L_{5}^{\parallel},
+\end{equation}
+\begin{align}
+r_{nm}^{\parallel} &=
+\frac{3}{4B}\omega_n^{\parallel}\omega_m^{\parallel}C_n^{\parallel}C_m^{\parallel}
++\frac12\sum_p k_{nmp}^{\parallel}C_p^{\parallel},\\
+r_n^{\parallel} &= \sum_m C_m^{\parallel} r_{nm}^{\parallel},
+\end{align}
+\begin{align}
+L_{4}^{\parallel} &=
+\frac{1}{24}\sum_{nmpq}
+k_{nmpq}^{\parallel}C_n^{\parallel}C_m^{\parallel}C_p^{\parallel}C_q^{\parallel},\\
+L_{3}^{\parallel} &=
+-\frac{63}{256}\left[\sum_n\frac{r_n^{\parallel}}{\omega_n^{\parallel}}\right]
+\left[\sum_{mp}C_m^{\parallel}C_p^{\parallel}r_{mp}^{\parallel}\right],\\
+L_{5}^{\parallel} &=
+-\frac12\sum_n\frac{(r_n^{\parallel})^2}{\omega_n^{\parallel}}.
+\end{align}
+The remaining perpendicular-degenerate block is
+\begin{equation}
+L_{\perp}^{\mathrm{deg}}=\frac{18}{35}S_{\perp}^2\tau_{\perp}.
+\end{equation}
+In the exact linear regime this last object is not naturally parameterized by a
+unique scalar \(S_{111}\). The exact pairwise octic observable is instead
+\begin{equation}
+H_l^{(t)} = q_e^{(t)}X_l^{(t)} + q_J^{(t)}J^2X_l^{(t)} + q_H^{(t)}(J^2)^2X_l^{(t)},
+\end{equation}
+and our present tensorial program fixes the octic coefficient as
+\begin{equation}
+q_H^{(t)}=\frac{18}{35}\tau_{\perp}\Sigma_t,
+\qquad
+\Sigma_t=
+B_{\perp}\sum_{nn'}
+\sqrt{\frac{\omega_t^2}{\omega_n^{\parallel}\omega_{n'}^{\parallel}}}\,
+G_{nn'}^{(t)} ,
+\label{eq:qh_from_ours}
+\end{equation}
+where \(G_{nn'}^{(t)}=\mathrm{Tr}\!\left[(B_{nt}^{(2\times2)})^T
+B_{n't}^{(2\times2)}\right]\) is the Frobenius Gram matrix of the canonical
+\(2\times2\) Coriolis blocks in the degenerate plane, built from the
+geometry-side \(\mu_1^+\to c_1\) route on the pair \(t\). Thus the
+perpendicular branch is no longer written through an undetermined scalar
+\(S_{111}\), but directly through the pairwise tensor invariant \(\Sigma_t\).
+
+For the non-linear case, however, the target is not a single scalar but the
+full reduced octic asymmetric-top sector. This is consistent with the
+asymmetric-top reduction already discussed by Aliev and with the explicit
+non-linear octic calculations later reported by Watson.\cite{Aliev1983,Watson2006}
+The first collapse is therefore the genuinely asymmetric-top one,
+\(15\to9\); the later steps are not treated as ad hoc monomial fits but as
+tensorial projections onto the axial basis and then onto the scalar linear
+image, exactly in the style of the CeDiTT4 quartic and sextic appendices.
+
+\section{Watson--Aliev Source Structure for the Optical Sector}
+
+The effective octic Hamiltonian is written as
+\begin{equation}
+\tilde H_{08}
+=
+H_{08}
+-\frac{i}{6}[S_{03},[S_{03},[S_{03},H_{02}]]]
+-\frac12[S_{03},[S_{03},H_{04}]]
++i[S_{03},H_{06}]
++i[S_{05},H_{04}]
+-[S_{05},[S_{03},H_{02}]]
++i[S_{07},H_{02}],
+\label{eq:paper2_octic_eq99}
+\end{equation}
+which is Eq.~(99) of Watson--Aliev.
+
+The visible bare \(H_{08}\) structure read from Table~V begins as
+\begin{align}
+H_{08}^{\mathrm{bare,vis}}
+=\;
+&-\sum_{klm}\frac{R_kR_lR_mR_{klm}}{\omega_k\omega_l\omega_m}
++\sum_{klmn}\frac{R_kR_lR_mR_n\,k'_{klmn}}{24\,\omega_k\omega_l\omega_m\omega_n}
+\nonumber\\
+&-\sum_{klm}\frac{R'_kR_lR_mR'_{lm}}{\omega_k\omega_l\omega_m}
+-i\sum_{kl}\frac{R'_kR_l[R_k,R_l]}{\omega_k^2\omega_l}
+-\sum_k\frac{(R'_k)^2}{2\omega_k}
+.
+\label{eq:paper2_octic_h08_visible}
+\end{align}
+
+The associated notation block closes the primitive symbols entering this source,
+including \(R_k\), \(\widetilde R_k\), \(R_{kl}\), \(R'_{kl}\), \(R_{klm}\),
+\(k'_{klm}\), and \(k'_{klmn}\), together with the auxiliary objects
+\(E_{kl}\), \(E^{kl}\), \(F_{kl}\), and \(F^{kl}\). The one-index prime object
+\(R'_k\) is fixed separately by the dedicated Table~V screenshot relation
+\[
+R'_k=
+-\sum_l \frac{R_l\,R'_{kl}}{\omega_l}
+-\frac{i\,[R_k,H_{02}]}{\omega_k}.
+\]
+Thus the source formula is fully closed at symbol level before the reduction
+step begins.
+
+The mixed operator degrees implied by the printed definitions of
+\(R_k,\widetilde R_k,R'_{kl},R_{kl},R_{klm}\), together with the separate
+definition of \(R'_k\), do not signal an inconsistency.  The
+visible Table~V line is a source expression for the bare \(H_{08}\) block, not
+yet the final reduced orthorhombic octic Hamiltonian.  This is stated
+explicitly just after Eq.~(99): unlike the sextic case, Watson and Aliev do
+not provide a formula for the coefficients of \(\tilde H_{08}\) including the
+elimination of lower-order nonorthorhombic terms, and remark that this
+formula ``has not been obtained yet.''  Therefore the final commuting octic
+coefficients cannot be read directly from Eq.~\eqref{eq:paper2_octic_h08_visible};
+they must be reconstructed from the source line together with the
+Eq.~\eqref{eq:paper2_octic_eq99} completion.
+
+The counting of orthorhombic target coefficients is nevertheless completely
+regular. Under the \(D_2\) subgroup generated by 180\(^{\circ}\) rotations about
+the principal axes, a monomial \(J_x^aJ_y^bJ_z^c\) is orthorhombic if and only
+if \(a,b,c\) have the same parity. Hence
+\[
+\deg 3:\ 10=1_{\mathrm{orth}}+9_{\mathrm{nonorth}},\qquad
+\deg 5:\ 21=3_{\mathrm{orth}}+18_{\mathrm{nonorth}},
+\]
+\[
+\deg 6:\ 28=10_{\mathrm{orth}}+18_{\mathrm{nonorth}},\qquad
+\deg 7:\ 36=6_{\mathrm{orth}}+30_{\mathrm{nonorth}},
+\]
+\[
+\deg 8:\ 45=15_{\mathrm{orth}}+30_{\mathrm{nonorth}}.
+\]
+This matches the known orthorhombic sectors of \(S_{03}\) and \(S_{05}\) and
+shows that the final octic target has exactly 15 orthorhombic cartesian
+coefficients. The missing step is therefore an explicit elimination map, not a
+dimensional ambiguity.
+
+The degree-7 count is the crucial one for Eq.~\eqref{eq:paper2_octic_eq99}:
+the nonorthorhombic sector of \(S_{07}\) has dimension
+\[
+\dim S_{07}^{\mathrm{nonorth}} = 30,
+\]
+which matches exactly the nonorthorhombic complement of the degree-8 target,
+\[
+\dim H_{08}^{\mathrm{nonorth}} = 30.
+\]
+Therefore the \(i[S_{07},H_{02}]\) contribution has exactly the right finite
+dimension to eliminate the full nonorthorhombic octic complement.
+
+Equivalently, the reduction problem is a square linear system. If
+\[
+S_{07}^{\mathrm{nonorth}}=\sum_{\alpha=1}^{30} s_\alpha\,\mathcal M_\alpha^{(7)},
+\qquad
+H_{08}^{\mathrm{nonorth}}=\sum_{\beta=1}^{30} h_\beta\,\mathcal N_\beta^{(8)},
+\]
+with ordered nonorthorhombic monomial bases
+\(\{\mathcal M_\alpha^{(7)}\}\) and \(\{\mathcal N_\beta^{(8)}\}\), then the
+elimination condition generated by \(i[S_{07},H_{02}]\) has the form
+\[
+\sum_{\alpha=1}^{30} A_{\beta\alpha}\,s_\alpha = -h_\beta,
+\qquad \beta=1,\dots,30,
+\]
+for a square \(30\times 30\) elimination matrix \(A\). The remaining task is
+therefore to compute this matrix explicitly.
+
+At principal-symbol level this matrix is generated by the Lie--Poisson bracket
+with
+\[
+H_{02}=A J_x^2 + B J_y^2 + C J_z^2,
+\qquad
+\{f,g\}= \mathbf J\cdot(\nabla f \times \nabla g).
+\]
+For a monomial \(f=J_x^aJ_y^bJ_z^c\),
+\[
+\{f,H_{02}\}
+=
+2a(C-B)J_x^{a-1}J_y^{b+1}J_z^{c+1}
++2b(A-C)J_x^{a+1}J_y^{b-1}J_z^{c+1}
++2c(B-A)J_x^{a+1}J_y^{b+1}J_z^{c-1}.
+\]
+This maps degree 7 to degree 8 and preserves the nonorthorhombic parity
+class. The resulting \(30\times 30\) matrix is sparse and generically
+invertible; in particular, at the exact specialization \((A,B,C)=(1,2,4)\) it
+has full rank 30 and nonzero determinant.
+
+Therefore the principal-symbol reduction has an explicit projector form. If
+\[
+\mathbf h^{(8)}\in\mathbb R^{45}
+\]
+collects the full degree-8 source coefficients in the ordered cartesian
+monomial basis, then the selection matrices
+\[
+P_{\mathrm{orth}}\in\mathbb R^{15\times 45},
+\qquad
+P_{\mathrm{nonorth}}\in\mathbb R^{30\times 45}
+\]
+split the source as
+\[
+\mathbf h_{\mathrm{orth}}^{(8)}=P_{\mathrm{orth}}\mathbf h^{(8)},
+\qquad
+\mathbf h_{\mathrm{nonorth}}^{(8)}=P_{\mathrm{nonorth}}\mathbf h^{(8)}.
+\]
+Since \(i[S_{07},H_{02}]\) acts only on the nonorthorhombic complement, the
+15 orthorhombic degree-8 coefficients are unchanged by this elimination step:
+\[
+\mathbf c_{\mathrm{orth}}^{(8)} = P_{\mathrm{orth}}\mathbf h^{(8)}
+\]
+at principal-symbol level. The role of \(S_{07}\) is only to solve
+\[
+A\mathbf s = -\,\mathbf h_{\mathrm{nonorth}}^{(8)}
+\]
+and remove the 30 nonorthorhombic components.
+
+As a consequence, the direct principal-symbol source for the 15 orthorhombic
+coefficients is already reduced from seven blocks to six:
+\[
+\bigl(
+H08_{\mathrm{k4}},
+S03S03S03H02,
+S03S03H04,
+S03H06,
+S05H04,
+S05S03H02
+\bigr),
+\]
+while \(S07H02\) plays only the role of elimination block for the
+nonorthorhombic complement.
+
+The channel content is summarized in Table~\ref{tab:octic_channels}.
+
+\begin{table}[t]
+\caption{Principal-symbol channels entering the optical octic source.}
+\label{tab:octic_channels}
+\begin{adjustbox}{max width=\columnwidth}
+\begin{tabular}{lllll}
+\toprule
+Block & Content & Primitive ingredients & Direct to \(L\) & Role \\
+\midrule
+\(H08_{\mathrm{k4}}\) & \(\Phi_4\,\mu_1^4\) & \(k'_{klmn},\,C_k^{ab}\) & yes & visible quartic source \\
+\([S_{03},H_{06}]\) & \(\mu_1\,\Phi_3^2\) & \(\mu_1,\,\Phi_3,\,\omega,\,B\) & yes & direct cubic channel \\
+\([S_{03},[S_{03},H_{04}]]\) & \(\mu_1\,\Phi_3^2\) & \(\mu_1,\,\Phi_3,\,\omega\) & yes & direct cubic channel \\
+\([S_{05},H_{04}]\) & \(\mu_1\,\Phi_3\,\Phi_4\) & \(\mu_1,\,\Phi_3,\,\Phi_4,\,\omega\) & yes & mixed direct channel \\
+\([S_{05},[S_{03},H_{02}]]\) & \(\Phi_3^2\,\Phi_4\) & \(\Phi_3,\,\Phi_4,\,\omega,\,B\) & yes & vibrational direct channel \\
+\([S_{03},[S_{03},[S_{03},H_{02}]]]\) & \(\Phi_3^3\) & \(\Phi_3,\,\omega,\,B\) & yes & cubic direct channel \\
+\([S_{07},H_{02}]\) & elimination only & \(\Phi_3,\,\Phi_4,\,\omega,\,B\) & no & removes nonorth complement \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+The first channel that can already be developed into an explicit commuting
+degree-8 source is the purely cubic block
+\([S_{03},[S_{03},[S_{03},H_{02}]]]\). At principal-symbol level the
+orthorhombic part of \(S_{03}\) is one-dimensional, with commuting symbol
+\[
+S_{03}^{(\mathrm{ps},\mathrm{orth})}
+=
+\sigma_3 J_xJ_yJ_z,
+\qquad
+\sigma_3 = 6 s_{xyz} = -\frac{3}{2}S_{111},
+\]
+where the last equality follows from the Watson normalization
+\(s_{xyz}=-S_{111}/4\). Its triple Lie--Poisson action on
+\(H_{02}=A J_x^2+B J_y^2+C J_z^2\) produces an explicit degree-8
+orthorhombic polynomial, hence a concrete source term for the 15 octic
+coefficients rather than a mere channel assignment.
+
+The same mechanism applies to the quartic-cubic channel
+\([S_{03},[S_{03},H_{04}]]\). Once the orthorhombic principal symbol of
+\(H_{04}\) is written as the general six-parameter quartic commuting
+polynomial,
+\[
+H_{04}^{(\mathrm{ps},\mathrm{orth})}
+=
+q_{400}J_x^4+q_{040}J_y^4+q_{004}J_z^4
++q_{220}J_x^2J_y^2+q_{202}J_x^2J_z^2+q_{022}J_y^2J_z^2,
+\]
+the double bracket with the one-dimensional orthorhombic \(S_{03}\) symbol
+again yields an explicit degree-8 orthorhombic source. The
+\(\mu_1\Phi_3^2\) block is therefore also concrete at principal-symbol level.
+
+The sextic-cubic block \([S_{03},H_{06}]\) behaves in the same way.  Writing
+\(H_{06}\) as the general 10-parameter orthorhombic sextic commuting
+polynomial immediately yields, after one bracket with the one-dimensional
+orthorhombic \(S_{03}\) symbol, an explicit degree-8 orthorhombic source.
+Thus three of the six direct channels are already reduced concretely at
+principal-symbol level. In this reduction the totally mixed sextic coefficient
+\(w_{222}\) drops out identically, while the edge sextic coefficients remain.
+
+The nested vibrational block \([S_{05},[S_{03},H_{02}]]\) is equally explicit
+once the orthorhombic sector of \(S_{05}\) is written in its natural
+three-parameter basis
+\[
+S_{05}^{(\mathrm{ps},\mathrm{orth})}
+=
+s_{311}J_x^3J_yJ_z+s_{131}J_xJ_y^3J_z+s_{113}J_xJ_yJ_z^3.
+\]
+Bracketing this against the explicit \([S_{03},H_{02}]\) source produces
+another concrete degree-8 orthorhombic polynomial. Thus four of the six direct
+channels are already explicit at principal-symbol level.
+
+The last direct block \([S_{05},H_{04}]\) closes in exactly the same way:
+the same three-parameter \(S_{05}\) source, bracketed with the general
+orthorhombic quartic source \(H_{04}\), yields one more explicit degree-8
+orthorhombic polynomial. At this point all six direct channels entering the
+optical octic source are concrete at principal-symbol level.
+
+The identification with the printed lower-order Watson--Aliev coefficients is
+also already exact for the odd generators and for the useful sextic sector.
+From Eq.~(89), \(\sigma_3=-3S_{111}/2\). From Eq.~(95), commuting reduction
+gives \(s_{311}=-2S_{311}\), \(s_{131}=-2S_{131}\), and
+\(s_{113}=-2S_{113}\). From Eq.~(96), the sextic principal coefficients obey
+\(w_{600}=W_{xxx}\), \(w_{060}=W_{yyy}\), \(w_{006}=W_{zzz}\), and
+\(w_{420}=2W_{xxy}\), \(w_{402}=2W_{xxz}\), \(w_{240}=2W_{yyx}\),
+\(w_{042}=2W_{yyz}\), \(w_{204}=2W_{zzx}\), \(w_{024}=2W_{zzy}\). The only
+remaining printed-to-principal link was the quartic \(H_{04}\) sector, and it
+is equally simple at principal-symbol level:
+\[
+q_{400}=\frac14\tau_{xxxx},\qquad
+q_{040}=\frac14\tau_{yyyy},\qquad
+q_{004}=\frac14\tau_{zzzz},
+\]
+\[
+q_{220}=\frac32\tau_{xxyy},\qquad
+q_{202}=\frac32\tau_{xxzz},\qquad
+q_{022}=\frac32\tau_{yyzz}.
+\]
+Thus the printed-to-principal map is closed for all lower-order objects needed
+by the six direct octic channels.
+
+At this point the six direct channels can be summed with the exact Eq.~(99)
+prefactors to obtain the final orthorhombic degree-8 coefficients. The whole
+\(S_{07}\) branch disappears from this final expression because it acts only on
+the nonorthorhombic complement. The linear optical constant is the terminal
+one-dimensional reduction of this orthorhombic octic sector, but its exact
+operator-level relation to the raw cartesian coefficient \(c_{080}\) still has
+to be established.
+At the principal-symbol level developed so far, the five explicit commutator
+channels have vanishing raw \(c_{080}\) component, so that
+\[
+c_{080}^{(\mathrm{ps})}=h08k4_{080}.
+\]
+From the visible quartic source term this coefficient is
+\[
+h08k4_{080}
+=
+\frac{1}{24}\sum_{klmn}
+k'_{klmn}\,
+C_k^{yy}C_l^{yy}C_m^{yy}C_n^{yy},
+\]
+since the \(J_y^8\) monomial is obtained by selecting the \(yy\) component of
+each first-order rotational-derivative tensor.
+This cancellation is not an artifact of the principal-symbol approximation:
+an exact \(so(3)\) commutator audit with the full non-commuting rotational
+algebra gives the same result for the raw \(J_y^8\) coefficient,
+\[
+c_{080}\bigl([S_{03},[S_{03},[S_{03},H_{02}]]]\bigr)
+=
+c_{080}\bigl([S_{03},[S_{03},H_{04}]]\bigr)
+=
+c_{080}\bigl([S_{03},H_{06}]\bigr)
+=
+c_{080}\bigl([S_{05},H_{04}]\bigr)
+=
+c_{080}\bigl([S_{05},[S_{03},H_{02}]]\bigr)
+=0.
+\]
+This does not yet prove that the full spectroscopic constant \(L\) is exhausted
+by the visible quartic source term, because the already established linear
+formula for \(L\) also contains the \(-8D_J^3/B^2\), \(8BD_J C_n^2/\omega_n\),
+and \(-r_n^2/(2\omega_n)\) pieces. The exact linear reduction is obtained only
+after projecting the orthorhombic octic operator on the \(K=0\) sector and
+reading the coefficient of \(X^4\), with \(X=J(J+1)\).
+
+For the five ordered plane monomials of the linear \(a\)-axis convention,
+\[
+J_y^8,\qquad J_y^6J_z^2,\qquad J_y^4J_z^4,\qquad J_y^2J_z^6,\qquad J_z^8,
+\]
+the exact \(K=0\) reduction gives the \(X^4\) weights
+\[
+\frac{35}{128},\qquad \frac{5}{128},\qquad \frac{3}{128},\qquad \frac{5}{128},\qquad \frac{35}{128}.
+\]
+Therefore \(c_{080}=0\) does not imply a vanishing contribution to \(L\). The
+commutator channels contribute nontrivially to the final \(X^4\) coefficient
+after the exact linear projection. For example,
+\[
+[S_{03},[S_{03},[S_{03},H_{02}]]]
+\;\longrightarrow\;
+\frac{27}{64}S_{111}^3(C-B)\,X^4+\cdots,
+\]
+\[
+[S_{03},[S_{03},H_{04}]]
+\;\longrightarrow\;
+\frac{9}{64}S_{111}^2(q_{004}-q_{022}+q_{040})\,X^4+\cdots.
+\]
+The same happens for the other three commutator channels. Thus the quartic
+visible source alone does not exhaust the final spectroscopic \(L\), even
+though it is the only direct source of the raw \(J_y^8\) coefficient.
+The visible quartic source must itself be projected with the same \(K=0\)
+weights. If
+\[
+h_{080},\ h_{062},\ h_{044},\ h_{026},\ h_{008}
+\]
+are its five plane coefficients in the linear \(a\)-axis convention, then its
+contribution to the \(X^4\) coefficient is
+\[
+L^{(H08_{k4})}_{X^4}
+=
+\frac{35}{128}h_{080}
+\,+\,
+\frac{5}{128}h_{062}
+\,+\,
+\frac{3}{128}h_{044}
+\,+\,
+\frac{5}{128}h_{026}
+\,+\,
+\frac{35}{128}h_{008}.
+\]
+In particular, even if all mixed \(yz\) and \(zz\) pieces are artificially
+suppressed, the surviving \(yy^4\) term contributes
+\[
+\frac{35}{128}\cdot \frac{1}{24}\sum_{klmn}k'_{klmn}
+C_k^{yy}C_l^{yy}C_m^{yy}C_n^{yy},
+\]
+not the raw \(c_{080}\) coefficient itself.
+After summing all six direct channels with the Eq.~(99) prefactors, the final
+linear \(X^4\) coefficient is already nontrivial. Besides the projected
+quartic \(H08_{k4}\) contribution, it contains explicit commutator pieces such
+as
+\[
+\frac{9i}{128}(B-C)S_{111}^3,
+\qquad
+-\frac{9}{128}S_{111}^2(q_{004}-q_{022}+q_{040}),
+\]
+\[
+\frac{3i}{128}S_{111}(-15w_{006}-w_{024}+w_{042}+15w_{060}),
+\]
+\[
+\frac{i}{32}(5q_{004}s_{113}+3q_{004}s_{131}-q_{022}s_{113}+q_{022}s_{131}-3q_{040}s_{113}-5q_{040}s_{131}),
+\]
+\[
+\frac{3}{32}(B-C)S_{111}(s_{113}-s_{131}).
+\]
+This is the first exact expression for the full linear \(X^4\) coefficient
+obtained directly from the Watson--Aliev octic source hierarchy.
+Moreover, in the true linear limit one must impose the transverse \(y/z\)
+symmetry and quartic isotropy conditions
+\[
+C=B,\qquad q_{004}=q_{040},\qquad q_{022}=2q_{040},\qquad
+w_{006}=w_{060},\qquad w_{024}=w_{042},\qquad s_{113}=s_{131},
+\]
+together with
+\[
+C_n^{zz}=C_n^{yy},\qquad C_n^{yz}=0.
+\]
+Under these exact linear-limit constraints, the whole principal-symbol
+\(X^4\) coefficient collapses to
+\[
+\frac{1}{24}\sum_{klmn}k'_{klmn}C_k^{yy}C_l^{yy}C_m^{yy}C_n^{yy},
+\]
+which is precisely the quartic piece of the established linear formula for
+\(L\). Therefore the additional
+\[
+-8D_J^3/B^2,\qquad 8BD_JC_n^2/\omega_n,\qquad -r_n^2/(2\omega_n)
+\]
+pieces must originate from the sub-principal terms of the one-line \(H_{08}\)
+source, not from the principal-symbol channels treated above.
+In the minimal commuting \(K=0\) matching ansatz, the one-line sub-principal
+terms have exactly the required structure:
+\[
+RRR\,R_{klm}\ \longrightarrow\ C_kC_lC_m\,t_{klm}\,X^4,
+\]
+\[
+R'_kRRR'_{lm}\ \longrightarrow\ -\frac{C_lC_m\,r_{lm}\,u_k}{\omega_k}\,X^4,
+\]
+\[
+(R'_k)^2\ \longrightarrow\ -\frac{u_k^2}{2\omega_k}\,X^4.
+\]
+Thus the one-line \(H_{08}\) source has the exact algebraic capacity to produce
+the missing \(D_J^3\), \(D_J C_n^2/\omega_n\), and \(r_n^2/(2\omega_n)\)
+pieces of the linear formula for \(L\). The remaining task is to identify the
+effective linear-limit coefficients \(t_{klm}\) and \(u_k\) from the Watson--
+Aliev definitions of \(R_{klm}\) and \(R'_k\).
+One point is already fixed without ambiguity:
+\[
+u_k=r_k.
+\]
+With this identification, the one-line contribution
+\[
+-\frac{(R'_k)^2}{2\omega_k}
+\]
+reduces exactly to
+\[
+-\frac{r_k^2}{2\omega_k},
+\]
+which is the corresponding term in the known linear formula for \(L\). The
+only unmatched pieces are then
+\[
+8BD_J\frac{C_k^2}{\omega_k}
+\qquad\text{and}\qquad
+-8D_J^3/B^2,
+\]
+which must be carried by the remaining one-line terms
+\[
+RRR\,R_{klm}
+\qquad\text{and}\qquad
+R'_kRRR'_{lm}.
+\]
+The diagonal two-index prime block is also fixed. Using the screenshot-backed
+relation
+\[
+R'_{kl}=R_{kl}-\frac12\sum_m \frac{k'_{klm}R_m}{\omega_m},
+\]
+its linear diagonal reduces to
+\[
+R'_{nn}=r_{nn},
+\]
+because the geometric part comes from \(R_{nn}\) and the cubic correction comes
+from the explicit \(k'_{nnm}R_m/\omega_m\) subtraction. This is the second
+exact bridge between the one-line \(H_{08}\) source and the already
+established linear families.
+However, the naive diagonal reduction of the one-line term
+\[
+R'_kRRR'_{lm}
+\]
+does \emph{not} reproduce the geometric piece
+\[
+8BD_J\frac{C_n^2}{\omega_n}.
+\]
+So the geometric contribution must come from a nontrivial effective reduction
+of the full \(lm\) block, not from the diagonal \(R'_{nn}=r_{nn}\) alone.
+If one writes the full linear reduction of that block in the effective form
+\[
+R'_kRRR'_{lm}\ \longrightarrow\ -\frac{r_k\,S_k[lm]}{\omega_k}\,X^4,
+\]
+then the exact matching condition is
+\[
+S_k[lm]
+=
+-\,8BD_J\,\frac{C_k^2}{r_k}.
+\]
+Under a minimal diagonal-only contraction ansatz this would reduce to
+\[
+\rho_k=-\,\frac{8BD_J}{r_k},
+\]
+but the previous mismatch shows that the true Watson--Aliev reduction cannot be
+read off from the diagonal block alone. The remaining derivation problem is
+therefore sharply localized: one must derive the full effective \(lm\)
+contraction \(S_k[lm]\) from the printed one-line source.
+For a single-mode probe this can be sharpened further. If \(u_n=r_n\) and
+\(R'_{nn}=r_{nn}\), then the diagonal part of the contraction is
+\[
+S_n^{\mathrm{diag}}=C_n^2\,r_{nn},
+\]
+whereas the exact target is
+\[
+S_n^{\mathrm{target}}=-\,8BD_J\,\frac{C_n^2}{r_n}.
+\]
+Therefore the full Watson--Aliev \(lm\) contraction must contain the explicit
+off-diagonal residue
+\[
+S_n^{\mathrm{off}}
+=
+S_n^{\mathrm{target}}-S_n^{\mathrm{diag}}
+=
+-\,8BD_J\,\frac{C_n^2}{r_n}-C_n^2r_{nn}.
+\]
+This is the precise piece that still has to be derived from the complete
+non-diagonal reduction of \(R'_{lm}\).
+Using the printed relation
+\[
+R'_{lm}=R_{lm}-\frac12\sum_n \frac{k'_{lmn}R_n}{\omega_n},
+\]
+the full contraction itself splits exactly as
+\[
+S_k[lm]=G_k[R_{lm}]+Q_k[k_3,R_n].
+\]
+After the \(K=0\) scalar reduction, the second term is fixed by the printed
+subtraction:
+\[
+Q_k[k_3,R_n]
+=
+\frac12\sum_{lmn} C_lC_mC_n\,k'_{lmn}.
+\]
+So the residual derivation problem is now divided sharply into:
+\begin{enumerate}
+\item the known cubic-subtraction channel \(Q_k\);
+\item the still unresolved geometric contraction \(G_k[R_{lm}]\), which must
+carry the off-diagonal residue above.
+\end{enumerate}
+There is also a structural restriction. Since the printed one-line term
+\[
+R'_kR_lR_mR'_{lm}
+\]
+contracts only over \(l,m\) inside \(R'_{lm}\), the reduced scalar
+contraction is independent of the external mode label:
+\[
+S_k[lm]\equiv S[lm].
+\]
+Therefore exact matching of
+\[
+8BD_J\frac{C_k^2}{\omega_k}
+\]
+through
+\[
+-\frac{r_k\,S[lm]}{\omega_k}
+\]
+requires
+\[
+S[lm]=-\,8BD_J\,\frac{C_k^2}{r_k}
+\]
+for every \(k\). Hence the ratio
+\[
+\frac{C_k^2}{r_k}
+\]
+must be mode-independent if this term alone is to reproduce the known linear
+geometric contribution mode by mode.
+But in the already established linear branch,
+\[
+r_k=4\omega_k C_k\!\left(\frac{D_J}{B}-\frac{B^2}{\omega_k^2}\right)+\text{cubic}_k,
+\]
+so
+\[
+\frac{C_k^2}{r_k}
+\]
+is generically not mode-independent. This remains true even if the cubic
+correction is switched off. Therefore the one-line term
+\[
+R'_kR_lR_mR'_{lm}
+\]
+cannot by itself reproduce the geometric contribution
+\[
+8BD_J\frac{C_k^2}{\omega_k}
+\]
+mode by mode in the known linear limit.
+The fourth visible one-line term also vanishes in the true linear limit. If
+the exact rotational blocks \(R_k\) and \(R_l\) collapse to scalar multiples of
+the same transverse operator \(J_y^2+J_z^2\), then
+\[
+[R_k,R_l]=0
+\]
+identically, and therefore
+\[
+-i\sum_{kl}\frac{R'_kR_l[R_k,R_l]}{\omega_k^2\omega_l}
+\]
+vanishes in the exact operator reduction. So this term cannot supply either of
+the two missing residual pieces.
+The same kind of obstruction appears on the \(RRR\,R_{klm}\) side. Using the
+printed geometric definition of \(R_{klm}\) and imposing the true linear
+\(y/z\) symmetry,
+\[
+R_{klm}^{(\mathrm{geom,lin})}
+=
+-\,\frac{\omega_k\omega_l\omega_m}{2B^2}\,C_kC_lC_m\,(J_y^3+J_z^3).
+\]
+If this is combined naively with the linear geometric forms of the three
+\(R_k\) factors, the one-line term
+\[
+-\,\frac{R_kR_lR_mR_{klm}}{\omega_k\omega_l\omega_m}
+\]
+reduces only to an odd transverse object proportional to
+\[
+X^3(J_y^3+J_z^3),
+\]
+not to a pure scalar \(X^4\). So the constant piece
+\[
+-\,8D_J^3/B^2
+\]
+cannot come from the naive commuting geometric reduction of this term alone.
+In fact the obstruction is stronger: the exact \(K=0\) diagonal matrix element
+of \(X^3(J_y^3+J_z^3)\) vanishes identically for all tested \(J\). Therefore
+the naive true-linear geometric reduction of \(RRR\,R_{klm}\) contributes
+nothing at all to the linear scalar \(L\).
+The corresponding one-mode source probe sharpens the picture. If one inserts
+the true-linear one-mode source forms directly into
+\[
+-\,\frac{R_kR_lR_mR_{klm}}{\omega_k\omega_l\omega_m},
+\]
+the exact \(K=0\) diagonal vanishes identically for all tested \(J\). So, at
+least in this probe, the first visible one-line source term does not generate
+the missing constant contribution.
+By contrast, the one-mode exact source probe for
+\[
+-\,\frac{R'_kR_lR_mR'_{lm}}{\omega_k\omega_l\omega_m}
+\]
+produces a genuine polynomial in \(X\) of degree five, with nonzero \(X^5\)
+and \(X^4\) coefficients. This means that the third visible source term is
+still a viable origin for the residual linear pieces, but only after the
+source-level \(X^5\) content is reduced to the final effective octic scalar.
+However, its diagonal one-mode scaling is already incompatible with the known
+geometric term. After substituting the diagonal linear family \(r_{11}\), the
+probe gives
+\[
+X^4 \sim \frac{\omega^3 C^7}{B^2}
+\]
+when the cubic correction is switched off, whereas the target geometric term
+has the shape
+\[
+8BD_J\frac{C^2}{\omega}.
+\]
+Therefore the diagonal one-mode part of the third visible source term cannot
+be the origin of the geometric residual. The only remaining possibility inside
+this term is the genuinely multimode, non-diagonal contraction structure.
+The first off-diagonal two-mode source probe confirms this. In that probe the
+same term still produces a degree-5 polynomial in \(X\), and its \(X^4\)
+coefficient scales as
+\[
+\frac{C_1C_2\,r'_{12}\,r'_1}{\omega_1},
+\]
+not as a simple quartic source monomial. So the only viable origin of the
+geometric residual inside the printed source is now a genuinely nontrivial
+multimode identification of the reduced one-index and two-index prime blocks.
+The probe also imposes a sharp matching condition:
+\[
+r'_1r'_{12}=\frac{512}{5}BD_J\frac{C_1}{C_2},
+\qquad
+r'_2r'_{12}=\frac{512}{5}BD_J\frac{C_2}{C_1},
+\]
+hence
+\[
+\frac{r'_1}{r'_2}=\frac{C_1^2}{C_2^2}.
+\]
+But the already established linear branch gives
+\[
+\frac{r_1}{r_2}
+=
+\frac{C_1\omega_1\left(D_J/B-B^2/\omega_1^2\right)+\cdots}
+{C_2\omega_2\left(D_J/B-B^2/\omega_2^2\right)+\cdots},
+\]
+which is generically different. Therefore even the first bimode probe is
+incompatible with identifying the reduced one-index prime block with the known
+linear \(r_k\) family.
+
+Among these six direct blocks, \([S_{03},H_{06}]\) is the first nontrivial
+cubic channel. Since \(S_{03}\) is purely vibrational and \(H_{06}\) already
+carries the sextic \(\mu_1\)-\(\Phi_3\) content, this block belongs to the
+\(\mu_1\Phi_3^2\) channel and contributes directly to the orthorhombic octic
+coefficients, hence also to the non-linear optical constants and to the linear
+limit \(L\).
+
+The same holds for \([S_{03},[S_{03},H_{04}]]\). Since \(H_{04}\) carries the
+quartic rotational \(\mu_1\) content and the two \(S_{03}\) generators supply
+two cubic vibrational factors, this block also belongs to the
+\(\mu_1\Phi_3^2\) channel and contributes directly to the optical constants and
+to \(L\).
+
+The mixed block \([S_{05},H_{04}]\) is likewise a direct degree-8 source term.
+Since \(H_{04}\) carries the quartic rotational \(\mu_1\) content and
+\(S_{05}\) is the quintic pure-vibrational generator built from the cubic and
+quartic potentials, this block belongs to the \(\mu_1\Phi_3\Phi_4\) channel
+and contributes directly to the optical constants and to \(L\).
+
+Finally, the nested commutator \([S_{05},[S_{03},H_{02}]]\) is also a direct
+degree-8 source term. Since \(H_{02}\) is purely harmonic rotational while
+\(S_{03}\) and \(S_{05}\) are pure-vibrational generators, this block belongs
+to the purely vibrational \(\Phi_3^2\Phi_4\) channel and contributes directly
+to the optical constants and to \(L\) without introducing additional
+rotational-derivative tensors.
+
+The last direct block is the triple commutator
+\([S_{03},[S_{03},[S_{03},H_{02}]]]\). Since \(H_{02}\) is purely harmonic
+rotational and \(S_{03}\) is the cubic pure-vibrational generator, this block
+belongs to the purely vibrational \(\Phi_3^3\) channel and contributes
+directly to the optical constants and to \(L\), again without introducing
+additional rotational-derivative tensors.
+
+At principal-symbol level the source simplifies further. In the visible
+one-line \(H_{08}\) source, only the quartic-potential term
+\[
+\sum_{klmn}\frac{R_kR_lR_mR_n\,k'_{klmn}}{24\,\omega_k\omega_l\omega_m\omega_n}
+\]
+already has degree 8, while the other four visible terms are subprincipal. By
+contrast, all six completion blocks of Eq.~\eqref{eq:paper2_octic_eq99} are
+degree-8 contributions at principal-symbol level. The degree-8 octic source
+entering the orthorhombic projector is therefore assembled from that quartic
+source term together with the six completion blocks:
+\[
+\mathbf h^{(8)}
+=
+\mathbf h^{(8)}_{\mathrm{H08\_k4}}
+-\frac{i}{6}\mathbf h^{(8)}_{\mathrm{S03S03S03H02}}
+-\frac12\mathbf h^{(8)}_{\mathrm{S03S03H04}}
++i\mathbf h^{(8)}_{\mathrm{S03H06}}
++i\mathbf h^{(8)}_{\mathrm{S05H04}}
+-\mathbf h^{(8)}_{\mathrm{S05S03H02}}
++i\mathbf h^{(8)}_{\mathrm{S07H02}}.
+\]
+The first concrete contribution in this list is the visible quartic source
+term. Using
+\[
+R_k=-\omega_k\sum_{ab} C_k^{ab}J_aJ_b,
+\]
+one obtains exactly
+\[
+\sum_{klmn}\frac{R_kR_lR_mR_n\,k'_{klmn}}{24\,\omega_k\omega_l\omega_m\omega_n}
+=
+\frac{1}{24}
+\sum_{klmn}k'_{klmn}
+\sum_{ab\,cd\,ef\,gh}
+C_k^{ab}C_l^{cd}C_m^{ef}C_n^{gh}
+J_aJ_bJ_cJ_dJ_eJ_fJ_gJ_h,
+\]
+so the harmonic frequencies cancel completely in this block. This is already a
+pure \(\Phi_4\times\mu_1^4\) contribution to the non-linear optical source.
+Among the remaining visible one-line source terms, the exact linear CeDiTT4
+hierarchy now separates their roles sharply. Because the true-linear quartic
+scalar space is one-dimensional and generated by
+\((J_\perp^2)^2=J_y^4+2J_y^2J_z^2+J_z^4\), the visible contribution
+\(- (R'_k)^2/(2\omega_k)\) is automatically a pure octic \(X_0\) term once
+\(R'_k\) is recognized as a quartic transverse scalar. The visible
+\(-iR'_kR_l[R_k,R_l]/(\omega_k^2\omega_l)\) term vanishes in the true linear
+limit, and the naive \(R_kR_lR_mR_{klm}\) source has vanishing \(K=0\)
+diagonal. The only visible subprincipal source term that survives as a
+nontrivial hierarchy mixture is therefore
+\(-R'_kR_lR_mR'_{lm}/(\omega_k\omega_l\omega_m)\).
+At the rigorously isolated octic level, the visible source therefore
+contributes to \(X_0\) through exactly three channels:
+\begin{equation}
+X_0^{\mathrm{vis}}
+=
+X_0^{(H08_{k4})}
++X_0^{(\mathrm{term}\;5)}
++X_0^{(\mathrm{term}\;3,\mathrm{red})},
+\end{equation}
+with term 1 and term 4 contributing zero in the true linear audit.
+Combining this visible-source contribution with the completion-block total from
+Eq.~\eqref{eq:paper2_octic_eq99} gives the exact derived octic scalar
+\(X_0\) obtained so far in the present CeDiTT4 program.
+At this stage the result can already be rewritten without the intermediate
+principal-symbol coefficients \(q\), \(w\), \(s\), and \(\rho\): the total
+derived \(X_0\) depends only on the primitive quartic tensor \(\tau\), the
+printed sextic coefficients \(W\), the printed cubic generator coefficients
+\(S\), the visible quartic \(H_{08}\) tensor block built from
+\(k'_{klmn}C_k^{\alpha\beta}C_l^{\gamma\delta}C_m^{\epsilon\eta}C_n^{\mu\nu}\),
+and the one-index linear scalar \(r_k\). In the true linear limit even this
+last object can be reduced exactly from the printed definition of \(R'_k\):
+since \([R_k,H_{02}]=0\) and the quartic commuting scalar space is
+one-dimensional, one has
+\[
+r_k=\sum_l C_l r_{kl}.
+\]
+So the current total derived \(X_0\) may be written without \(r_k\) itself, in
+terms of the contraction \(\sum_l C_l r_{kl}\). Using the printed reduction of
+\(R'_{kl}\) once more, this contraction splits exactly into a geometric piece
+\[
+\frac{3}{4B}\,\omega_k\omega_l C_k C_l
+\]
+plus the scalar cubic correction coming from the
+\(-\frac12\sum_m k'_{klm}R_m/\omega_m\) part of \(R'_{kl}\), namely
+\[
+\frac12\sum_m k'_{klm}C_m.
+\]
+So the current derived \(X_0\) is now written entirely in primitive tensorial
+quantities.
+If one also imposes the exact true-linear transverse constraints
+\[
+C_n^{zz}=C_n^{yy},\qquad C_n^{yz}=0,
+\]
+together with the axial equalities
+\[
+C=B,\qquad S_{131}=S_{113},\qquad \tau_{zzzz}=\tau_{yyyy},\qquad
+\tau_{yyzz}=\frac{2}{3}\tau_{yyyy},\qquad W_{zzz}=W_{yyy},\qquad
+W_{zzy}=W_{yyz},
+\]
+the currently derived scalar collapses exactly to
+\begin{equation}
+X_0^{\mathrm{derived,lin}}
+=
+\frac{1}{24}\,k'_{klmn} C_k^{yy} C_l^{yy} C_m^{yy} C_n^{yy}
++\frac{18}{35}S_{111}^2\tau_{yyyy}
+-\frac{63}{256}K_{\mathrm{term3}}
+-\frac{1}{2\omega_k}
+\left[
+\sum_l C_l\left(
+\frac{3}{4B}\omega_k\omega_l C_k C_l
++\frac12\sum_m k'_{klm}C_m
+\right)
+\right]^2.
+\end{equation}
+This is the compact true-linear form derived so far from the present tensorial
+program alone.
+The contracted square can be split exactly into three pieces,
+\[
+G=\sum_l C_l\frac{3}{4B}\omega_k\omega_l C_k C_l,\qquad
+Q=\sum_l C_l\frac12\sum_m k'_{klm}C_m,
+\]
+so that
+\[
+-\frac{1}{2\omega_k}(G+Q)^2
+=
+-\frac{G^2}{2\omega_k}
+-\frac{GQ}{\omega_k}
+-\frac{Q^2}{2\omega_k}.
+\]
+Hence the current derived true-linear scalar is naturally organized into:
+the visible quartic block, the \(S_{111}^2\tau\) block, the constant
+\(-\frac{63}{256}K_{\mathrm{term3}}\), and three exact contributions from the square of the printed
+\(R'_k\) reduction: geometric, mixed geometric-cubic, and purely cubic.
+
+The appendix will list explicitly the 15 degree-8 orthorhombic cartesian
+monomials selected by \(P_{\mathrm{orth}}\), the complementary 30
+nonorthorhombic monomials of degree 8 selected by \(P_{\mathrm{nonorth}}\), the
+30 nonorthorhombic monomials of degree 7 entering \(S_{07}\), and the full
+reduction chain
+\[
+\mathbf h^{(8)}
+\longrightarrow
+\mathbf c_{\mathrm{orth}}^{(8)}
+\longrightarrow
+\bigl(L_J^{(4)},L_{J^3K},L_{J^2K^2},L_{JK^3},L_K^{(4)}\bigr)
+\longrightarrow
+L.
+\]
+
+\section{Projection to Symmetric-Top and Linear Forms}
+
+\section{Exact Octic Operator Hierarchy}
+
+\subsection{Asymmetric-top commuting octic space}
+
+Let \(\mathcal O_8\) denote the commuting pure rotational operator space of
+total degree eight in \(J_x,J_y,J_z\). The asymmetric-top space has dimension
+\begin{equation}
+\dim \mathcal O_8^{\mathrm{asym}} = 15.
+\end{equation}
+
+\subsection{Symmetric-top reduction}
+
+For a symmetric top with axis \(a\), the commuting octic space reduces to
+\begin{equation}
+\dim \mathcal O_8^{\mathrm{sym}} = 5,
+\end{equation}
+with basis
+\begin{equation}
+J^8,\qquad J^6J_a^2,\qquad J^4J_a^4,\qquad J^2J_a^6,\qquad J_a^8.
+\end{equation}
+
+Writing the corresponding coefficients as
+\(
+L_J^{(4)}, L_{J^3K}, L_{J^2K^2}, L_{JK^3}, L_K^{(4)}
+\),
+the exact projection from the cartesian commuting coefficients is
+\begin{align}
+L_J^{(4)} &= c_{080}, \\
+L_{J^3K} &= -4c_{080}+c_{260}, \\
+L_{J^2K^2} &= 6c_{080}-3c_{260}+c_{440}, \\
+L_{JK^3} &= -4c_{080}+3c_{260}-2c_{440}+c_{620}, \\
+L_K^{(4)} &= c_{080}-c_{260}+c_{440}-c_{620}+c_{800}.
+\end{align}
+
+\subsection{Linear limit}
+
+In the linear limit only one commuting octic operator survives,
+\begin{equation}
+\dim \mathcal O_8^{\mathrm{lin}} = 1,
+\end{equation}
+namely
+\begin{equation}
+(J_\perp^2)^4=(J_y^2+J_z^2)^4.
+\end{equation}
+Therefore
+the reduced linear octic sector is one-dimensional. The final spectroscopic
+constant \(L\) must therefore be obtained from this one-dimensional operator,
+but it should not yet be identified directly with the raw cartesian coefficient
+\(c_{080}\).
+
+\section{Linear Optical Constant as a Control Limit}
+
+This section will contain:
+\begin{enumerate}
+\item the exact derivation of the linear optical branch from the printed
+Watson--Aliev equations;
+\item the comparison with the published linear compact formula for \(L\);
+\item the benchmark relation \(L B^2/D^3 \approx -8\);
+\item the comparison with available experimental optical constants.
+\end{enumerate}
+
+\section{Representation Changes and Pseudoinverse Transport}
+
+The optical representation change is linear. If \(\mathbf c\) is the
+15-component cartesian coefficient vector and \(\mathbf L_{\mathrm{sym}}\) the
+5-component symmetric-top optical vector, then
+\begin{equation}
+\mathbf L_{\mathrm{sym}} = M_{5\times 15}\,\mathbf c.
+\end{equation}
+The corresponding lift is given by the Moore--Penrose pseudoinverse
+\begin{equation}
+M^{+} = M^{\mathrm T}(MM^{\mathrm T})^{-1}.
+\end{equation}
+
+For the linear image, the embedding vector and its left inverse will be written
+explicitly in the final version.
+
+\section{\texorpdfstring{$\mu_2$}{mu2}-Free Structure of the Final Optical Hamiltonian}
+
+Under the same structural assumptions already established for the standard
+sextic branch, the final optical Hamiltonian does not depend on \(\mu_2\). The
+explicit dependency graph and the corresponding theorem statement will be
+inserted here in the final version.
+
+\section{General Non-Linear Optical Constants}
+
+This section will contain the projection of the general cartesian octic source
+onto:
+\begin{enumerate}
+\item the five symmetric-top optical constants,
+\item the one-dimensional linear limit,
+\item the asymmetric-top optical parameter set appropriate to the chosen
+effective Hamiltonian.
+\end{enumerate}
+
+\section{Computational Strategy}
+
+This section will summarize:
+\begin{enumerate}
+\item extraction of the rotational derivative tensors from quantum chemical
+force fields;
+\item assembly of the octic cartesian source coefficients;
+\item projection/lift with linear maps and pseudoinverses;
+\item validation against linear benchmarks and available experimental optical
+constants.
+\end{enumerate}
+
+\section{Results}
+
+\subsection{Linear molecules}
+
+Planned benchmark systems:
+\begin{itemize}
+\item HCN,
+\item HCCD,
+\item \ce{C2H2},
+\item OCS,
+\item additional linear systems with reliable experimental optical constants.
+\end{itemize}
+
+\subsection{Symmetric-top and non-linear prototypes}
+
+This section will collect the first non-linear applications once the full
+cartesian source coefficients have been written explicitly in terms of
+\(\mu_1\), \(\Phi_3\), and \(\Phi_4\).
+
+\section{Discussion}
+
+The final discussion will emphasize three points:
+\begin{enumerate}
+\item the linear optical constant \(L\) provides a fully controlled test case
+because it is not contaminated by the unresolved compact \(U\)-channel problem
+of the vibrational quartic branch;
+\item optical constants remain in the linear tensor-transport regime;
+\item \(H_{22}\) is the first sector that breaks this linearity in the broader
+centrifugal-distortion hierarchy.
+\end{enumerate}
+
+\section{Conclusions}
+
+The present paper establishes the structure of the optical centrifugal
+distortion problem directly from the printed Watson--Aliev Hamiltonian and uses
+the linear case as a control limit for the general non-linear extension.
+
+\bibliography{paper2}
+
+\end{document}
