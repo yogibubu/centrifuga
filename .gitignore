@@ -20,6 +20,7 @@ dmg_stage/
 tmp_merge/
 tmp/
 output/
+archive/
 
 *.aux
 *.bbl
