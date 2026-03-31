@@ -27,8 +27,11 @@ def _check_case(fchk_path: str, log_path: str, tol_hz: float = 1.0e-6) -> None:
     assert abs(float(out["H"]) - float(rotd.h_mhz * 1.0e6)) < tol_hz
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DATA_ROOT = REPO_ROOT / "data/gaussian/linear_cases"
+
 def test_linear_sextic_exact_source_matches_gaussian_nno_and_hc3n() -> None:
-    _check_case("/Users/vincenzobarone/centrifugal/nno_HPCS2.fchk", "/Users/vincenzobarone/centrifugal/nno_HPCS2.log")
-    _check_case("/Users/vincenzobarone/centrifugal/nno_DPCS3.fchk", "/Users/vincenzobarone/centrifugal/nno_DPCS3.log")
-    _check_case("/Users/vincenzobarone/centrifugal/hc3n_HPCS2.fchk", "/Users/vincenzobarone/centrifugal/hc3n_HPCS2.log")
-    _check_case("/Users/vincenzobarone/centrifugal/hc3n_DPCS3.fchk", "/Users/vincenzobarone/centrifugal/hc3n_DPCS3.log")
+    _check_case(str(DATA_ROOT / "nno_HPCS2.fchk"), str(REPO_ROOT / "nno_HPCS2.log"))
+    _check_case(str(DATA_ROOT / "nno_DPCS3.fchk"), str(REPO_ROOT / "nno_DPCS3.log"))
+    _check_case(str(DATA_ROOT / "hc3n_HPCS2.fchk"), str(REPO_ROOT / "hc3n_HPCS2.log"))
+    _check_case(str(DATA_ROOT / "hc3n_DPCS3.fchk"), str(REPO_ROOT / "hc3n_DPCS3.log"))

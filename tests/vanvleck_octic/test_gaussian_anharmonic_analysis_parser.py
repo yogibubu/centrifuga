@@ -76,8 +76,10 @@ def test_parse_gaussian_anharmonic_force_data_includes_quartics() -> None:
     assert abs(float(out.phi4_reduced_cm[1, 1, 0, 0]) + 257.92864) < 1.0e-4
 
 
+ROOT = Path(__file__).resolve().parents[2]
+
 def test_parse_gaussian_fchk_harmonic_data_accepts_missing_e_exponent_tokens() -> None:
-    out = parse_gaussian_fchk_harmonic_data("nno_DPCS3.fchk")
+    out = parse_gaussian_fchk_harmonic_data(str(ROOT / "data/gaussian/linear_cases/nno_DPCS3.fchk"))
     assert out.n_modes == 4
     assert out.point_group == "Cinfv"
 

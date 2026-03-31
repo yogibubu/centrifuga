@@ -19,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+LINEAR_CASES = REPO_ROOT / "data/gaussian/linear_cases"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -256,10 +257,10 @@ def build_nno_composite_report(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--low-fchk", default="/Users/vincenzobarone/centrifugal/nno_HPCS2.fchk")
-    parser.add_argument("--low-log", default="/Users/vincenzobarone/centrifugal/nno_HPCS2.log")
-    parser.add_argument("--high-fchk", default="/Users/vincenzobarone/centrifugal/nno_DPCS3.fchk")
-    parser.add_argument("--high-log", default="/Users/vincenzobarone/centrifugal/nno_DPCS3.log")
+    parser.add_argument("--low-fchk", default=str(LINEAR_CASES / "nno_HPCS2.fchk"))
+    parser.add_argument("--low-log", default=str(REPO_ROOT / "nno_HPCS2.log"))
+    parser.add_argument("--high-fchk", default=str(LINEAR_CASES / "nno_DPCS3.fchk"))
+    parser.add_argument("--high-log", default=str(REPO_ROOT / "nno_DPCS3.log"))
     parser.add_argument("--output", default="")
     args = parser.parse_args()
 

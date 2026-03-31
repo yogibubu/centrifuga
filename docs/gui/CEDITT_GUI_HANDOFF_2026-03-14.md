@@ -68,7 +68,7 @@
   - `python3 -m pytest -q test_ceditt_gui_xyz_harmonization.py test_harmonic_convention.py test_h30h30_structure.py test_h30h30_resonance.py`
   - `19 passed`
 - Test pratico con:
-  - [h2s.xyz](/Users/vincenzobarone/centrifugal/h2s.xyz)
+  - [h2s.xyz](/Users/vincenzobarone/centrifugal/data/gaussian/linear_cases/h2s.xyz)
   - [h2s.fchk](/Users/vincenzobarone/centrifugal/h2s.fchk)
   - [h2s.log](/Users/vincenzobarone/centrifugal/h2s.log)
 - Build release eseguito con:
@@ -78,7 +78,7 @@
 ## File principali
 - [ceditt_gui.py](/Users/vincenzobarone/centrifugal/ceditt_gui.py)
 - [rovib_distortion.py](/Users/vincenzobarone/centrifugal/rovib_distortion.py)
-- [test_ceditt_gui_xyz_harmonization.py](/Users/vincenzobarone/centrifugal/test_ceditt_gui_xyz_harmonization.py)
+- [test_ceditt_gui_xyz_harmonization.py](/Users/vincenzobarone/centrifugal/tests/vanvleck_octic/test_ceditt_gui_xyz_harmonization.py)
 - [README_CeDiTT.txt](/Users/vincenzobarone/centrifugal/README_CeDiTT.txt)
 - [DOCUMENTAZIONE_CeDiTT1.0.txt](/Users/vincenzobarone/centrifugal/DOCUMENTAZIONE_CeDiTT1.0.txt)
 - [GUI_APP_GUIDE.md](/Users/vincenzobarone/centrifugal/docs/gui/GUI_APP_GUIDE.md)

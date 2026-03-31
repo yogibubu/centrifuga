@@ -1,13 +1,18 @@
+from pathlib import Path
+
 from linear_dv_aliev_terms import build_explicit_aliev_L_model, build_explicit_aliev_dv_general_model, make_linear_aliev_explicit_inputs_from_mapping
 from scripts.build_linear_aliev_payload_from_gaussian import build_payload_same_modes_approx
 from scripts.nno_composite_report import build_nno_composite_report
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DATA_ROOT = REPO_ROOT / "data/gaussian/linear_cases"
+
 
 def test_nno_same_modes_composite_payload_is_finite_and_audited() -> None:
     payload = build_payload_same_modes_approx(
-        harmonic_fchk_path="/Users/vincenzobarone/centrifugal/nno_DPCS3.fchk",
-        anharmonic_log_path="/Users/vincenzobarone/centrifugal/nno_HPCS2.log",
-        anharmonic_fchk_path="/Users/vincenzobarone/centrifugal/nno_HPCS2.fchk",
+        harmonic_fchk_path=str(DATA_ROOT / "nno_DPCS3.fchk"),
+        anharmonic_log_path=str(REPO_ROOT / "nno_HPCS2.log"),
+        anharmonic_fchk_path=str(DATA_ROOT / "nno_HPCS2.fchk"),
         force_constant_source="raw_au_reconverted",
         align_permutation_and_sign=True,
     )
@@ -23,19 +28,19 @@ def test_nno_same_modes_composite_payload_is_finite_and_audited() -> None:
 
 def test_nno_same_modes_composite_report_contains_dual_level_h() -> None:
     report = build_nno_composite_report(
-        "/Users/vincenzobarone/centrifugal/nno_HPCS2.fchk",
-        "/Users/vincenzobarone/centrifugal/nno_HPCS2.log",
-        "/Users/vincenzobarone/centrifugal/nno_DPCS3.fchk",
-        "/Users/vincenzobarone/centrifugal/nno_DPCS3.log",
+        str(DATA_ROOT / "nno_HPCS2.fchk"),
+        str(REPO_ROOT / "nno_HPCS2.log"),
+        str(DATA_ROOT / "nno_DPCS3.fchk"),
+        str(REPO_ROOT / "nno_DPCS3.log"),
     )
     assert "comp : `H =" in report
 
 
 def test_hc3n_same_modes_composite_report_contains_dual_level_h() -> None:
     report = build_nno_composite_report(
-        "/Users/vincenzobarone/centrifugal/hc3n_HPCS2.fchk",
-        "/Users/vincenzobarone/centrifugal/hc3n_HPCS2.log",
-        "/Users/vincenzobarone/centrifugal/hc3n_DPCS3.fchk",
-        "/Users/vincenzobarone/centrifugal/hc3n_DPCS3.log",
+        str(DATA_ROOT / "hc3n_HPCS2.fchk"),
+        str(REPO_ROOT / "hc3n_HPCS2.log"),
+        str(DATA_ROOT / "hc3n_DPCS3.fchk"),
+        str(REPO_ROOT / "hc3n_DPCS3.log"),
     )
     assert "comp : `H =" in report

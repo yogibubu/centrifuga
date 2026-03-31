@@ -3,8 +3,8 @@ from pathlib import Path
 from ceditt_gui import App, _abc_delta_info, _harmonization_status, _point_group_from_xyz_file
 
 
-ROOT = Path(__file__).resolve().parent
-H2S_XYZ = ROOT / "h2s.xyz"
+ROOT = Path(__file__).resolve().parents[2]
+H2S_XYZ = ROOT / "data/gaussian/linear_cases/h2s.xyz"
 
 
 class DummyVar:
