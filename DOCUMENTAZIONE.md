@@ -62,7 +62,7 @@ Input:
 
 Metodi disponibili:
 - `Reference (Yamada / Yamada-like S)`
-- `Tensor (quartic)`
+- `Tensor (quartic, with exact r/l flip)`
 
 Output:
 - costanti trasformate nelle altre 2 rappresentazioni
@@ -99,9 +99,10 @@ Output:
 ## 7. Algoritmi (sintesi)
 
 ### 7.1 Quartic Tensor
-1. Ricostruzione `tau` da Watson input (via `pinv`)
+1. Ricostruzione `tau` da Watson input (via `pinv`) per il trasporto tra rappresentazioni `I/II/III`
 2. Permutazione assi (`I/II/III`)
 3. Ricostruzione Watson in output
+4. Per il flip quartico a rappresentazione fissa `r/l`, uso del mapping operatoriale esatto sulle 5 costanti, senza lift locale
 
 ### 7.2 Sextic Tensor
 1. Ricostruzione `phi` da Watson input (via `pinv`)
