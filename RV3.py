@@ -337,6 +337,28 @@ def _format_compact(obj: Any) -> str:
     return json.dumps(_sanitize_jsonable(obj), sort_keys=True)
 
 
+def _as_float_gui(value: str) -> float:
+    text = value.strip().replace("D", "E").replace("d", "e")
+    return float(text) if text else 0.0
+
+
+def _parse_manual_constant_list(spec: str, expected: int, units: str) -> list[float]:
+    raw = [chunk.strip() for chunk in spec.replace(";", ",").split(",") if chunk.strip()]
+    if len(raw) != expected:
+        raise ValueError(f"Expected {expected} constants, found {len(raw)}.")
+    vals = [_as_float_gui(item) for item in raw]
+    unit = units.strip().lower()
+    if unit == "mhz":
+        vals = [1000.0 * val for val in vals]
+    elif unit != "khz":
+        raise ValueError(f"Unknown units '{units}'. Use MHz or kHz.")
+    return vals
+
+
+def _manual_transform_report(obj: Any) -> str:
+    return json.dumps(obj.to_jsonable(), indent=2, sort_keys=True)
+
+
 def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQuarticResult:
     rep_in = _norm_rep(request.rep_in)
     red = _norm_reduction(request.reduction)
@@ -1249,7 +1271,13 @@ def export_rv3_outputs(
 def launch_rv3_gui() -> int:
     root = tk.Tk()
     root.title("RV3")
-    root.geometry("1100x850")
+    root.geometry("1220x940")
+    try:
+        icon_path = Path(__file__).resolve().parent / "assets" / "icons" / "rv3_app_icon_256.png"
+        root._rv3_icon = tk.PhotoImage(file=str(icon_path))  # type: ignore[attr-defined]
+        root.iconphoto(True, root._rv3_icon)  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     vars: dict[str, tk.StringVar] = {
         "order": tk.StringVar(value="3"),
@@ -1261,6 +1289,18 @@ def launch_rv3_gui() -> int:
         "alpha_log": tk.StringVar(),
         "alpha_cubic_two_index": tk.StringVar(),
         "alpha_excluded_modes": tk.StringVar(),
+        "manual_A": tk.StringVar(),
+        "manual_B": tk.StringVar(),
+        "manual_C": tk.StringVar(),
+        "manual_q_rep_in": tk.StringVar(value="I"),
+        "manual_q_red": tk.StringVar(value="A"),
+        "manual_q_units": tk.StringVar(value="kHz"),
+        "manual_q_constants": tk.StringVar(),
+        "manual_s_rep_in": tk.StringVar(value="I"),
+        "manual_s_red_in": tk.StringVar(value="S"),
+        "manual_s_red_out": tk.StringVar(value="S"),
+        "manual_s_units": tk.StringVar(value="kHz"),
+        "manual_s_constants": tk.StringVar(),
     }
 
     top = ttk.Frame(root, padding=8)
@@ -1331,6 +1371,80 @@ def launch_rv3_gui() -> int:
             report.delete("1.0", tk.END)
             report.insert(tk.END, f"RV3 error:\n{exc}\n")
 
+    manual = ttk.LabelFrame(root, text="Manual Distortion Transforms", padding=8)
+    manual.pack(fill=tk.X, padx=8, pady=(0, 8))
+    manual.columnconfigure(1, weight=1)
+    manual.columnconfigure(3, weight=1)
+    manual.columnconfigure(5, weight=1)
+
+    ttk.Label(manual, text="A (MHz)").grid(row=0, column=0, sticky="w")
+    ttk.Entry(manual, textvariable=vars["manual_A"], width=14).grid(row=0, column=1, sticky="w", padx=4)
+    ttk.Label(manual, text="B (MHz)").grid(row=0, column=2, sticky="w")
+    ttk.Entry(manual, textvariable=vars["manual_B"], width=14).grid(row=0, column=3, sticky="w", padx=4)
+    ttk.Label(manual, text="C (MHz)").grid(row=0, column=4, sticky="w")
+    ttk.Entry(manual, textvariable=vars["manual_C"], width=14).grid(row=0, column=5, sticky="w", padx=4)
+
+    ttk.Label(manual, text="Quartic rep").grid(row=1, column=0, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_q_rep_in"], values=["I", "II", "III"], width=6, state="readonly").grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Quartic red").grid(row=1, column=2, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_q_red"], values=["A", "S"], width=6, state="readonly").grid(row=1, column=3, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Quartic units").grid(row=1, column=4, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_q_units"], values=["kHz", "MHz"], width=6, state="readonly").grid(row=1, column=5, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Quartic constants (DJ,DJK,DK,dJ,dK)").grid(row=2, column=0, sticky="w", pady=(6, 0))
+    ttk.Entry(manual, textvariable=vars["manual_q_constants"], width=100).grid(row=2, column=1, columnspan=5, sticky="we", padx=4, pady=(6, 0))
+
+    ttk.Label(manual, text="Sextic rep").grid(row=3, column=0, sticky="w", pady=(10, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_s_rep_in"], values=["I", "II", "III"], width=6, state="readonly").grid(row=3, column=1, sticky="w", padx=4, pady=(10, 0))
+    ttk.Label(manual, text="Sextic red in").grid(row=3, column=2, sticky="w", pady=(10, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_s_red_in"], values=["A", "S"], width=6, state="readonly").grid(row=3, column=3, sticky="w", padx=4, pady=(10, 0))
+    ttk.Label(manual, text="Sextic red out").grid(row=3, column=4, sticky="w", pady=(10, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_s_red_out"], values=["A", "S"], width=6, state="readonly").grid(row=3, column=5, sticky="w", padx=4, pady=(10, 0))
+    ttk.Label(manual, text="Sextic units").grid(row=4, column=0, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_s_units"], values=["kHz", "MHz"], width=6, state="readonly").grid(row=4, column=1, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Sextic constants (HJ,HJK,HKJ,HK,h1,h2,h3)").grid(row=5, column=0, sticky="w", pady=(6, 0))
+    ttk.Entry(manual, textvariable=vars["manual_s_constants"], width=100).grid(row=5, column=1, columnspan=5, sticky="we", padx=4, pady=(6, 0))
+    ttk.Label(
+        manual,
+        text="Manual distortion constants can be entered in kHz or MHz. Gaussian/file routes remain available above.",
+    ).grid(row=6, column=0, columnspan=6, sticky="w", pady=(6, 0))
+
+    def _run_manual_quartic() -> None:
+        try:
+            result = run_manual_quartic_transform(
+                RV3ManualQuarticRequest(
+                    A_mhz=_as_float_gui(vars["manual_A"].get()),
+                    B_mhz=_as_float_gui(vars["manual_B"].get()),
+                    C_mhz=_as_float_gui(vars["manual_C"].get()),
+                    rep_in=vars["manual_q_rep_in"].get(),
+                    reduction=vars["manual_q_red"].get(),
+                    constants=_parse_manual_constant_list(vars["manual_q_constants"].get(), 5, vars["manual_q_units"].get()),
+                )
+            )
+            report.delete("1.0", tk.END)
+            report.insert(tk.END, _manual_transform_report(result))
+        except Exception as exc:
+            report.delete("1.0", tk.END)
+            report.insert(tk.END, f"RV3 manual quartic error:\n{exc}\n")
+
+    def _run_manual_sextic() -> None:
+        try:
+            result = run_manual_sextic_transform(
+                RV3ManualSexticRequest(
+                    A_mhz=_as_float_gui(vars["manual_A"].get()),
+                    B_mhz=_as_float_gui(vars["manual_B"].get()),
+                    C_mhz=_as_float_gui(vars["manual_C"].get()),
+                    rep_in=vars["manual_s_rep_in"].get(),
+                    reduction_in=vars["manual_s_red_in"].get(),
+                    reduction_out=vars["manual_s_red_out"].get(),
+                    constants=_parse_manual_constant_list(vars["manual_s_constants"].get(), 7, vars["manual_s_units"].get()),
+                )
+            )
+            report.delete("1.0", tk.END)
+            report.insert(tk.END, _manual_transform_report(result))
+        except Exception as exc:
+            report.delete("1.0", tk.END)
+            report.insert(tk.END, f"RV3 manual sextic error:\n{exc}\n")
+
     def _export(kind: str) -> None:
         result = last_result["value"]
         if result is None:
@@ -1354,6 +1468,8 @@ def launch_rv3_gui() -> int:
     ttk.Button(actions, text="Run Summary", command=lambda: _run("summary")).pack(side=tk.LEFT)
     ttk.Button(actions, text="Run Integrated Report", command=lambda: _run("report")).pack(side=tk.LEFT, padx=(8, 0))
     ttk.Button(actions, text="Run JSON", command=lambda: _run("json")).pack(side=tk.LEFT, padx=(8, 0))
+    ttk.Button(actions, text="Manual Quartic", command=_run_manual_quartic).pack(side=tk.LEFT, padx=(24, 0))
+    ttk.Button(actions, text="Manual Sextic", command=_run_manual_sextic).pack(side=tk.LEFT, padx=(8, 0))
     ttk.Button(actions, text="Export JSON", command=lambda: _export("json")).pack(side=tk.LEFT, padx=(24, 0))
     ttk.Button(actions, text="Export Report", command=lambda: _export("report")).pack(side=tk.LEFT, padx=(8, 0))
     ttk.Button(actions, text="Export CSV", command=lambda: _export("csv")).pack(side=tk.LEFT, padx=(8, 0))
@@ -1365,7 +1481,17 @@ def launch_rv3_gui() -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = _build_arg_parser()
     ns = ap.parse_args(argv)
-    if ns.gui:
+    if ns.gui or (
+        ns.max_derivative_order is None
+        and not ns.manual_quartic_json
+        and not ns.manual_sextic_json
+        and ns.geometry is None
+        and ns.hessian is None
+        and ns.cubic is None
+        and ns.quartic is None
+        and ns.alpha_log is None
+        and ns.alpha_cubic_two_index is None
+    ):
         return launch_rv3_gui()
     if ns.manual_quartic_json and ns.manual_sextic_json:
         raise ValueError("Choose only one of --manual-quartic-json or --manual-sextic-json.")

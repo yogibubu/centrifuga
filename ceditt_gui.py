@@ -106,6 +106,48 @@ def _norm_reduction(red: str) -> str:
     return red
 
 
+def _manual_rotor_class_label(A: float, B: float, C: float) -> str:
+    abc = np.array([A, B, C], dtype=float)
+    scale = float(np.max(np.abs(abc))) if np.any(np.isfinite(abc)) else 1.0
+
+    def _close(x: float, y: float) -> bool:
+        return abs(x - y) <= max(1.0e-3, 1.0e-6 * max(abs(x), abs(y), scale, 1.0))
+
+    if (not np.isfinite(abc[0])) or (_close(abc[1], abc[2]) and abc[0] > 100.0 * max(abs(abc[1]), 1.0)):
+        return "linear"
+    if _close(abc[0], abc[1]) and _close(abc[1], abc[2]):
+        return "spherical_top"
+    if _close(abc[1], abc[2]):
+        return "symmetric_top_prolate"
+    if _close(abc[0], abc[1]):
+        return "symmetric_top_oblate"
+    return "asymmetric_top"
+
+
+def _manual_rotor_limit_info(A: float, B: float, C: float) -> dict[str, object]:
+    kind = _manual_rotor_class_label(A, B, C)
+    return {
+        "kind": kind,
+        "is_special_limit": kind != "asymmetric_top",
+    }
+
+
+def _validate_transformable_abc(A: float, B: float, C: float, domain: str) -> None:
+    vals = (float(A), float(B), float(C))
+    if not all(np.isfinite(vals)):
+        raise ValueError("Rotational constants A, B, C must be finite numbers in MHz.")
+    if min(abs(A), abs(B), abs(C)) < 1.0e-9:
+        raise ValueError("Rotational constants A, B, C must be non-zero and in MHz.")
+
+    eps = max(1.0e-9, 1.0e-12 * max(abs(A), abs(B), abs(C), 1.0))
+    if abs(B - C) <= eps:
+        raise ValueError(f"{domain} transform is singular for B=C. Use the symmetry-adapted special-limit route.")
+    if abs(2.0 * A - B - C) <= eps:
+        raise ValueError(
+            f"{domain} transform is singular for 2A-B-C=0. Choose a non-singular axis representation or use harmonic input."
+        )
+
+
 def _parse_mode_selection(spec: str) -> set[int]:
     """Parse a 1-based mode selection like ``1,3-5,8``."""
     out: set[int] = set()
@@ -1516,6 +1558,8 @@ class App(tk.Tk):
 
         top = ttk.Frame(root)
         top.pack(fill=tk.X)
+        for col in (1, 3, 5, 7):
+            top.columnconfigure(col, weight=1)
 
         ttk.Label(top, text="A (MHz)").grid(row=0, column=0, sticky="w")
         ttk.Entry(top, width=15, textvariable=self._sv("A", "")).grid(row=0, column=1, padx=4)
@@ -1523,21 +1567,26 @@ class App(tk.Tk):
         ttk.Entry(top, width=15, textvariable=self._sv("B", "")).grid(row=0, column=3, padx=4)
         ttk.Label(top, text="C (MHz)").grid(row=0, column=4, sticky="w")
         ttk.Entry(top, width=15, textvariable=self._sv("C", "")).grid(row=0, column=5, padx=4)
+        ttk.Label(top, text="Rotor class").grid(row=0, column=6, sticky="w", padx=(10, 0))
+        ttk.Entry(top, width=14, textvariable=self._sv("rotor_class", ""), state="readonly").grid(row=0, column=7, padx=4)
 
-        ttk.Label(top, text="Required for manual transforms only; harmonic-input paths compute them internally.").grid(row=0, column=6, padx=(10, 0), sticky="w")
-        ttk.Label(top, text="Shared vibro-rotational input").grid(row=1, column=0, sticky="w", pady=(10, 0))
-        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_fchk", "")).grid(row=1, column=1, columnspan=2, padx=4, sticky="we", pady=(10, 0))
-        ttk.Button(top, text="FCHK", command=self._browse_vr_shared_fchk).grid(row=1, column=3, padx=(4, 0), pady=(10, 0))
-        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_xyz", "")).grid(row=1, column=4, columnspan=2, padx=4, sticky="we", pady=(10, 0))
-        ttk.Button(top, text="XYZ", command=self._browse_vr_shared_xyz).grid(row=1, column=6, padx=(4, 0), pady=(10, 0))
-        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_hessian", "")).grid(row=2, column=1, columnspan=2, padx=4, sticky="we", pady=(4, 0))
-        ttk.Button(top, text="Hessian", command=self._browse_vr_shared_hessian).grid(row=2, column=3, padx=(4, 0), pady=(4, 0))
-        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_anh_log", "")).grid(row=2, column=4, columnspan=2, padx=4, sticky="we", pady=(4, 0))
-        ttk.Button(top, text="Anharm log", command=self._browse_vr_shared_anh_log).grid(row=2, column=6, padx=(4, 0), pady=(4, 0))
+        ttk.Label(
+            top,
+            text="Manual A/B/C are used for manual transforms only. Harmonic-input paths compute them internally.",
+        ).grid(row=1, column=0, columnspan=8, padx=(0, 0), sticky="w", pady=(6, 0))
+        ttk.Label(top, text="Shared vibro-rotational input").grid(row=2, column=0, sticky="w", pady=(10, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_fchk", "")).grid(row=2, column=1, columnspan=2, padx=4, sticky="we", pady=(10, 0))
+        ttk.Button(top, text="FCHK", command=self._browse_vr_shared_fchk).grid(row=2, column=3, padx=(4, 0), pady=(10, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_xyz", "")).grid(row=2, column=4, columnspan=2, padx=4, sticky="we", pady=(10, 0))
+        ttk.Button(top, text="XYZ", command=self._browse_vr_shared_xyz).grid(row=2, column=6, padx=(4, 0), pady=(10, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_hessian", "")).grid(row=3, column=1, columnspan=2, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(top, text="Hessian", command=self._browse_vr_shared_hessian).grid(row=3, column=3, padx=(4, 0), pady=(4, 0))
+        ttk.Entry(top, width=42, textvariable=self._sv("vr_shared_anh_log", "")).grid(row=3, column=4, columnspan=2, padx=4, sticky="we", pady=(4, 0))
+        ttk.Button(top, text="Anharm log", command=self._browse_vr_shared_anh_log).grid(row=3, column=6, padx=(4, 0), pady=(4, 0))
         ttk.Label(
             top,
             text="These shared paths define the default vibro-rotational dataset used by quartic, sextic, and alpha modules whenever local fields are left empty.",
-        ).grid(row=3, column=1, columnspan=6, sticky="w", pady=(4, 0))
+        ).grid(row=4, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         notebook = ttk.Notebook(root)
         notebook.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
@@ -1552,6 +1601,9 @@ class App(tk.Tk):
         self._build_quartic_tab(q_tab["content"], q_tab["report_host"])
         self._build_sextic_tab(s_tab["content"], s_tab["report_host"])
         self._build_integrated_tab(vr_tab["content"], vr_tab["report_host"])
+        for key in ("A", "B", "C"):
+            self.vars[key].trace_add("write", self._refresh_manual_rotor_class)
+        self._refresh_manual_rotor_class()
 
     def _make_scrollable_tab(self, notebook: ttk.Notebook) -> dict[str, tk.Widget]:
         container = ttk.Frame(notebook)
@@ -1620,9 +1672,18 @@ class App(tk.Tk):
         ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
         ttk.Label(
             ctrl,
-            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
+            text="Manual quartic constants may be entered in MHz or kHz; the app detects the scale and converts internally.",
         ).grid(row=3, column=1, columnspan=6, sticky="w")
-        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=4, column=1, columnspan=6, sticky="w", pady=(4, 0))
+        ttk.Label(
+            ctrl,
+            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
+        ).grid(row=4, column=1, columnspan=6, sticky="w")
+        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=5, column=1, columnspan=6, sticky="w", pady=(4, 0))
+        ttk.Label(ctrl, text="Output reps").grid(row=6, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="rep #1").grid(row=6, column=1, sticky="e", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("q_out_rep1", "II")).grid(row=6, column=2, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="rep #2").grid(row=6, column=3, sticky="e", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("q_out_rep2", "III")).grid(row=6, column=4, padx=4, sticky="w", pady=(6, 0))
 
         grid = ttk.Frame(parent)
         grid.pack(fill=tk.X, pady=(12, 0))
@@ -1754,14 +1815,25 @@ class App(tk.Tk):
         ).grid(row=2, column=1, columnspan=7, sticky="w", pady=(4, 0))
         ttk.Label(
             ctrl,
-            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
+            text="Manual sextic constants may be entered in MHz or kHz; the app detects the scale and converts internally.",
         ).grid(row=3, column=1, columnspan=7, sticky="w")
         ttk.Label(
             ctrl,
-            text="The validated sextic transport currently covers cyclic right-handed representation changes; the fixed-representation r<->l flip does not preserve the validated 5D sextic subspace and is therefore reported explicitly but not generated as a separate numeric target.",
+            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
         ).grid(row=4, column=1, columnspan=7, sticky="w")
-        ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=5, column=1, columnspan=7, sticky="w")
-        ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=6, column=1, columnspan=7, sticky="w", pady=(4, 0))
+        ttk.Label(
+            ctrl,
+            text="The validated sextic transport currently covers cyclic right-handed representation changes; the fixed-representation r<->l flip does not preserve the validated 5D sextic subspace and is therefore reported explicitly but not generated as a separate numeric target.",
+        ).grid(row=5, column=1, columnspan=7, sticky="w")
+        ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=6, column=1, columnspan=7, sticky="w")
+        ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=7, column=1, columnspan=7, sticky="w", pady=(4, 0))
+        ttk.Label(ctrl, text="Output reps").grid(row=8, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="rep #1").grid(row=8, column=1, sticky="e", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("s_out_rep1", "II")).grid(row=8, column=2, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="rep #2").grid(row=8, column=3, sticky="e", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("s_out_rep2", "III")).grid(row=8, column=4, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(ctrl, text="out red").grid(row=8, column=5, sticky="e", pady=(6, 0))
+        ttk.Label(ctrl, textvariable=self._sv("s_red_out", "A")).grid(row=8, column=6, sticky="w", pady=(6, 0))
 
         h22s_frame = ttk.LabelFrame(parent, text="Optional sextic analysis from harmonic input", padding=8)
         h22s_frame.pack(fill=tk.X, pady=(10, 0))
@@ -1910,6 +1982,18 @@ class App(tk.Tk):
             lbl.configure(text=nm)
         for lbl, nm in zip(self.s_o2_labels, out_names):
             lbl.configure(text=nm)
+
+    def _refresh_manual_rotor_class(self, *_: object) -> None:
+        try:
+            A = _as_float(self.vars["A"].get())
+            B = _as_float(self.vars["B"].get())
+            C = _as_float(self.vars["C"].get())
+            if min(abs(A), abs(B), abs(C)) < 1e-12:
+                self.vars["rotor_class"].set("")
+                return
+            self.vars["rotor_class"].set(_manual_rotor_class_label(A, B, C))
+        except Exception:
+            self.vars["rotor_class"].set("")
 
     def _set_sextic_preset(self, reduction: str) -> None:
         red = _norm_reduction(reduction)
@@ -2184,6 +2268,9 @@ class App(tk.Tk):
             return abc_xyz
         return _as_float(self.vars["A"].get()), _as_float(self.vars["B"].get()), _as_float(self.vars["C"].get())
 
+    def _read_manual_abc(self) -> tuple[float, float, float]:
+        return _as_float(self.vars["A"].get()), _as_float(self.vars["B"].get()), _as_float(self.vars["C"].get())
+
     def _apply_xyz_abc_reference(self, meta: dict[str, object] | None) -> tuple[float, float, float] | None:
         abc_xyz = _abc_from_xyz_meta(meta)
         if abc_xyz is None:
@@ -2234,14 +2321,12 @@ class App(tk.Tk):
         }
 
     def _validate_units_quartic(self, A: float, B: float, C: float, D: np.ndarray) -> None:
-        if min(abs(A), abs(B), abs(C)) < 1e-9:
-            raise ValueError("Rotational constants A, B, C must be non-zero and in MHz.")
+        _validate_transformable_abc(A, B, C, "Quartic")
         if np.max(np.abs(D)) > 1.0e5:
             raise ValueError("Quartic constants look too large for kHz input. Please check units.")
 
     def _validate_units_sextic(self, A: float, B: float, C: float, H: np.ndarray) -> None:
-        if min(abs(A), abs(B), abs(C)) < 1e-9:
-            raise ValueError("Rotational constants A, B, C must be non-zero and in MHz.")
+        _validate_transformable_abc(A, B, C, "Sextic")
         if np.max(np.abs(H)) > 1.0e6:
             raise ValueError("Sextic constants look too large for kHz input. Please check units.")
 
@@ -2373,8 +2458,8 @@ class App(tk.Tk):
 
     def _run_quartic(self) -> None:
         try:
-            A, B, C = self._read_abc("q_symm_xyz")
-            rotor_limit = classify_rotor_limit(np.array([A, B, C], dtype=float))
+            A, B, C = self._read_manual_abc()
+            rotor_limit = _manual_rotor_limit_info(A, B, C)
             if rotor_limit["is_special_limit"]:
                 raise ValueError(
                     "Exact symmetric-top and linear limits do not use the asymmetric-top quartic representation transform. "
@@ -2384,10 +2469,14 @@ class App(tk.Tk):
             red = _norm_reduction(self.vars["q_red"].get())
             D_in = self._quartic_input()
             self._validate_units_quartic(A, B, C, D_in)
-
-            rep_outs = [r for r in REPRESENTATIONS if r != rep_in]
-            self.vars["q_out_rep1"].set(rep_outs[0])
-            self.vars["q_out_rep2"].set(rep_outs[1])
+            rep_outs = [
+                _norm_rep(self.vars["q_out_rep1"].get()),
+                _norm_rep(self.vars["q_out_rep2"].get()),
+            ]
+            if rep_in in rep_outs:
+                raise ValueError("Output representations must differ from the input representation.")
+            if rep_outs[0] == rep_outs[1]:
+                raise ValueError("Output representations #1 and #2 must be different.")
 
             M_in = _M4(A, B, C, red)
             tau_in = np.linalg.pinv(M_in) @ D_in
@@ -2546,7 +2635,7 @@ class App(tk.Tk):
     def _run_quartic_legacy_check(self) -> None:
         try:
             A, B, C = self._read_abc("q_symm_xyz")
-            rotor_limit = classify_rotor_limit(np.array([A, B, C], dtype=float))
+            rotor_limit = _manual_rotor_limit_info(A, B, C)
             if rotor_limit["is_special_limit"]:
                 raise ValueError("Legacy asymmetric-top quartic transforms are not defined for symmetric-top or linear limits.")
             rep_in = _norm_rep(self.vars["q_rep_in"].get())
@@ -3163,15 +3252,8 @@ class App(tk.Tk):
 
     def _run_sextic(self) -> None:
         try:
-            manual_abc = (
-                _as_float(self.vars["A"].get()),
-                _as_float(self.vars["B"].get()),
-                _as_float(self.vars["C"].get()),
-            )
-            xyz_meta = _symmetry_meta_from_xyz_path(self.vars["s_symm_xyz"].get().strip())
-            xyz_abc = _abc_from_xyz_meta(xyz_meta)
-            A, B, C = self._read_abc("s_symm_xyz")
-            rotor_limit = classify_rotor_limit(np.array([A, B, C], dtype=float))
+            A, B, C = self._read_manual_abc()
+            rotor_limit = _manual_rotor_limit_info(A, B, C)
             if rotor_limit["is_special_limit"]:
                 raise ValueError(
                     "Exact symmetric-top and linear limits do not use the asymmetric-top sextic representation transform. "
@@ -3182,10 +3264,14 @@ class App(tk.Tk):
             red_out = _norm_reduction(self.vars["s_red_out"].get())
             H_in = self._sextic_input()
             self._validate_units_sextic(A, B, C, H_in)
-
-            rep_outs = [r for r in REPRESENTATIONS if r != rep_in]
-            self.vars["s_out_rep1"].set(rep_outs[0])
-            self.vars["s_out_rep2"].set(rep_outs[1])
+            rep_outs = [
+                _norm_rep(self.vars["s_out_rep1"].get()),
+                _norm_rep(self.vars["s_out_rep2"].get()),
+            ]
+            if rep_in in rep_outs:
+                raise ValueError("Output representations must differ from the input representation.")
+            if rep_outs[0] == rep_outs[1]:
+                raise ValueError("Output representations #1 and #2 must be different.")
 
             H1 = transform_sextic_tensor(H_in, A, B, C, rep_in, rep_outs[0], red_in, red_out)
             H2 = transform_sextic_tensor(H_in, A, B, C, rep_in, rep_outs[1], red_in, red_out)
