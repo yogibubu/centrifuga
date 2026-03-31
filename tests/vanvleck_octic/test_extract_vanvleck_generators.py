@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from extract_vanvleck_generators import extract_reference_generators
+from tools.vanvleck.extract_vanvleck_generators import extract_reference_generators
 
 
 def test_extract_reference_generators_exposes_first_three_bch_orders():

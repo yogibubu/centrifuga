@@ -26,13 +26,13 @@ So the hierarchy contains:
 
 ## What the current scans actually use
 
-Low-order scans in `derive_watson_octic_from_loworder_vanvleck.py` use only:
+Low-order scans in `tools/vanvleck/derive_watson_octic_from_loworder_vanvleck.py` use only:
 - `H12`
 - `H22`
 - `H30`
 - `H40`
 
-Targeted scans in `run_targeted_octic_sectors.py` extend this to:
+Targeted scans in `tools/vanvleck/run_targeted_octic_sectors.py` extend this to:
 - `H32`
 - `H50`
 - `H60`

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from map_vanvleck_generators_to_watson import map_generators_to_watson
+from tools.vanvleck.map_vanvleck_generators_to_watson import map_generators_to_watson
 
 
 def test_map_generators_to_watson_has_first_three_bridges():

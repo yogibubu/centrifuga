@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import derive_first_active_octic_sector as fao
+from tools.vanvleck import derive_first_active_octic_sector as fao
 
 
 def test_first_active_octic_sector_is_h12_two_mode_diagonal():

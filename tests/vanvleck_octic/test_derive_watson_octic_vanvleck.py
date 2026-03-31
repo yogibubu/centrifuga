@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sympy as sp
 
-import derive_watson_octic_vanvleck as dovv
+from tools.vanvleck import derive_watson_octic_vanvleck as dovv
 
 
 def _key(jword, coeff, origin=("T",)):

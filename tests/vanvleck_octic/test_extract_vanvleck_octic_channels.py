@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from extract_vanvleck_octic_channels import extract_reference_octic_channels
+from tools.vanvleck.extract_vanvleck_octic_channels import extract_reference_octic_channels
 
 
 def test_extract_reference_octic_channels_exposes_expected_labels():

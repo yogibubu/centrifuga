@@ -18,7 +18,7 @@
 3. A perturbative input composer exists in
    `/Users/vincenzobarone/centrifugal/vanvleck_perturbative_input.py`.
 4. A generic Van Vleck driver exists in
-   `/Users/vincenzobarone/centrifugal/derive_watson_generic_vanvleck.py`.
+   `/Users/vincenzobarone/centrifugal/tools/vanvleck/derive_watson_generic_vanvleck.py`.
 5. The new stack reproduces the old quartic engine when run with the same reduction policy.
 6. The octic hierarchy is encoded exactly in
    `/Users/vincenzobarone/centrifugal/vanvleck_octic_hierarchy.py`.

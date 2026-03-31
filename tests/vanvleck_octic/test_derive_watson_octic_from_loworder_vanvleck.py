@@ -5,7 +5,7 @@ from __future__ import annotations
 import sympy as sp
 
 import derive_watson_quartic_vanvleck as old
-import derive_watson_octic_from_loworder_vanvleck as dlo
+from tools.vanvleck import derive_watson_octic_from_loworder_vanvleck as dlo
 
 
 def test_loworder_octic_problem_reproduces_quartic_slice():

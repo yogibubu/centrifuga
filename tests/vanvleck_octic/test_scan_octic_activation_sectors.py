@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import scan_octic_activation_sectors as scan
+from tools.vanvleck import scan_octic_activation_sectors as scan
 
 
 def test_default_scan_cases_are_ordered_from_minimal_to_nonminimal():

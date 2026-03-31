@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from derive_first_surviving_octic_sector import derive_first_surviving_octic_sector
+from tools.vanvleck.derive_first_surviving_octic_sector import derive_first_surviving_octic_sector
 
 
 def test_first_surviving_scan_classifies_known_zero_h12_channel():

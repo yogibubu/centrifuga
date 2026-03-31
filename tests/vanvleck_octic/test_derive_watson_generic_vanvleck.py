@@ -5,7 +5,7 @@ from __future__ import annotations
 import sympy as sp
 
 import derive_watson_quartic_vanvleck as old
-import derive_watson_generic_vanvleck as new
+from tools.vanvleck import derive_watson_generic_vanvleck as new
 
 
 def test_generic_driver_reproduces_existing_quartic_engine_for_full_order2_input():
