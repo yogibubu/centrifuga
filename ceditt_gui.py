@@ -199,9 +199,11 @@ def _flip_handedness_abc(A: float, B: float, C: float) -> tuple[float, float, fl
 def quartic_handedness_flip_constants(D: np.ndarray, reduction: str) -> np.ndarray:
     """Return the exact fixed-representation quartic r<->l flip.
 
-    For quartic Watson constants the handedness change does not require a lift
-    to the 6D tensor slice. The operator-level action is diagonal on the
-    5-parameter set and therefore closes exactly under round-trip.
+    The handedness change is applied at fixed Watson reduction. It does not
+    require a lift to the 6D tensor slice and it is distinct from both cyclic
+    I/II/III transport and A<->S reduction changes. The operator-level action
+    is diagonal on the 5-parameter set and therefore closes exactly under
+    round-trip.
     """
     D = np.asarray(D, dtype=float).reshape(5)
     red = _norm_reduction(reduction)
@@ -215,10 +217,12 @@ def quartic_handedness_flip_constants(D: np.ndarray, reduction: str) -> np.ndarr
 def sextic_handedness_flip_constants(H: np.ndarray, A: float, B: float, C: float, reduction: str) -> np.ndarray:
     """Return the exact fixed-representation sextic r<->l flip.
 
-    The full 7D Watson sextic operator basis is closed under swapping the last
-    two local axes. In S reduction this action is diagonal: the two odd
-    operators change sign while the even sector is unchanged. A reduction is
-    handled by explicit A<->S conversion before/after the flip.
+    The handedness change is applied at fixed representation and fixed Watson
+    reduction. It is distinct from cyclic I/II/III transport. In S reduction
+    the full 7D Watson sextic operator basis is closed under swapping the last
+    two local axes and the action is diagonal. In A reduction the same exact
+    flip is evaluated by explicit A->S conversion, S-space flipping, and
+    conversion back to A in the opposite-handed frame.
     """
     H = np.asarray(H, dtype=float).reshape(7)
     red = _norm_reduction(reduction)
@@ -504,6 +508,30 @@ def _M4(A: float, B: float, C: float, reduction: str) -> np.ndarray:
     return M
 
 
+def _quartic_rotate_abc_from_I(A: float, B: float, C: float, rep: str) -> tuple[float, float, float]:
+    """Return the ABC order associated with a target quartic representation."""
+    return _rotate_abc(A, B, C, "I", rep)
+
+
+def _quartic_tau_perm_from_I(rep: str) -> np.ndarray:
+    """Return the tau permutation that maps the Ir ordering to ``rep``."""
+    return _perm_tau_indices(_cycle_shift("I", rep))
+
+
+def _quartic_K(red: str, rep: str, A: float, B: float, C: float) -> np.ndarray:
+    """Build K(red,rep) with D(red,rep) = K tau_I on the shared Ir tau slice."""
+    red = _norm_reduction(red)
+    rep = _norm_rep(rep)
+    A_r, B_r, C_r = _quartic_rotate_abc_from_I(A, B, C, rep)
+    P = np.eye(6, dtype=float)[_quartic_tau_perm_from_I(rep), :]
+    K = np.zeros((5, 6), dtype=float)
+    for j in range(6):
+        e = np.zeros(6, dtype=float)
+        e[j] = 1.0
+        K[:, j] = _quartic_forward_constants(red, P @ e, A_r, B_r, C_r)
+    return K
+
+
 def _transform_matrix_quartic(A: float, B: float, C: float, rep_from: str, rep_to: str, reduction: str) -> np.ndarray:
     T = np.zeros((5, 5), dtype=float)
     for k in range(5):
@@ -609,6 +637,53 @@ def transform_quartic_tensor(
     A2, B2, C2 = _rotate_abc(A, B, C, rep_from, rep_to)
     M_to = _M4(A2, B2, C2, reduction)
     return M_to @ tau_p
+
+
+def transform_quartic_general(
+    D: np.ndarray,
+    A: float,
+    B: float,
+    C: float,
+    rep_from: str,
+    rep_to: str,
+    reduction_in: str,
+    reduction_out: str,
+) -> np.ndarray:
+    """General quartic transform with explicit representation and reduction change."""
+    D = np.asarray(D, dtype=float).reshape(5)
+    rep_from = _norm_rep(rep_from)
+    rep_to = _norm_rep(rep_to)
+    reduction_in = _norm_reduction(reduction_in)
+    reduction_out = _norm_reduction(reduction_out)
+
+    out = D.copy()
+    if reduction_in != reduction_out:
+        out = quartic_change_reduction(out, A, B, C, rep_from, reduction_in, reduction_out)
+    if rep_from != rep_to:
+        out = transform_quartic_tensor(out, A, B, C, rep_from, rep_to, reduction_out)
+    return out
+
+
+def quartic_change_reduction(
+    D: np.ndarray,
+    A: float,
+    B: float,
+    C: float,
+    rep: str,
+    reduction_in: str,
+    reduction_out: str,
+) -> np.ndarray:
+    """Convert quartic constants between Watson A and S at fixed representation."""
+    D = np.asarray(D, dtype=float).reshape(5)
+    rep = _norm_rep(rep)
+    reduction_in = _norm_reduction(reduction_in)
+    reduction_out = _norm_reduction(reduction_out)
+    if reduction_in == reduction_out:
+        return D.copy()
+    K_from = _quartic_K(reduction_in, rep, A, B, C)
+    tau_I = np.linalg.pinv(K_from) @ D
+    K_to = _quartic_K(reduction_out, rep, A, B, C)
+    return K_to @ tau_I
 
 
 def _sympy_modepair_tensor(arr: np.ndarray) -> sp.MutableDenseNDimArray:
@@ -1288,38 +1363,46 @@ def _append_linear_ltype_report(widget: tk.Text, ltype: dict[str, object] | None
 
 # --- Sextic tensor algorithm --------------------------------------------------------
 
+_SEXTIC_A2S_M0 = np.array(
+    [
+        [-44.84608013864, -18.936675851945, -12.98928049429, -13.019706776869, -77.786715815891, -20.455061230481, -2.022663895757],
+        [254.300840662417, 98.338716115811, 61.974312903032, 60.745451071696, 395.642732086069, 105.464370838626, 11.4814620834],
+        [-159.978272239168, -40.41225266056, -10.741837994234, -7.189236975899, -152.008364534421, -44.721984352796, -7.931583137152],
+        [-48.476490040714, -37.989788662537, -37.243195163855, -39.53650787278, -165.847650489147, -40.287325333048, -1.527215433209],
+        [-16.169592032649, -6.388476956264, -3.45034517437, -2.541090956111, -10.410159298426, -3.703181682241, -1.140084683157],
+        [22.923040016176, 9.46833789311, 6.494640224241, 6.509853372625, 38.893357970334, 10.227530617499, 1.011331934602],
+        [16.169592064888, 6.388476975656, 3.450345187583, 2.541090964867, 11.410159251524, 3.703181678496, 1.140084690887],
+    ],
+    dtype=float,
+)
+
+_SEXTIC_A2S_M1 = np.array(
+    [
+        [-7.289552510684, -3.339401918943, -1.377801946964, -0.05631824029, 8.536063221792, 1.414118371615, -0.584871849256],
+        [36.41884939676, 17.120874326594, 7.170348824824, 0.267901917843, -44.137016518254, -7.563442397736, 2.737109914645],
+        [-12.052877063202, -6.978552406152, -3.234133605301, -0.048232792169, 19.082439131083, 3.999698836355, -0.35062202544],
+        [-17.076419911381, -6.802920061976, -2.558413302576, -0.163350886771, 16.518513940496, 2.149625125652, -1.801616056875],
+        [-0.07744610782, -0.174521564321, -0.111328136444, -0.007666366651, 0.815982447875, 0.111236727965, -0.09142532503],
+        [3.644776257195, 1.669700959386, 0.688900973201, 0.028159120118, -4.268031623258, -0.707059188878, 0.292435924231],
+        [0.077446104742, 0.174521563922, 0.111328136546, 0.007666366663, -0.815982437912, -0.111236725607, 0.09142532522],
+    ],
+    dtype=float,
+)
+
+
+def _sextic_sigma(A: float, B: float, C: float) -> float:
+    if abs(B - C) < 1.0e-14:
+        raise ValueError("Sextic reduction change is singular for B=C.")
+    return (2.0 * A - B - C) / (B - C)
+
+
 def _sextic_a_to_s_matrix(A: float, B: float, C: float) -> np.ndarray:
-    s = (2.0 * A - B - C) / (B - C)
-    return np.array(
-        [
-            [1.0, -1.0 / 3.0, -1.0 / 3.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 2.0 / 3.0, -1.0 / 3.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, -1.0 / 3.0, 2.0 / 3.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 2.0 / 3.0, 2.0 / 3.0, 1.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, s, 1.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0, -s, 1.0],
-        ],
-        dtype=float,
-    )
+    s = _sextic_sigma(A, B, C)
+    return _SEXTIC_A2S_M0 + s * _SEXTIC_A2S_M1
 
 
 def _sextic_s_to_a_matrix(A: float, B: float, C: float) -> np.ndarray:
-    if abs(B - C) < 1.0e-14 or abs(2.0 * A - B - C) < 1.0e-14:
-        raise ValueError("S->A sextic conversion is singular for B=C or 2A-B-C=0.")
-    s = (2.0 * A - B - C) / (B - C)
-    return np.array(
-        [
-            [1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0],          # PhiJ
-            [0.0, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0],          # PhiJK
-            [0.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0],          # PhiKJ
-            [0.0, -2.0, -2.0, 1.0, 0.0, 0.0, 0.0],        # PhiK
-            [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],          # phi_j
-            [0.0, 0.0, 0.0, 0.0, 0.0, 1.0 / (2.0 * s), -1.0 / (2.0 * s)],  # phi_jk
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5],          # phi_k
-        ],
-        dtype=float,
-    )
+    return np.linalg.inv(_sextic_a_to_s_matrix(A, B, C))
 
 
 def _B6_S(rep: str) -> np.ndarray:
@@ -1364,10 +1447,39 @@ def _B6_S(rep: str) -> np.ndarray:
     )
 
 
+def _canonicalize_basis_columns(mat: np.ndarray, tol: float = 1.0e-12) -> np.ndarray:
+    out = np.asarray(mat, dtype=float).copy()
+    for j in range(out.shape[1]):
+        col = out[:, j]
+        idx = np.flatnonzero(np.abs(col) > tol)
+        if idx.size and col[idx[0]] < 0.0:
+            out[:, j] *= -1.0
+    return out
+
+
+def _N6_S(rep: str) -> np.ndarray:
+    """Canonical 2D complement of the sextic physical subspace in S reduction."""
+    u, _, _ = np.linalg.svd(_B6_S(rep), full_matrices=True)
+    return _canonicalize_basis_columns(u[:, 5:])
+
+
+def _M6_S_canonical(rep: str) -> np.ndarray:
+    """Full 7D canonical sextic basis = physical 5D sector + residual 2D sector."""
+    return np.column_stack([_B6_S(rep), _N6_S(rep)])
+
+
 def _sextic_s_rep_transform(rep_from: str, rep_to: str) -> np.ndarray:
+    """Physical 5D sextic transport embedded in Watson's 7D S space."""
     B_from = _B6_S(rep_from)
     B_to = _B6_S(rep_to)
     return B_to @ np.linalg.pinv(B_from)
+
+
+def _sextic_s_full_transform(rep_from: str, rep_to: str) -> np.ndarray:
+    """Exact full 7D sextic transport in the canonical 5+2 basis."""
+    M_from = _M6_S_canonical(rep_from)
+    M_to = _M6_S_canonical(rep_to)
+    return M_to @ np.linalg.inv(M_from)
 
 
 def _nonzero_condition_metrics(T: np.ndarray, tol: float = 1.0e-12) -> dict[str, float]:
@@ -1393,15 +1505,21 @@ def _nonzero_condition_metrics(T: np.ndarray, tol: float = 1.0e-12) -> dict[str,
 
 
 def _sextic_condition_metrics(rep_from: str, rep_to: str) -> dict[str, float]:
-    """Numerical conditioning diagnostics for the sextic physical subspace."""
+    """Numerical conditioning diagnostics for the sextic canonical 7D route."""
     B_from = _B6_S(rep_from)
     B_to = _B6_S(rep_to)
+    M_from = _M6_S_canonical(rep_from)
+    M_to = _M6_S_canonical(rep_to)
     T_phys = _sextic_s_rep_transform(rep_from, rep_to)
+    T_full = _sextic_s_full_transform(rep_from, rep_to)
     out = {}
     for key, mat in (
         ("B_from", B_from),
         ("B_to", B_to),
+        ("M_from", M_from),
+        ("M_to", M_to),
         ("T_phys", T_phys),
+        ("T_full", T_full),
     ):
         met = _nonzero_condition_metrics(mat)
         for mk, mv in met.items():
@@ -1430,24 +1548,17 @@ def _sextic_decomposition(
     B: float,
     C: float,
 ) -> dict[str, np.ndarray | float]:
-    """Decompose sextic constants into physical 5D coordinates plus 2D residual.
+    """Decompose sextic constants into canonical 5 physical + 2 residual coordinates.
 
-    The sextic transform is performed on a canonical five-dimensional
-    representation-independent subspace S_6, expressed operationally in
-    Watson's S reduction:
+    The canonical sextic object is the full 7D S-reduction coordinate vector
 
-        H_S = B_rep sigma + r
+        c = (sigma_1, ..., sigma_5, g_1, g_2)^T
 
-    where:
-    - sigma are the 5 physical coordinates on the modeled sextic subspace S_6
-    - r is the orthogonal residual in the 2D complement
-
-    Thus the CeDiTT sextic 5+2 decomposition is not merely a numerical fit:
-    it is the decomposition of a 7-component Watson vector with respect to the
-    invariant operator subspace S_6 and its complementary 2D residual sector.
-    Structurally, the same physical 5D sector may be viewed as:
-    - a harmonic 1+4 sector: one scalar plus one even rank-6 component
-    - a representation-adapted 1+1+1+2 sector under cyclic axis relabelings.
+    where the first five entries span the validated representation-invariant
+    physical subspace S_6 and the last two entries resolve the complementary
+    residual sector in a fixed canonical gauge basis.  Cyclic I/II/III changes
+    act by changing only the embedding matrix B_rep/N_rep; the canonical
+    coordinates themselves are representation-independent.
     """
     H = np.asarray(H, dtype=float).reshape(7)
     reduction = _norm_reduction(reduction)
@@ -1457,15 +1568,13 @@ def _sextic_decomposition(
         Hs = H.copy()
 
     Bmat = _B6_S(rep)
-    pinv = np.linalg.pinv(Bmat)
-    sigma = pinv @ Hs
+    gauge_basis = _N6_S(rep)
+    Mmat = _M6_S_canonical(rep)
+    canon = np.linalg.solve(Mmat, Hs)
+    sigma = canon[:5]
+    gauge_coords = canon[5:]
     Hs_phys = Bmat @ sigma
-    residual = Hs - Hs_phys
-
-    # Orthonormal basis of the 2D complement in the S-canonical 7D space.
-    u, _, _ = np.linalg.svd(Bmat, full_matrices=True)
-    gauge_basis = u[:, 5:]
-    gauge_coords = gauge_basis.T @ residual
+    residual = gauge_basis @ gauge_coords
 
     return {
         "Hs": Hs,
@@ -1476,6 +1585,7 @@ def _sextic_decomposition(
         "residual_norm2": float(np.linalg.norm(residual)),
         "gauge_basis": gauge_basis,
         "gauge_coords": gauge_coords,
+        "canonical_coords": canon,
     }
 
 
@@ -1489,11 +1599,20 @@ def transform_sextic_tensor(
     red_from: str,
     red_to: str,
 ) -> np.ndarray:
-    """Transform sextic constants through the validated 5D invariant S-subspace.
+    """Transform sextic constants through the canonical 7D = 5+2 S-space object.
 
-    The representation change is performed on the canonical S-reduction
-    invariant subspace; A<->S conversion is handled explicitly before/after
-    the representation transform.
+    Pipeline:
+    1. Convert the input Watson constants to the same underlying S-reduction
+       7D sextic object without changing handedness or representation.
+    2. Lift to the canonical 5+2 coordinates, whose first five entries are the
+       validated physical sigma sector and whose last two entries resolve the
+       residual sector.
+    3. Change only the axis representation by re-embedding the same canonical
+       coordinates into the target representation.
+    4. Project to the requested output reduction.
+
+    The fixed-representation r<->l handedness flip remains a separate exact
+    operation on the same full 7D sextic object.
     """
     H = np.asarray(H, dtype=float).reshape(7)
     rep_from = _norm_rep(rep_from)
@@ -1502,12 +1621,13 @@ def transform_sextic_tensor(
     red_to = _norm_reduction(red_to)
     A2, B2, C2 = _rotate_abc(A, B, C, rep_from, rep_to)
 
-    if red_from == "S":
-        Hs_in = H
-    else:
+    if red_from == "A":
         Hs_in = _sextic_a_to_s_matrix(A, B, C) @ H
+    else:
+        Hs_in = H.copy()
 
-    Hs_out = _sextic_s_rep_transform(rep_from, rep_to) @ Hs_in
+    canon = np.linalg.solve(_M6_S_canonical(rep_from), Hs_in)
+    Hs_out = _M6_S_canonical(rep_to) @ canon
 
     if red_to == "S":
         return Hs_out
@@ -2575,7 +2695,7 @@ class App(tk.Tk):
             names = QUARTIC_A_NAMES if red == "A" else QUARTIC_S_NAMES
             self.q_report.insert(
                 tk.END,
-                f"Same-representation opposite-handedness constants ({_norm_rep(rep_in)}l): "
+                f"Same-representation opposite-handedness constants at fixed {red} reduction ({_norm_rep(rep_in)}l): "
                 + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names, D_flip))
                 + "\n",
             )
@@ -3386,7 +3506,7 @@ class App(tk.Tk):
             names_flip = SEXTIC_A_NAMES if red_in == "A" else SEXTIC_S_NAMES
             self.s_report.insert(
                 tk.END,
-                f"Same-representation opposite-handedness sextic constants ({_norm_rep(rep_in)}l): "
+                f"Same-representation opposite-handedness sextic constants at fixed {red_in} reduction ({_norm_rep(rep_in)}l): "
                 + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names_flip, h_flip))
                 + "\n",
             )
@@ -3397,11 +3517,9 @@ class App(tk.Tk):
             )
             self.s_report.insert(
                 tk.END,
-                "Sextic transform uses the validated 5D invariant-subspace route with explicit A<->S conversion.\n"
-                "The canonical decomposition is H_S = B_rep sigma + r, with five physical coordinates sigma "
-                "and a two-dimensional residual r in the orthogonal complement. "
-                "The same physical sector may also be viewed as harmonic 1+4 and, "
-                "for cyclic representation changes, as 1+1+1+2.\n",
+                "Sextic transform uses the canonical 7D = 5+2 S-space route with explicit A<->S projection only at input/output.\n"
+                "The canonical coordinates are c=(sigma,g), with five physical coordinates sigma and a two-dimensional residual gauge sector g. "
+                "Cyclic I/II/III changes re-embed the same canonical coordinates into the target representation, so the full 7D round-trip closes exactly while the physical 5D sector is preserved when g=(0,0).\n"
             )
             self.s_report.insert(tk.END, f"\nPhysical-subspace residuals: in={phys_in:.3e}, out1={phys1:.3e}, out2={phys2:.3e}\n")
             self.s_report.insert(
@@ -3414,22 +3532,22 @@ class App(tk.Tk):
             )
             self.s_report.insert(
                 tk.END,
-                "For physically consistent sextic constants the round-trip closes at numerical precision; "
-                "large residuals indicate that the input does not lie on the modeled sextic physical subspace.\n",
+                "The full 7D round-trip closes at numerical precision for arbitrary sextic inputs; "
+                "large residuals only indicate that the input carries a nonzero component outside the modeled physical 5D sector.\n",
             )
-            self.s_report.insert(tk.END, "\nSextic conditioning diagnostics on the physical subspace\n")
+            self.s_report.insert(tk.END, "\nSextic conditioning diagnostics\n")
             for rep_to, cm in ((rep_outs[0], cm1), (rep_outs[1], cm2)):
                 self.s_report.insert(
                     tk.END,
-                    f"{rep_in}->{rep_to}: cond2(T_phys)={cm['T_phys_cond2_nz']:.3e}, "
-                    f"sigma_min={cm['T_phys_sigma_min_nz']:.3e}, sigma_max={cm['T_phys_sigma_max_nz']:.3e}, "
-                    f"cond2*eps={cm['T_phys_amp_eps_nz']:.3e}\n",
+                    f"{rep_in}->{rep_to}: cond2(T_full)={cm['T_full_cond2_nz']:.3e}, cond2(T_phys)={cm['T_phys_cond2_nz']:.3e}, "
+                    f"sigma_min(full)={cm['T_full_sigma_min_nz']:.3e}, sigma_max(full)={cm['T_full_sigma_max_nz']:.3e}, "
+                    f"cond2*eps(full)={cm['T_full_amp_eps_nz']:.3e}\n",
                 )
                 self.s_report.insert(
                     tk.END,
-                    f"              cond2(B_{rep_in})={cm['B_from_cond2_nz']:.3e}, "
-                    f"cond2(B_{rep_to})={cm['B_to_cond2_nz']:.3e}, "
-                    f"warning={stability_warning(cm['T_phys_cond2_nz'])}\n",
+                    f"              cond2(B_{rep_in})={cm['B_from_cond2_nz']:.3e}, cond2(B_{rep_to})={cm['B_to_cond2_nz']:.3e}, "
+                    f"cond2(M_{rep_in})={cm['M_from_cond2_nz']:.3e}, cond2(M_{rep_to})={cm['M_to_cond2_nz']:.3e}, "
+                    f"warning={stability_warning(cm['T_full_cond2_nz'])}\n",
                 )
             self.s_report.insert(tk.END, "\nSextic 5+2 decomposition in canonical S-subspace\n")
             for label, dec in (

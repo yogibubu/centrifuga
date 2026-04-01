@@ -43,6 +43,8 @@ from ceditt_gui import (
     _M4,
     _flip_handedness_abc,
     quartic_handedness_flip_constants,
+    transform_quartic_general,
+    quartic_change_reduction,
     sextic_handedness_flip_constants,
     _norm_reduction,
     _norm_rep,
@@ -236,6 +238,7 @@ class RV3ManualQuarticRequest:
     rep_in: str
     reduction: str
     constants: list[float]
+    reduction_out: str = "same"
 
 
 @dataclass
@@ -246,6 +249,7 @@ class RV3ManualQuarticResult:
     spectral_invariants: dict[str, Any]
     reduced_3plus2: dict[str, Any]
     handedness_flip: dict[str, Any]
+    reduction_change: dict[str, Any] | None = None
 
     def to_jsonable(self) -> dict[str, Any]:
         return _sanitize_jsonable(asdict(self))
@@ -361,7 +365,8 @@ def _manual_transform_report(obj: Any) -> str:
 
 def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQuarticResult:
     rep_in = _norm_rep(request.rep_in)
-    red = _norm_reduction(request.reduction)
+    red_in = _norm_reduction(request.reduction)
+    red_out = red_in if str(request.reduction_out).strip().lower() == "same" else _norm_reduction(request.reduction_out)
     A = float(request.A_mhz)
     B = float(request.B_mhz)
     C = float(request.C_mhz)
@@ -374,39 +379,55 @@ def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQ
         )
 
     rep_outs = [rep for rep in ("I", "II", "III") if rep != rep_in]
-    m_in = _M4(A, B, C, red)
+    m_in = _M4(A, B, C, red_in)
     tau_in = np.linalg.pinv(m_in) @ d_in
     spec_in = _quartic_spectral_invariants_from_tau(tau_in)
     red5_in = _quartic_reduced_3plus2_from_tau(tau_in, A, B, C)
     outputs: dict[str, dict[str, Any]] = {}
     for rep_out in rep_outs:
-        d_out = transform_quartic_tensor(d_in, A, B, C, rep_in, rep_out, red)
+        d_out = transform_quartic_general(d_in, A, B, C, rep_in, rep_out, red_in, red_out)
         A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_out)
-        tmat = quartic_transform_matrix(A, B, C, rep_in, rep_out, red, "tensor")
-        metrics = stability_metrics(tmat, A, B, C)
-        m_out = _M4(A2, B2, C2, red)
+        if red_in == red_out:
+            tmat = quartic_transform_matrix(A, B, C, rep_in, rep_out, red_in, "tensor")
+            metrics: dict[str, Any] = stability_metrics(tmat, A, B, C)
+        else:
+            metrics = {"note": "Quartic A<->S conversion is handled explicitly through the shared tau slice; fixed-reduction tensor stability metrics apply only when reduction is unchanged."}
+        m_out = _M4(A2, B2, C2, red_out)
         tau_out = np.linalg.pinv(m_out) @ d_out
         outputs[rep_out] = {
             "A_mhz": A2,
             "B_mhz": B2,
             "C_mhz": C2,
+            "reduction_out": red_out,
             "constants": [float(x) for x in d_out],
-            "tensor_roundtrip_max_error": float(np.max(np.abs(transform_quartic_tensor(d_out, A2, B2, C2, rep_out, rep_in, red) - d_in))),
+            "tensor_roundtrip_max_error": float(np.max(np.abs(transform_quartic_general(d_out, A2, B2, C2, rep_out, rep_in, red_out, red_in) - d_in))),
             "stability_metrics": metrics,
-            "s111": compute_s111(A2, B2, C2, d_out, red),
+            "s111": compute_s111(A2, B2, C2, d_out, red_out),
             "T_over_B": compute_T_over_B(B2, d_out),
             "spectral_invariants": spec_in if rep_out == rep_in else _quartic_spectral_invariants_from_tau(tau_out),
             "reduced_3plus2": _quartic_reduced_3plus2_from_tau(tau_out, A2, B2, C2),
         }
     flip_abc = _flip_handedness_abc(A, B, C)
-    d_flip = quartic_handedness_flip_constants(d_in, red)
+    d_flip = quartic_handedness_flip_constants(d_in, red_in)
+    reduction_change = None
+    if red_in != red_out:
+        d_red = quartic_change_reduction(d_in, A, B, C, rep_in, red_in, red_out)
+        d_back = quartic_change_reduction(d_red, A, B, C, rep_in, red_out, red_in)
+        reduction_change = {
+            "rep": rep_in,
+            "reduction_in": red_in,
+            "reduction_out": red_out,
+            "constants": [float(x) for x in d_red],
+            "roundtrip_max_error": float(np.max(np.abs(d_back - d_in))),
+        }
     return RV3ManualQuarticResult(
         request={
             "A_mhz": A,
             "B_mhz": B,
             "C_mhz": C,
             "rep_in": rep_in,
-            "reduction": red,
+            "reduction_in": red_in,
+            "reduction_out": red_out,
             "constants": [float(x) for x in d_in],
         },
         outputs=outputs,
@@ -419,6 +440,7 @@ def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQ
             "C_mhz": flip_abc[2],
             "constants": [float(x) for x in d_flip],
         },
+        reduction_change=reduction_change,
     )
 
 
@@ -479,8 +501,8 @@ def run_manual_sextic_transform(request: RV3ManualSexticRequest) -> RV3ManualSex
             "constants": [float(x) for x in h_flip],
             "roundtrip_max_error": float(np.max(np.abs(h_flip_back - h_in))),
             "note": (
-                "The fixed-representation r<->l sextic flip is applied exactly on the full 7D Watson space; "
-                "the separate 5D invariant transport still applies only to cyclic I/II/III changes."
+                "The fixed-representation r<->l sextic flip is applied exactly on the same full 7D sextic object used by the cyclic transport; "
+                "the canonical 7D = 5+2 coordinates preserve the physical 5D sigma sector and the residual 2D gauge sector, while A<->S is handled only as input/output projection."
             ),
         },
     )
