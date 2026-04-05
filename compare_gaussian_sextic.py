@@ -466,7 +466,7 @@ def _aligned_model_from_gaussian(fchk_path: str, log_path: str):
             fchk.cartesian_force_constants,
             representation=rep,
         )
-        order = frequency_reorder_map(anh.frequencies_cm, np.abs(trial.vib_freq_cm))
+        order = frequency_reorder_map(np.abs(anh.frequencies_cm), np.abs(trial.vib_freq_cm))
         for signs in product((1.0, -1.0), repeat=trial.vib_freq_cm.size):
             model = harmonic_inertia_model_from_geometry_hessian(
                 fchk.masses_amu,

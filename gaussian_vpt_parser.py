@@ -410,21 +410,27 @@ def _find_mode_equivalency(lines: list[str], n_modes: int) -> np.ndarray | None:
     for i, line in enumerate(lines):
         if "connection between this new numbering (A) and the one used before" not in line:
             continue
-        block = lines[i : i + 8]
-        h_line = next((row for row in block if row.lstrip().startswith("(H) |")), None)
-        a_line = next((row for row in block if row.lstrip().startswith("(A) |")), None)
-        if h_line is None or a_line is None:
-            continue
-        h_vals = [int(tok) for tok in re.findall(r"\d+", h_line)]
-        a_vals = [int(tok) for tok in re.findall(r"\d+", a_line)]
-        if len(h_vals) != len(a_vals) or not h_vals:
-            continue
 
         mapping = np.arange(n_modes, dtype=int)
-        for h_mode, a_mode in zip(h_vals, a_vals):
-            if 1 <= h_mode <= n_modes and 1 <= a_mode <= n_modes:
-                mapping[a_mode - 1] = h_mode - 1
-        return mapping
+        found = False
+        j = i + 1
+        while j < len(lines):
+            if lines[j].strip().startswith("Analysis of symmetry-allowed terms"):
+                break
+            h_line = lines[j] if lines[j].lstrip().startswith("(H) |") else None
+            a_line = lines[j + 1] if h_line is not None and j + 1 < len(lines) and lines[j + 1].lstrip().startswith("(A) |") else None
+            if h_line is None or a_line is None:
+                j += 1
+                continue
+            h_vals = [int(tok) for tok in re.findall(r"\d+", h_line)]
+            a_vals = [int(tok) for tok in re.findall(r"\d+", a_line)]
+            if len(h_vals) == len(a_vals) and h_vals:
+                for h_mode, a_mode in zip(h_vals, a_vals):
+                    if 1 <= h_mode <= n_modes and 1 <= a_mode <= n_modes:
+                        mapping[a_mode - 1] = h_mode - 1
+                        found = True
+            j += 1
+        return mapping if found else None
     return None
 
 
@@ -444,7 +450,7 @@ def _find_alpha_matrix(lines: list[str], unit_label: str) -> tuple[np.ndarray, n
         parts = lines[i].split()
         if len(parts) >= 5 and parts[0] == "Q(" and parts[1].endswith(")"):
             mode_indices.append(int(parts[1][:-1]))
-            rows.append([_to_float(tok) for tok in parts[-3:]])
+            rows.append([_to_float(tok) for tok in parts[2:5]])
             i += 1
             continue
         break
