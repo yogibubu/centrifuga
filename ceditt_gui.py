@@ -3,20 +3,22 @@
 
 Included in one program:
 1) Tensor quartic transform: Watson -> tau -> permute -> Watson
-2) Tensor sextic transform on the validated invariant subspace
+2) Tensor sextic transform on the canonical 7D = 5+2 object
 3) Optional legacy quartic comparison for A reduction
 
 Representations: I, II, III.
-Reduction is preserved (input reduction == output reduction).
+Explicit input/output representation, handedness, and reduction are supported.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import math
 import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
+from typing import Any
 
 import numpy as np
 import sympy as sp
@@ -90,6 +92,36 @@ SEXTIC_KEYS = SEXTIC_S_NAMES
 def _as_float(v: str) -> float:
     s = v.strip().replace("D", "E").replace("d", "e")
     return float(s) if s else 0.0
+
+
+def _parse_manual_list(spec: str, expected: int, units: str = "kHz") -> list[float]:
+    raw = [chunk.strip() for chunk in spec.replace(";", ",").split(",") if chunk.strip()]
+    if len(raw) != expected:
+        raise ValueError(f"Expected {expected} constants, found {len(raw)}.")
+    vals = [_as_float(item) for item in raw]
+    unit = units.strip().lower()
+    if unit == "mhz":
+        vals = [1000.0 * val for val in vals]
+    elif unit != "khz":
+        raise ValueError(f"Unknown units '{units}'. Use MHz or kHz.")
+    return vals
+
+
+def _sanitize(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {str(k): _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [_sanitize(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return _sanitize(obj.tolist())
+    if isinstance(obj, (np.floating, float)):
+        val = float(obj)
+        return val if np.isfinite(val) else None
+    if isinstance(obj, (np.integer, int)):
+        return int(obj)
+    return obj
 
 
 def _norm_rep(rep: str) -> str:
@@ -248,6 +280,105 @@ def _flip_tau_last_two_axes(tau: np.ndarray) -> np.ndarray:
 
 def _rep_label(rep: str, handedness: str = "r") -> str:
     return f"{_norm_rep(rep)}{handedness.lower()}"
+
+
+def _norm_handedness(handedness: str) -> str:
+    hand = str(handedness).strip().lower()
+    if hand not in {"r", "l"}:
+        raise ValueError(f"Unknown handedness '{handedness}'. Use r or l.")
+    return hand
+
+
+def transform_quartic_explicit(
+    D: np.ndarray,
+    A: float,
+    B: float,
+    C: float,
+    rep_in: str,
+    hand_in: str,
+    red_in: str,
+    rep_out: str,
+    hand_out: str,
+    red_out: str,
+) -> tuple[np.ndarray, tuple[float, float, float]]:
+    """Transform quartic constants through explicit input/output convention labels."""
+    D = np.asarray(D, dtype=float).reshape(5)
+    rep_in = _norm_rep(rep_in)
+    rep_out = _norm_rep(rep_out)
+    hand_in = _norm_handedness(hand_in)
+    hand_out = _norm_handedness(hand_out)
+    red_in = _norm_reduction(red_in)
+    red_out = _norm_reduction(red_out)
+    abc_in = (float(A), float(B), float(C))
+
+    D_work = D.copy()
+    if hand_in == "l":
+        D_work = quartic_handedness_flip_constants(D_work, red_in)
+        abc_in = _flip_handedness_abc(*abc_in)
+
+    D_out = transform_quartic_general(
+        D_work,
+        abc_in[0],
+        abc_in[1],
+        abc_in[2],
+        rep_in,
+        rep_out,
+        red_in,
+        red_out,
+    )
+    abc_out = _rotate_abc(*abc_in, rep_in, rep_out)
+
+    if hand_out == "l":
+        D_out = quartic_handedness_flip_constants(D_out, red_out)
+        abc_out = _flip_handedness_abc(*abc_out)
+
+    return D_out, abc_out
+
+
+def transform_sextic_explicit(
+    H: np.ndarray,
+    A: float,
+    B: float,
+    C: float,
+    rep_in: str,
+    hand_in: str,
+    red_in: str,
+    rep_out: str,
+    hand_out: str,
+    red_out: str,
+) -> tuple[np.ndarray, tuple[float, float, float]]:
+    """Transform sextic constants through explicit input/output convention labels."""
+    H = np.asarray(H, dtype=float).reshape(7)
+    rep_in = _norm_rep(rep_in)
+    rep_out = _norm_rep(rep_out)
+    hand_in = _norm_handedness(hand_in)
+    hand_out = _norm_handedness(hand_out)
+    red_in = _norm_reduction(red_in)
+    red_out = _norm_reduction(red_out)
+    abc_in = (float(A), float(B), float(C))
+
+    H_work = H.copy()
+    if hand_in == "l":
+        H_work = sextic_handedness_flip_constants(H_work, abc_in[0], abc_in[1], abc_in[2], red_in)
+        abc_in = _flip_handedness_abc(*abc_in)
+
+    H_out = transform_sextic_tensor(
+        H_work,
+        abc_in[0],
+        abc_in[1],
+        abc_in[2],
+        rep_in,
+        rep_out,
+        red_in,
+        red_out,
+    )
+    abc_out = _rotate_abc(*abc_in, rep_in, rep_out)
+
+    if hand_out == "l":
+        H_out = sextic_handedness_flip_constants(H_out, abc_out[0], abc_out[1], abc_out[2], red_out)
+        abc_out = _flip_handedness_abc(*abc_out)
+
+    return H_out, abc_out
 
 
 # --- Quartic Yamada / Yamada-like maps --------------------------------------------
@@ -1647,10 +1778,8 @@ class App(tk.Tk):
 
         self.q_in_labels: list[ttk.Label] = []
         self.q_o1_labels: list[ttk.Label] = []
-        self.q_o2_labels: list[ttk.Label] = []
         self.s_in_labels: list[ttk.Label] = []
         self.s_o1_labels: list[ttk.Label] = []
-        self.s_o2_labels: list[ttk.Label] = []
         self.last_quartic_result: dict[str, object] | None = None
         self.q_symmetry_status_var = tk.StringVar(value="Quartic XYZ reference: not assigned.")
         self.s_symmetry_status_var = tk.StringVar(value="Sextic XYZ reference: not assigned.")
@@ -1815,35 +1944,37 @@ class App(tk.Tk):
         ttk.Label(ctrl, text="Input rep").grid(row=0, column=0, sticky="w")
         ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("q_rep_in", "I")).grid(row=0, column=1, padx=4)
 
-        ttk.Label(ctrl, text="Reduction").grid(row=0, column=2, sticky="w")
-        red_box = ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("q_red", "A"))
-        red_box.grid(row=0, column=3, padx=4)
+        ttk.Label(ctrl, text="Input hand").grid(row=0, column=2, sticky="w")
+        ttk.Combobox(ctrl, width=8, state="readonly", values=("r", "l"), textvariable=self._sv("q_hand_in", "r")).grid(row=0, column=3, padx=4)
 
-        ttk.Label(ctrl, text="Method").grid(row=0, column=4, sticky="w")
-        ttk.Label(ctrl, text="Tensor / pseudoinverse").grid(row=0, column=5, padx=4, sticky="w")
-        ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(ctrl, width=48, textvariable=self._sv("q_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
-        ttk.Button(ctrl, text="Browse", command=self._browse_q_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
-        ttk.Button(ctrl, text="Use XYZ A,B,C", command=lambda: self._use_xyz_abc_reference("q_symm_xyz")).grid(row=1, column=6, padx=(4, 0), pady=(6, 0))
+        ttk.Label(ctrl, text="Input red").grid(row=0, column=4, sticky="w")
+        red_box = ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("q_red", "A"))
+        red_box.grid(row=0, column=5, padx=4)
+
+        ttk.Label(ctrl, text="Output rep").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("q_rep_out", "II")).grid(row=1, column=1, padx=4, pady=(6, 0))
+        ttk.Label(ctrl, text="Output hand").grid(row=1, column=2, sticky="w", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=("r", "l"), textvariable=self._sv("q_hand_out", "r")).grid(row=1, column=3, padx=4, pady=(6, 0))
+        ttk.Label(ctrl, text="Output red").grid(row=1, column=4, sticky="w", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("q_red_out", "A")).grid(row=1, column=5, padx=4, pady=(6, 0))
+        ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(ctrl, width=48, textvariable=self._sv("q_symm_xyz", "")).grid(row=2, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
+        ttk.Button(ctrl, text="Browse", command=self._browse_q_symm_xyz).grid(row=2, column=5, padx=(4, 0), pady=(6, 0))
+        ttk.Button(ctrl, text="Use XYZ A,B,C", command=lambda: self._use_xyz_abc_reference("q_symm_xyz")).grid(row=2, column=6, padx=(4, 0), pady=(6, 0))
         self.vars["q_symm_xyz"].trace_add("write", lambda *_: self._set_symmetry_status_from_entry("q_symm_xyz"))
         ttk.Label(
             ctrl,
-            text="Manual quartic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
-        ).grid(row=2, column=1, columnspan=6, sticky="w", pady=(4, 0))
+            text="Manual quartic constants are interpreted in the selected input representation, handedness, and reduction; XYZ fixes the spectroscopic A,B,C order.",
+        ).grid(row=3, column=1, columnspan=6, sticky="w", pady=(4, 0))
         ttk.Label(
             ctrl,
             text="Manual quartic constants may be entered in MHz or kHz; the app detects the scale and converts internally.",
-        ).grid(row=3, column=1, columnspan=6, sticky="w")
+        ).grid(row=4, column=1, columnspan=6, sticky="w")
         ttk.Label(
             ctrl,
-            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
-        ).grid(row=4, column=1, columnspan=6, sticky="w")
-        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=5, column=1, columnspan=6, sticky="w", pady=(4, 0))
-        ttk.Label(ctrl, text="Output reps").grid(row=6, column=0, sticky="w", pady=(6, 0))
-        ttk.Label(ctrl, text="rep #1").grid(row=6, column=1, sticky="e", pady=(6, 0))
-        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("q_out_rep1", "II")).grid(row=6, column=2, padx=4, sticky="w", pady=(6, 0))
-        ttk.Label(ctrl, text="rep #2").grid(row=6, column=3, sticky="e", pady=(6, 0))
-        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("q_out_rep2", "III")).grid(row=6, column=4, padx=4, sticky="w", pady=(6, 0))
+            text="Pipeline: lift from the input Watson set, axis transport for representation/handedness, then projection to the output reduction.",
+        ).grid(row=5, column=1, columnspan=6, sticky="w")
+        ttk.Label(ctrl, textvariable=self.q_symmetry_status_var).grid(row=6, column=1, columnspan=6, sticky="w", pady=(4, 0))
 
         grid = ttk.Frame(parent)
         grid.pack(fill=tk.X, pady=(12, 0))
@@ -1856,21 +1987,13 @@ class App(tk.Tk):
             self.q_in_labels.append(lbl)
             ttk.Entry(grid, width=16, textvariable=self._sv(f"q_in_{name}", "")).grid(row=2, column=i, padx=4, pady=2)
 
-        ttk.Label(grid, text="Output rep #1", font=("TkDefaultFont", 10, "bold")).grid(row=3, column=0, columnspan=5, sticky="w", pady=(10, 0))
-        ttk.Label(grid, textvariable=self._sv("q_out_rep1", "II")).grid(row=3, column=2, sticky="w")
+        ttk.Label(grid, text="Output quartic constants", font=("TkDefaultFont", 10, "bold")).grid(row=3, column=0, columnspan=5, sticky="w", pady=(10, 0))
+        ttk.Label(grid, textvariable=self._sv("q_output_summary", "II r A")).grid(row=3, column=2, columnspan=3, sticky="w")
         for i, name in enumerate(QUARTIC_A_NAMES):
             lbl = ttk.Label(grid, text=name)
             lbl.grid(row=4, column=i, sticky="w")
             self.q_o1_labels.append(lbl)
-            ttk.Entry(grid, width=16, textvariable=self._sv(f"q_out1_{name}", ""), state="readonly").grid(row=5, column=i, padx=4, pady=2)
-
-        ttk.Label(grid, text="Output rep #2", font=("TkDefaultFont", 10, "bold")).grid(row=6, column=0, columnspan=5, sticky="w", pady=(10, 0))
-        ttk.Label(grid, textvariable=self._sv("q_out_rep2", "III")).grid(row=6, column=2, sticky="w")
-        for i, name in enumerate(QUARTIC_A_NAMES):
-            lbl = ttk.Label(grid, text=name)
-            lbl.grid(row=7, column=i, sticky="w")
-            self.q_o2_labels.append(lbl)
-            ttk.Entry(grid, width=16, textvariable=self._sv(f"q_out2_{name}", ""), state="readonly").grid(row=8, column=i, padx=4, pady=2)
+            ttk.Entry(grid, width=16, textvariable=self._sv(f"q_out_{name}", ""), state="readonly").grid(row=5, column=i, padx=4, pady=2)
 
         h22_frame = ttk.LabelFrame(parent, text="Validated quartic H22 nonlinearity from harmonic input", padding=8)
         h22_frame.pack(fill=tk.X, pady=(10, 0))
@@ -1948,7 +2071,8 @@ class App(tk.Tk):
         self.q_report = scrolledtext.ScrolledText(report_parent, height=12, wrap="word")
         self.q_report.pack(fill=tk.BOTH, expand=True)
 
-        self.vars["q_red"].trace_add("write", self._refresh_quartic_labels)
+        for key in ("q_red", "q_rep_out", "q_hand_out", "q_red_out"):
+            self.vars[key].trace_add("write", self._refresh_quartic_labels)
         self._refresh_quartic_labels()
 
     def _build_sextic_tab(self, parent: ttk.Frame, report_parent: ttk.Frame) -> None:
@@ -1958,42 +2082,39 @@ class App(tk.Tk):
         ttk.Label(ctrl, text="Input rep").grid(row=0, column=0, sticky="w")
         ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("s_rep_in", "I")).grid(row=0, column=1, padx=4)
 
-        ttk.Label(ctrl, text="Input reduction").grid(row=0, column=2, sticky="w")
-        ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_in", "A")).grid(row=0, column=3, padx=4)
-        ttk.Label(ctrl, text="Output reduction").grid(row=0, column=4, sticky="w")
-        ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_out", "A")).grid(row=0, column=5, padx=4)
-        ttk.Button(ctrl, text="Preset A->A", command=lambda: self._set_sextic_preset("A")).grid(row=0, column=6, padx=(8, 0))
-        ttk.Button(ctrl, text="Preset S->S", command=lambda: self._set_sextic_preset("S")).grid(row=0, column=7, padx=(4, 0))
-        ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=1, column=0, sticky="w", pady=(6, 0))
-        ttk.Entry(ctrl, width=48, textvariable=self._sv("s_symm_xyz", "")).grid(row=1, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
-        ttk.Button(ctrl, text="Browse", command=self._browse_s_symm_xyz).grid(row=1, column=5, padx=(4, 0), pady=(6, 0))
-        ttk.Button(ctrl, text="Use XYZ A,B,C", command=lambda: self._use_xyz_abc_reference("s_symm_xyz")).grid(row=1, column=6, padx=(4, 0), pady=(6, 0))
+        ttk.Label(ctrl, text="Input hand").grid(row=0, column=2, sticky="w")
+        ttk.Combobox(ctrl, width=8, state="readonly", values=("r", "l"), textvariable=self._sv("s_hand_in", "r")).grid(row=0, column=3, padx=4)
+        ttk.Label(ctrl, text="Input reduction").grid(row=0, column=4, sticky="w")
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_in", "A")).grid(row=0, column=5, padx=4)
+
+        ttk.Label(ctrl, text="Output rep").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("s_rep_out", "II")).grid(row=1, column=1, padx=4, pady=(6, 0))
+        ttk.Label(ctrl, text="Output hand").grid(row=1, column=2, sticky="w", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=("r", "l"), textvariable=self._sv("s_hand_out", "r")).grid(row=1, column=3, padx=4, pady=(6, 0))
+        ttk.Label(ctrl, text="Output reduction").grid(row=1, column=4, sticky="w", pady=(6, 0))
+        ttk.Combobox(ctrl, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("s_red_out", "A")).grid(row=1, column=5, padx=4, pady=(6, 0))
+        ttk.Label(ctrl, text="XYZ reference (optional)").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(ctrl, width=48, textvariable=self._sv("s_symm_xyz", "")).grid(row=2, column=1, columnspan=4, padx=4, sticky="we", pady=(6, 0))
+        ttk.Button(ctrl, text="Browse", command=self._browse_s_symm_xyz).grid(row=2, column=5, padx=(4, 0), pady=(6, 0))
+        ttk.Button(ctrl, text="Use XYZ A,B,C", command=lambda: self._use_xyz_abc_reference("s_symm_xyz")).grid(row=2, column=6, padx=(4, 0), pady=(6, 0))
         self.vars["s_symm_xyz"].trace_add("write", lambda *_: self._set_symmetry_status_from_entry("s_symm_xyz"))
         ttk.Label(
             ctrl,
-            text="Manual sextic constants are interpreted in the selected input representation and reduction; XYZ fixes the spectroscopic A,B,C order.",
-        ).grid(row=2, column=1, columnspan=7, sticky="w", pady=(4, 0))
+            text="Manual sextic constants are interpreted in the selected input representation, handedness, and reduction; XYZ fixes the spectroscopic A,B,C order.",
+        ).grid(row=3, column=1, columnspan=7, sticky="w", pady=(4, 0))
         ttk.Label(
             ctrl,
             text="Manual sextic constants may be entered in MHz or kHz; the app detects the scale and converts internally.",
-        ).grid(row=3, column=1, columnspan=7, sticky="w")
-        ttk.Label(
-            ctrl,
-            text="Right-handed I/II/III conventions are used explicitly in the current selectors; the corresponding left-handed frame at fixed representation is obtained by swapping two axes, as summarized in the CeDiTT4 appendix.",
         ).grid(row=4, column=1, columnspan=7, sticky="w")
         ttk.Label(
             ctrl,
-            text="The validated sextic I/II/III transport still uses the canonical 5D subspace; the fixed-representation r<->l flip is now applied exactly on the full 7D Watson sextic space.",
+            text="Pipeline: lift from the input Watson set, axis transport for representation/handedness, then projection to the output reduction.",
         ).grid(row=5, column=1, columnspan=7, sticky="w")
-        ttk.Label(ctrl, text="Quick presets only change sextic representation/reduction selectors.").grid(row=6, column=1, columnspan=7, sticky="w")
+        ttk.Label(
+            ctrl,
+            text="Sextic transport uses the same canonical 7D = 5+2 object for cyclic representation changes, fixed-representation handedness inversion, and input/output A<->S projection.",
+        ).grid(row=6, column=1, columnspan=7, sticky="w")
         ttk.Label(ctrl, textvariable=self.s_symmetry_status_var).grid(row=7, column=1, columnspan=7, sticky="w", pady=(4, 0))
-        ttk.Label(ctrl, text="Output reps").grid(row=8, column=0, sticky="w", pady=(6, 0))
-        ttk.Label(ctrl, text="rep #1").grid(row=8, column=1, sticky="e", pady=(6, 0))
-        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("s_out_rep1", "II")).grid(row=8, column=2, padx=4, sticky="w", pady=(6, 0))
-        ttk.Label(ctrl, text="rep #2").grid(row=8, column=3, sticky="e", pady=(6, 0))
-        ttk.Combobox(ctrl, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("s_out_rep2", "III")).grid(row=8, column=4, padx=4, sticky="w", pady=(6, 0))
-        ttk.Label(ctrl, text="out red").grid(row=8, column=5, sticky="e", pady=(6, 0))
-        ttk.Label(ctrl, textvariable=self._sv("s_red_out", "A")).grid(row=8, column=6, sticky="w", pady=(6, 0))
 
         h22s_frame = ttk.LabelFrame(parent, text="Optional sextic analysis from harmonic input", padding=8)
         h22s_frame.pack(fill=tk.X, pady=(10, 0))
@@ -2043,21 +2164,13 @@ class App(tk.Tk):
             self.s_in_labels.append(lbl)
             ttk.Entry(grid, width=14, textvariable=self._sv(f"s_in_{key}", "")).grid(row=2, column=i, padx=3, pady=2)
 
-        ttk.Label(grid, text="Output rep #1", font=("TkDefaultFont", 10, "bold")).grid(row=3, column=0, columnspan=7, sticky="w", pady=(10, 0))
-        ttk.Label(grid, textvariable=self._sv("s_out_rep1", "II")).grid(row=3, column=2, sticky="w")
+        ttk.Label(grid, text="Output sextic constants", font=("TkDefaultFont", 10, "bold")).grid(row=3, column=0, columnspan=7, sticky="w", pady=(10, 0))
+        ttk.Label(grid, textvariable=self._sv("s_output_summary", "II r A")).grid(row=3, column=2, columnspan=5, sticky="w")
         for i, key in enumerate(SEXTIC_KEYS):
             lbl = ttk.Label(grid, text=SEXTIC_A_NAMES[i])
             lbl.grid(row=4, column=i, sticky="w")
             self.s_o1_labels.append(lbl)
-            ttk.Entry(grid, width=14, textvariable=self._sv(f"s_out1_{key}", ""), state="readonly").grid(row=5, column=i, padx=3, pady=2)
-
-        ttk.Label(grid, text="Output rep #2", font=("TkDefaultFont", 10, "bold")).grid(row=6, column=0, columnspan=7, sticky="w", pady=(10, 0))
-        ttk.Label(grid, textvariable=self._sv("s_out_rep2", "III")).grid(row=6, column=2, sticky="w")
-        for i, key in enumerate(SEXTIC_KEYS):
-            lbl = ttk.Label(grid, text=SEXTIC_A_NAMES[i])
-            lbl.grid(row=7, column=i, sticky="w")
-            self.s_o2_labels.append(lbl)
-            ttk.Entry(grid, width=14, textvariable=self._sv(f"s_out2_{key}", ""), state="readonly").grid(row=8, column=i, padx=3, pady=2)
+            ttk.Entry(grid, width=14, textvariable=self._sv(f"s_out_{key}", ""), state="readonly").grid(row=5, column=i, padx=3, pady=2)
 
         sbtn = ttk.Frame(parent)
         sbtn.pack(anchor="w", pady=(12, 6))
@@ -2067,8 +2180,8 @@ class App(tk.Tk):
 
         self.s_report = scrolledtext.ScrolledText(report_parent, height=12, wrap="word")
         self.s_report.pack(fill=tk.BOTH, expand=True)
-        self.vars["s_red_in"].trace_add("write", self._refresh_sextic_labels)
-        self.vars["s_red_out"].trace_add("write", self._refresh_sextic_labels)
+        for key in ("s_red_in", "s_rep_out", "s_hand_out", "s_red_out"):
+            self.vars[key].trace_add("write", self._refresh_sextic_labels)
         self._refresh_sextic_labels()
 
     def _build_integrated_tab(self, parent: ttk.Frame, report_parent: ttk.Frame) -> None:
@@ -2114,6 +2227,42 @@ class App(tk.Tk):
         ttk.Button(extras, text="Browse", command=self._browse_s_cubic_fchk).grid(row=2, column=4, padx=(4, 0), pady=(4, 0))
         extras.columnconfigure(3, weight=1)
 
+        manual = ttk.LabelFrame(parent, text="Unified Manual Transform", padding=8)
+        manual.pack(fill=tk.X, pady=(10, 0))
+        ttk.Label(manual, text="A (MHz)").grid(row=0, column=0, sticky="w")
+        ttk.Entry(manual, width=14, textvariable=self._sv("A", "")).grid(row=0, column=1, padx=4, sticky="w")
+        ttk.Label(manual, text="B (MHz)").grid(row=0, column=2, sticky="w")
+        ttk.Entry(manual, width=14, textvariable=self._sv("B", "")).grid(row=0, column=3, padx=4, sticky="w")
+        ttk.Label(manual, text="C (MHz)").grid(row=0, column=4, sticky="w")
+        ttk.Entry(manual, width=14, textvariable=self._sv("C", "")).grid(row=0, column=5, padx=4, sticky="w")
+
+        ttk.Label(manual, text="Input rep").grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("u_rep_in", "I")).grid(row=1, column=1, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(manual, text="Input hand").grid(row=1, column=2, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=("r", "l"), textvariable=self._sv("u_hand_in", "r")).grid(row=1, column=3, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(manual, text="Input red").grid(row=1, column=4, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("u_red_in", "A")).grid(row=1, column=5, padx=4, sticky="w", pady=(6, 0))
+
+        ttk.Label(manual, text="Output rep").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=REPRESENTATIONS, textvariable=self._sv("u_rep_out", "II")).grid(row=2, column=1, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(manual, text="Output hand").grid(row=2, column=2, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=("r", "l"), textvariable=self._sv("u_hand_out", "r")).grid(row=2, column=3, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(manual, text="Output red").grid(row=2, column=4, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=REDUCTIONS, textvariable=self._sv("u_red_out", "A")).grid(row=2, column=5, padx=4, sticky="w", pady=(6, 0))
+
+        ttk.Label(manual, text="Units").grid(row=3, column=0, sticky="w", pady=(6, 0))
+        ttk.Combobox(manual, width=8, state="readonly", values=("kHz", "MHz"), textvariable=self._sv("u_units", "kHz")).grid(row=3, column=1, padx=4, sticky="w", pady=(6, 0))
+        ttk.Label(manual, text="Quartic constants (DJ,DJK,DK,dJ,dK)").grid(row=4, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(manual, width=80, textvariable=self._sv("u_quartic", "")).grid(row=4, column=1, columnspan=5, padx=4, sticky="we", pady=(6, 0))
+        ttk.Label(manual, text="Sextic constants (HJ,HJK,HKJ,HK,h1,h2,h3) optional").grid(row=5, column=0, sticky="w", pady=(6, 0))
+        ttk.Entry(manual, width=80, textvariable=self._sv("u_sextic", "")).grid(row=5, column=1, columnspan=5, padx=4, sticky="we", pady=(6, 0))
+        ttk.Label(
+            manual,
+            text="Shared explicit pipeline: A,B,C; input representation/handedness/reduction; output representation/handedness/reduction; quartics required; sextics optional.",
+        ).grid(row=6, column=0, columnspan=6, sticky="w", pady=(6, 0))
+        ttk.Button(manual, text="Run Unified Transform", command=self._run_unified_manual_transform).grid(row=7, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        manual.columnconfigure(5, weight=1)
+
         actions = ttk.LabelFrame(parent, text="Integrated Actions", padding=8)
         actions.pack(fill=tk.X, pady=(10, 0))
         ttk.Button(actions, text="Run Integrated Analysis", command=self._run_vr_integrated_analysis).pack(side=tk.LEFT)
@@ -2124,14 +2273,71 @@ class App(tk.Tk):
         self.vr_report = scrolledtext.ScrolledText(report_parent, height=12, wrap="word")
         self.vr_report.pack(fill=tk.BOTH, expand=True)
 
+    def _run_unified_manual_transform(self) -> None:
+        try:
+            A, B, C = self._read_manual_abc()
+            rotor_limit = _manual_rotor_limit_info(A, B, C)
+            if rotor_limit["is_special_limit"]:
+                raise ValueError(
+                    "Exact symmetric-top and linear limits do not use the asymmetric-top transform route. "
+                    "Use the dedicated harmonic-input paths for the symmetry-adapted limits."
+                )
+            rep_in = _norm_rep(self.vars["u_rep_in"].get())
+            hand_in = _norm_handedness(self.vars["u_hand_in"].get())
+            red_in = _norm_reduction(self.vars["u_red_in"].get())
+            rep_out = _norm_rep(self.vars["u_rep_out"].get())
+            hand_out = _norm_handedness(self.vars["u_hand_out"].get())
+            red_out = _norm_reduction(self.vars["u_red_out"].get())
+            if rep_in == rep_out and hand_in == hand_out and red_in == red_out:
+                raise ValueError("Choose at least one output convention change.")
+
+            out: dict[str, Any] = {
+                "abc_mhz": [A, B, C],
+                "input": {"representation": rep_in, "handedness": hand_in, "reduction": red_in},
+                "output": {"representation": rep_out, "handedness": hand_out, "reduction": red_out},
+            }
+
+            q_text = self.vars["u_quartic"].get().strip()
+            if q_text:
+                q_in = np.asarray(_parse_manual_list(q_text, 5, self.vars["u_units"].get()), dtype=float)
+                self._validate_units_quartic(A, B, C, q_in)
+                q_out, abc_q = transform_quartic_explicit(q_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out)
+                out["quartic"] = {
+                    "input_constants_khz": [float(x) for x in q_in],
+                    "output_constants_khz": [float(x) for x in q_out],
+                    "output_abc_mhz": [float(x) for x in abc_q],
+                }
+
+            s_text = self.vars["u_sextic"].get().strip()
+            if s_text:
+                s_in = np.asarray(_parse_manual_list(s_text, 7, self.vars["u_units"].get()), dtype=float)
+                self._validate_units_sextic(A, B, C, s_in)
+                s_out, abc_s = transform_sextic_explicit(s_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out)
+                out["sextic"] = {
+                    "input_constants_khz": [float(x) for x in s_in],
+                    "output_constants_khz": [float(x) for x in s_out],
+                    "output_abc_mhz": [float(x) for x in abc_s],
+                }
+
+            if "quartic" not in out and "sextic" not in out:
+                raise ValueError("Provide quartic constants and optionally sextic constants.")
+
+            self.vr_report.delete("1.0", tk.END)
+            self.vr_report.insert(tk.END, json.dumps(_sanitize(out), indent=2, sort_keys=True))
+        except Exception as exc:
+            self.vr_report.delete("1.0", tk.END)
+            self.vr_report.insert(tk.END, f"Unified manual transform error:\n{exc}\n")
+
     def _refresh_quartic_labels(self, *_: object) -> None:
         names = QUARTIC_A_NAMES if _norm_reduction(self.vars["q_red"].get()) == "A" else QUARTIC_S_NAMES
+        out_names = QUARTIC_A_NAMES if _norm_reduction(self.vars["q_red_out"].get()) == "A" else QUARTIC_S_NAMES
         for lbl, nm in zip(self.q_in_labels, names):
             lbl.configure(text=nm)
-        for lbl, nm in zip(self.q_o1_labels, names):
+        for lbl, nm in zip(self.q_o1_labels, out_names):
             lbl.configure(text=nm)
-        for lbl, nm in zip(self.q_o2_labels, names):
-            lbl.configure(text=nm)
+        self.vars["q_output_summary"].set(
+            f"{_norm_rep(self.vars['q_rep_out'].get())} {_norm_handedness(self.vars['q_hand_out'].get())} {_norm_reduction(self.vars['q_red_out'].get())}"
+        )
 
     def _refresh_sextic_labels(self, *_: object) -> None:
         in_names = SEXTIC_A_NAMES if _norm_reduction(self.vars["s_red_in"].get()) == "A" else SEXTIC_S_NAMES
@@ -2140,8 +2346,9 @@ class App(tk.Tk):
             lbl.configure(text=nm)
         for lbl, nm in zip(self.s_o1_labels, out_names):
             lbl.configure(text=nm)
-        for lbl, nm in zip(self.s_o2_labels, out_names):
-            lbl.configure(text=nm)
+        self.vars["s_output_summary"].set(
+            f"{_norm_rep(self.vars['s_rep_out'].get())} {_norm_handedness(self.vars['s_hand_out'].get())} {_norm_reduction(self.vars['s_red_out'].get())}"
+        )
 
     def _refresh_manual_rotor_class(self, *_: object) -> None:
         try:
@@ -2158,7 +2365,10 @@ class App(tk.Tk):
     def _set_sextic_preset(self, reduction: str) -> None:
         red = _norm_reduction(reduction)
         self.vars["s_rep_in"].set("I")
+        self.vars["s_hand_in"].set("r")
         self.vars["s_red_in"].set(red)
+        self.vars["s_rep_out"].set("II")
+        self.vars["s_hand_out"].set("r")
         self.vars["s_red_out"].set(red)
 
     def _shared_path(self, local_key: str, shared_key: str) -> str:
@@ -2515,57 +2725,25 @@ class App(tk.Tk):
         if not pth:
             return
         r = self.last_quartic_result
-        names = QUARTIC_A_NAMES if r["red"] == "A" else QUARTIC_S_NAMES
+        names_in = QUARTIC_A_NAMES if r["red_in"] == "A" else QUARTIC_S_NAMES
+        names_out = QUARTIC_A_NAMES if r["red_out"] == "A" else QUARTIC_S_NAMES
         lines = [
             "field,value",
             f"method,{r['method']}",
             f"input_rep,{r['rep_in']}",
-            f"reduction,{r['red']}",
+            f"input_hand,{r['hand_in']}",
+            f"input_red,{r['red_in']}",
+            f"output_rep,{r['rep_out']}",
+            f"output_hand,{r['hand_out']}",
+            f"output_red,{r['red_out']}",
             f"A_MHz,{r['A']}",
             f"B_MHz,{r['B']}",
             f"C_MHz,{r['C']}",
         ]
-        for nm, v in zip(names, r["D_in"]):
+        for nm, v in zip(names_in, r["D_in"]):
             lines.append(f"in_{nm},{float(v):.12g}")
-        for nm, v in zip(names, r["D_out1"]):
-            lines.append(f"{r['rep_out1']}_{nm},{float(v):.12g}")
-        for nm, v in zip(names, r["D_out2"]):
-            lines.append(f"{r['rep_out2']}_{nm},{float(v):.12g}")
-        lines.extend(
-            [
-                f"{r['rep_in']}_to_{r['rep_out1']}_cond2,{r['m1']['cond2']:.6e}",
-                f"{r['rep_in']}_to_{r['rep_out2']}_cond2,{r['m2']['cond2']:.6e}",
-                f"{r['rep_out1']}_s111,{r['s111_out1']:.6e}",
-                f"{r['rep_out2']}_s111,{r['s111_out2']:.6e}",
-                f"{r['rep_out1']}_T_over_B,{r['tb_out1']:.6e}",
-                f"{r['rep_out2']}_T_over_B,{r['tb_out2']:.6e}",
-            ]
-        )
-        for tag in ("in", "out1", "out2"):
-            spec = r[f"spec_{tag}"]
-            red5 = r[f"red5_{tag}"]
-            rep = r["rep_in"] if tag == "in" else r[f"rep_{tag}"]
-            taup = spec["tauprime"]
-            lines.extend(
-                [
-                    f"{rep}_lambda1,{spec['lambda'][0]:.12g}",
-                    f"{rep}_lambda2,{spec['lambda'][1]:.12g}",
-                    f"{rep}_lambda3,{spec['lambda'][2]:.12g}",
-                    f"{rep}_I1_tauprime,{spec['I1']:.12g}",
-                    f"{rep}_I2_tauprime,{spec['I2']:.12g}",
-                    f"{rep}_I3_tauprime,{spec['I3']:.12g}",
-                    f"{rep}_tauprime_aa,{taup[0,0]:.12g}",
-                    f"{rep}_tauprime_bb,{taup[1,1]:.12g}",
-                    f"{rep}_tauprime_cc,{taup[2,2]:.12g}",
-                    f"{rep}_tauprime_ab,{taup[0,1]:.12g}",
-                    f"{rep}_tauprime_ac,{taup[0,2]:.12g}",
-                    f"{rep}_tauprime_bc,{taup[1,2]:.12g}",
-                    f"{rep}_alpha_zyz,{red5['alpha_zyz']:.12g}",
-                    f"{rep}_beta_zyz,{red5['beta_zyz']:.12g}",
-                    f"{rep}_gamma_zyz_recovered,{red5['gamma_zyz_recovered']:.12g}",
-                    f"{rep}_constraint_F_recovered,{red5['constraint_F_recovered']:.12g}",
-                ]
-            )
+        for nm, v in zip(names_out, r["D_out"]):
+            lines.append(f"out_{nm},{float(v):.12g}")
         with open(pth, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
         messagebox.showinfo("Export", f"CSV exported:\n{pth}")
@@ -2582,28 +2760,24 @@ class App(tk.Tk):
         if not pth:
             return
         r = self.last_quartic_result
-        names = QUARTIC_A_NAMES if r["red"] == "A" else QUARTIC_S_NAMES
+        names_in = QUARTIC_A_NAMES if r["red_in"] == "A" else QUARTIC_S_NAMES
+        names_out = QUARTIC_A_NAMES if r["red_out"] == "A" else QUARTIC_S_NAMES
         rows = []
-        for i, nm in enumerate(names):
-            rows.append(
-                f"{nm} & {float(r['D_in'][i]):.6g} & {float(r['D_out1'][i]):.6g} & {float(r['D_out2'][i]):.6g} \\\\"
-            )
-        rows.append(f"s111 & -- & {r['s111_out1']:.3e} & {r['s111_out2']:.3e} \\\\")
-        rows.append(f"T/B & -- & {r['tb_out1']:.3e} & {r['tb_out2']:.3e} \\\\")
-        rows.append(f"$\\lambda_1(\\Tau')$ & {r['spec_in']['lambda'][0]:.6g} & {r['spec_out1']['lambda'][0]:.6g} & {r['spec_out2']['lambda'][0]:.6g} \\\\")
-        rows.append(f"$\\lambda_2(\\Tau')$ & {r['spec_in']['lambda'][1]:.6g} & {r['spec_out1']['lambda'][1]:.6g} & {r['spec_out2']['lambda'][1]:.6g} \\\\")
-        rows.append(f"$\\lambda_3(\\Tau')$ & {r['spec_in']['lambda'][2]:.6g} & {r['spec_out1']['lambda'][2]:.6g} & {r['spec_out2']['lambda'][2]:.6g} \\\\")
-        rows.append(f"$\\alpha_{{ZYZ}}$ & {r['red5_in']['alpha_zyz']:.6g} & {r['red5_out1']['alpha_zyz']:.6g} & {r['red5_out2']['alpha_zyz']:.6g} \\\\")
-        rows.append(f"$\\beta_{{ZYZ}}$ & {r['red5_in']['beta_zyz']:.6g} & {r['red5_out1']['beta_zyz']:.6g} & {r['red5_out2']['beta_zyz']:.6g} \\\\")
-        rows.append(f"$\\gamma_{{rec}}$ & {r['red5_in']['gamma_zyz_recovered']:.6g} & {r['red5_out1']['gamma_zyz_recovered']:.6g} & {r['red5_out2']['gamma_zyz_recovered']:.6g} \\\\")
+        max_len = max(len(names_in), len(names_out))
+        for i in range(max_len):
+            in_nm = names_in[i] if i < len(names_in) else ""
+            out_nm = names_out[i] if i < len(names_out) else ""
+            in_val = f"{float(r['D_in'][i]):.6g}" if i < len(r["D_in"]) else ""
+            out_val = f"{float(r['D_out'][i]):.6g}" if i < len(r["D_out"]) else ""
+            rows.append(f"{in_nm or out_nm} & {in_val} & {out_val} \\\\")
         tex = "\n".join(
             [
                 r"\begin{table}[h]",
                 r"\centering",
-                rf"\caption{{Quartic transform ({r['rep_in']}\to {r['rep_out1']},{r['rep_out2']}; reduction {r['red']}; method {r['method']}).}}",  # noqa: E501
-                r"\begin{tabular}{lccc}",
+                rf"\caption{{Quartic transform ({r['rep_in']} {r['hand_in']} {r['red_in']} $\to$ {r['rep_out']} {r['hand_out']} {r['red_out']}; method {r['method']}).}}",
+                r"\begin{tabular}{lcc}",
                 r"\hline",
-                rf"Constant & {r['rep_in']} & {r['rep_out1']} & {r['rep_out2']} \\",
+                r"Constant & input & output \\",
                 r"\hline",
                 *rows,
                 r"\hline",
@@ -2626,44 +2800,32 @@ class App(tk.Tk):
                     "Use harmonic input to compute the symmetry-adapted quartic constants directly."
                 )
             rep_in = _norm_rep(self.vars["q_rep_in"].get())
-            red = _norm_reduction(self.vars["q_red"].get())
+            hand_in = _norm_handedness(self.vars["q_hand_in"].get())
+            red_in = _norm_reduction(self.vars["q_red"].get())
             D_in = self._quartic_input()
             self._validate_units_quartic(A, B, C, D_in)
-            rep_outs = [
-                _norm_rep(self.vars["q_out_rep1"].get()),
-                _norm_rep(self.vars["q_out_rep2"].get()),
-            ]
-            if rep_in in rep_outs:
-                raise ValueError("Output representations must differ from the input representation.")
-            if rep_outs[0] == rep_outs[1]:
-                raise ValueError("Output representations #1 and #2 must be different.")
+            rep_out = _norm_rep(self.vars["q_rep_out"].get())
+            hand_out = _norm_handedness(self.vars["q_hand_out"].get())
+            red_out = _norm_reduction(self.vars["q_red_out"].get())
+            if rep_in == rep_out and hand_in == hand_out and red_in == red_out:
+                raise ValueError("Choose at least one output convention change.")
 
-            M_in = _M4(A, B, C, red)
-            tau_in = np.linalg.pinv(M_in) @ D_in
-            D1 = transform_quartic_tensor(D_in, A, B, C, rep_in, rep_outs[0], red)
-            D2 = transform_quartic_tensor(D_in, A, B, C, rep_in, rep_outs[1], red)
-            m_used = "tensor"
-            A1, B1, C1 = _rotate_abc(A, B, C, rep_in, rep_outs[0])
-            A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_outs[1])
-            M_out1 = _M4(A1, B1, C1, red)
-            M_out2 = _M4(A2, B2, C2, red)
-            tau1 = np.linalg.pinv(M_out1) @ D1
-            tau2 = np.linalg.pinv(M_out2) @ D2
-            spec_in = _quartic_spectral_invariants_from_tau(tau_in)
-            spec1 = _quartic_spectral_invariants_from_tau(tau1)
-            spec2 = _quartic_spectral_invariants_from_tau(tau2)
-            red5_in = _quartic_reduced_3plus2_from_tau(tau_in, A, B, C)
-            red5_1 = _quartic_reduced_3plus2_from_tau(tau1, A1, B1, C1)
-            red5_2 = _quartic_reduced_3plus2_from_tau(tau2, A2, B2, C2)
-
-            self._set_values("q_out1", QUARTIC_A_NAMES, D1)
-            self._set_values("q_out2", QUARTIC_A_NAMES, D2)
+            D_out, abc_out = transform_quartic_explicit(
+                D_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out
+            )
+            out_names = QUARTIC_A_NAMES if red_out == "A" else QUARTIC_S_NAMES
+            self._set_values("q_out", out_names, D_out)
 
             self.q_report.delete("1.0", tk.END)
             self.q_report.insert(tk.END, "Quartic transform completed.\n\n")
-            self.q_report.insert(tk.END, f"Input: rep={_rep_label(rep_in)}, reduction={red}, method={m_used}\n")
-            self.q_report.insert(tk.END, f"Output #1: rep={_rep_label(rep_outs[0])}, reduction={red}\n")
-            self.q_report.insert(tk.END, f"Output #2: rep={_rep_label(rep_outs[1])}, reduction={red}\n")
+            self.q_report.insert(
+                tk.END,
+                f"Input: rep={_rep_label(rep_in)}, handedness={hand_in}, reduction={red_in}, method=explicit tensor pipeline\n",
+            )
+            self.q_report.insert(
+                tk.END,
+                f"Output: rep={_rep_label(rep_out)}, handedness={hand_out}, reduction={red_out}\n",
+            )
             meta = self._set_symmetry_status_from_entry("q_symm_xyz")
             if meta:
                 abc_xyz = _abc_from_xyz_meta(meta)
@@ -2679,117 +2841,32 @@ class App(tk.Tk):
                         tk.END,
                         "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
                         f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
-                        f"input constants interpreted as rep={_rep_label(rep_in)}, reduction={red}.\n",
+                        f"input constants interpreted as rep={_rep_label(rep_in)}, handedness={hand_in}, reduction={red_in}.\n",
                     )
             self.q_report.insert(
                 tk.END,
-                "Quartic transport on I/II/III uses the tensor route; the fixed-representation r<->l flip uses the exact operator-level quartic sign map.\n",
+                f"Output ABC after axis transport: ({abc_out[0]:.6f}, {abc_out[1]:.6f}, {abc_out[2]:.6f}) MHz\n",
             )
-            flip_abc = _flip_handedness_abc(A, B, C)
+            D_back, _ = transform_quartic_explicit(
+                D_out, abc_out[0], abc_out[1], abc_out[2], rep_out, hand_out, red_out, rep_in, hand_in, red_in
+            )
             self.q_report.insert(
                 tk.END,
-                f"Fixed-representation handedness flip: {_rep_label(rep_in)} <-> {_norm_rep(rep_in)}l is obtained by swapping the last two axes, "
-                f"so ABC=({A:.6f}, {B:.6f}, {C:.6f}) MHz -> ({flip_abc[0]:.6f}, {flip_abc[1]:.6f}, {flip_abc[2]:.6f}) MHz.\n",
+                f"Round-trip max diff: {float(np.max(np.abs(D_back - D_in))):.3e}\n",
             )
-            D_flip = quartic_handedness_flip_constants(D_in, red)
-            names = QUARTIC_A_NAMES if red == "A" else QUARTIC_S_NAMES
-            self.q_report.insert(
-                tk.END,
-                f"Same-representation opposite-handedness constants at fixed {red} reduction ({_norm_rep(rep_in)}l): "
-                + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names, D_flip))
-                + "\n",
-            )
-            D_flip_back = quartic_handedness_flip_constants(D_flip, red)
-            self.q_report.insert(
-                tk.END,
-                f"Fixed-representation handedness round-trip max diff: {float(np.max(np.abs(D_flip_back - D_in))):.3e}\n",
-            )
-
-            # Stability diagnostics for each linear transform.
-            T1 = quartic_transform_matrix(A, B, C, rep_in, rep_outs[0], red, m_used)
-            T2 = quartic_transform_matrix(A, B, C, rep_in, rep_outs[1], red, m_used)
-            m1 = stability_metrics(T1, A, B, C)
-            m2 = stability_metrics(T2, A, B, C)
-            s1 = compute_s111(*_rotate_abc(A, B, C, rep_in, rep_outs[0]), D1, red)
-            s2 = compute_s111(*_rotate_abc(A, B, C, rep_in, rep_outs[1]), D2, red)
-            tb1 = compute_T_over_B(_rotate_abc(A, B, C, rep_in, rep_outs[0])[1], D1)
-            tb2 = compute_T_over_B(_rotate_abc(A, B, C, rep_in, rep_outs[1])[1], D2)
-            self.q_report.insert(tk.END, "\nStability diagnostics\n")
-            self.q_report.insert(tk.END, f"{_rep_label(rep_in)}->{_rep_label(rep_outs[0])}: cond2={m1['cond2']:.3e}, cond1={m1['cond1']:.3e}, condinf={m1['condinf']:.3e}\n")
-            self.q_report.insert(tk.END, f"                sigma_min={m1['sigma_min']:.3e}, sigma_max={m1['sigma_max']:.3e}, cond2*eps={m1['amp_eps']:.3e}\n")
-            self.q_report.insert(tk.END, f"                warning={stability_warning(m1['cond2'])}, s111={s1:.3e}, T/B={tb1:.3e}\n")
-            self.q_report.insert(tk.END, f"{_rep_label(rep_in)}->{_rep_label(rep_outs[1])}: cond2={m2['cond2']:.3e}, cond1={m2['cond1']:.3e}, condinf={m2['condinf']:.3e}\n")
-            self.q_report.insert(tk.END, f"                sigma_min={m2['sigma_min']:.3e}, sigma_max={m2['sigma_max']:.3e}, cond2*eps={m2['amp_eps']:.3e}\n")
-            self.q_report.insert(tk.END, f"                warning={stability_warning(m2['cond2'])}, s111={s2:.3e}, T/B={tb2:.3e}\n")
-            self.q_report.insert(tk.END, f"Gaps (MHz): A-B={m1['A_minus_B']:.6f}, B-C={m1['B_minus_C']:.6f}, A-C={m1['A_minus_C']:.6f}\n")
-            self.q_report.insert(tk.END, "\nTau' spectral invariants\n")
-            for label, spec in (
-                (_rep_label(rep_in), spec_in),
-                (_rep_label(rep_outs[0]), spec1),
-                (_rep_label(rep_outs[1]), spec2),
-            ):
-                self.q_report.insert(
-                    tk.END,
-                    f"{label}: lambda=({spec['lambda'][0]:.6g}, {spec['lambda'][1]:.6g}, {spec['lambda'][2]:.6g}), "
-                    f"I1={spec['I1']:.6g}, I2={spec['I2']:.6g}, I3={spec['I3']:.6g}\n",
-                )
-                tp = spec["tauprime"]
-                self.q_report.insert(
-                    tk.END,
-                    f"     Tau'=[[{tp[0,0]:.6g}, {tp[0,1]:.6g}, {tp[0,2]:.6g}], "
-                    f"[{tp[0,1]:.6g}, {tp[1,1]:.6g}, {tp[1,2]:.6g}], "
-                    f"[{tp[0,2]:.6g}, {tp[1,2]:.6g}, {tp[2,2]:.6g}]]\n",
-                )
-            self.q_report.insert(tk.END, "\nReduced 3+2 coordinates on pseudoinverse slice\n")
-            for label, red5 in (
-                (_rep_label(rep_in), red5_in),
-                (_rep_label(rep_outs[0]), red5_1),
-                (_rep_label(rep_outs[1]), red5_2),
-            ):
-                self.q_report.insert(
-                    tk.END,
-                    f"{label}: lambda=({red5['lambda1']:.6g}, {red5['lambda2']:.6g}, {red5['lambda3']:.6g}), "
-                    f"alpha={red5['alpha_zyz']:.6g}, beta={red5['beta_zyz']:.6g}, "
-                    f"gamma_rec={red5['gamma_zyz_recovered']:.6g}, F={red5['constraint_F_recovered']:.3e}\n",
-                )
-
-            # Internal round-trip verification of the exact tensor transform.
-            D1_back = transform_quartic_tensor(D1, A1, B1, C1, rep_outs[0], rep_in, red)
-            D2_back = transform_quartic_tensor(D2, A2, B2, C2, rep_outs[1], rep_in, red)
-            rt1 = float(np.max(np.abs(D1_back - D_in)))
-            rt2 = float(np.max(np.abs(D2_back - D_in)))
-            self.q_report.insert(
-                tk.END,
-                f"Tensor round-trip max diff: {rt1:.3e} via {_rep_label(rep_outs[0])}, {rt2:.3e} via {_rep_label(rep_outs[1])}\n",
-            )
-
             self.last_quartic_result = {
                 "A": A,
                 "B": B,
                 "C": C,
                 "rep_in": rep_in,
-                "red": red,
-                "method": m_used,
-                "rep_out1": rep_outs[0],
-                "rep_out2": rep_outs[1],
+                "hand_in": hand_in,
+                "red_in": red_in,
+                "method": "explicit tensor pipeline",
+                "rep_out": rep_out,
+                "hand_out": hand_out,
+                "red_out": red_out,
                 "D_in": D_in.copy(),
-                "D_out1": D1.copy(),
-                "D_out2": D2.copy(),
-                "m1": m1,
-                "m2": m2,
-                "s111_out1": s1,
-                "s111_out2": s2,
-                "tb_out1": tb1,
-                "tb_out2": tb2,
-                "tau_in": tau_in.copy(),
-                "tau_out1": tau1.copy(),
-                "tau_out2": tau2.copy(),
-                "spec_in": spec_in,
-                "spec_out1": spec1,
-                "spec_out2": spec2,
-                "red5_in": red5_in,
-                "red5_out1": red5_1,
-                "red5_out2": red5_2,
+                "D_out": D_out.copy(),
             }
 
         except Exception as exc:
@@ -3423,45 +3500,43 @@ class App(tk.Tk):
                     "Use harmonic input to compute the symmetry-adapted sextic constants directly."
                 )
             rep_in = _norm_rep(self.vars["s_rep_in"].get())
+            hand_in = _norm_handedness(self.vars["s_hand_in"].get())
             red_in = _norm_reduction(self.vars["s_red_in"].get())
-            red_out = _norm_reduction(self.vars["s_red_out"].get())
             H_in = self._sextic_input()
             self._validate_units_sextic(A, B, C, H_in)
-            rep_outs = [
-                _norm_rep(self.vars["s_out_rep1"].get()),
-                _norm_rep(self.vars["s_out_rep2"].get()),
-            ]
-            if rep_in in rep_outs:
-                raise ValueError("Output representations must differ from the input representation.")
-            if rep_outs[0] == rep_outs[1]:
-                raise ValueError("Output representations #1 and #2 must be different.")
+            rep_out = _norm_rep(self.vars["s_rep_out"].get())
+            hand_out = _norm_handedness(self.vars["s_hand_out"].get())
+            red_out = _norm_reduction(self.vars["s_red_out"].get())
+            if rep_in == rep_out and hand_in == hand_out and red_in == red_out:
+                raise ValueError("Choose at least one output convention change.")
 
-            H1 = transform_sextic_tensor(H_in, A, B, C, rep_in, rep_outs[0], red_in, red_out)
-            H2 = transform_sextic_tensor(H_in, A, B, C, rep_in, rep_outs[1], red_in, red_out)
+            H_out, abc_out = transform_sextic_explicit(
+                H_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out
+            )
 
-            self._set_values("s_out1", SEXTIC_KEYS, H1)
-            self._set_values("s_out2", SEXTIC_KEYS, H2)
+            out_names = SEXTIC_A_NAMES if red_out == "A" else SEXTIC_S_NAMES
+            self._set_values("s_out", SEXTIC_KEYS, H_out)
 
-            A1, B1, C1 = _rotate_abc(A, B, C, rep_in, rep_outs[0])
-            A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_outs[1])
-            H_back1 = transform_sextic_tensor(H1, A1, B1, C1, rep_outs[0], rep_in, red_out, red_in)
-            H_back2 = transform_sextic_tensor(H2, A2, B2, C2, rep_outs[1], rep_in, red_out, red_in)
-            err1 = float(np.max(np.abs(H_back1 - H_in)))
-            err2 = float(np.max(np.abs(H_back2 - H_in)))
+            H_back, _ = transform_sextic_explicit(
+                H_out, abc_out[0], abc_out[1], abc_out[2], rep_out, hand_out, red_out, rep_in, hand_in, red_in
+            )
+            err = float(np.max(np.abs(H_back - H_in)))
             phys_in = _sextic_physical_subspace_residual(H_in, rep_in, red_in, A, B, C)
-            phys1 = _sextic_physical_subspace_residual(H1, rep_outs[0], red_out, A1, B1, C1)
-            phys2 = _sextic_physical_subspace_residual(H2, rep_outs[1], red_out, A2, B2, C2)
+            phys_out = _sextic_physical_subspace_residual(H_out, rep_out, red_out, abc_out[0], abc_out[1], abc_out[2])
             dec_in = _sextic_decomposition(H_in, rep_in, red_in, A, B, C)
-            dec1 = _sextic_decomposition(H1, rep_outs[0], red_out, A1, B1, C1)
-            dec2 = _sextic_decomposition(H2, rep_outs[1], red_out, A2, B2, C2)
-            cm1 = _sextic_condition_metrics(rep_in, rep_outs[0])
-            cm2 = _sextic_condition_metrics(rep_in, rep_outs[1])
+            dec_out = _sextic_decomposition(H_out, rep_out, red_out, abc_out[0], abc_out[1], abc_out[2])
+            cm = _sextic_condition_metrics(rep_in, rep_out)
 
             self.s_report.delete("1.0", tk.END)
             self.s_report.insert(tk.END, "Sextic tensor transform completed.\n\n")
-            self.s_report.insert(tk.END, f"Input: rep={_rep_label(rep_in)}, reduction={red_in}\n")
-            self.s_report.insert(tk.END, f"Output #1: rep={_rep_label(rep_outs[0])}, reduction={red_out}\n")
-            self.s_report.insert(tk.END, f"Output #2: rep={_rep_label(rep_outs[1])}, reduction={red_out}\n")
+            self.s_report.insert(
+                tk.END,
+                f"Input: rep={_rep_label(rep_in)}, handedness={hand_in}, reduction={red_in}\n",
+            )
+            self.s_report.insert(
+                tk.END,
+                f"Output: rep={_rep_label(rep_out)}, handedness={hand_out}, reduction={red_out}\n",
+            )
             meta = self._set_symmetry_status_from_entry("s_symm_xyz")
             if meta:
                 abc_xyz = _abc_from_xyz_meta(meta)
@@ -3478,83 +3553,40 @@ class App(tk.Tk):
                         tk.END,
                         "XYZ reference used to harmonize the input A,B,C order with the manual centrifugal constants: "
                         f"A={abc_xyz[0]:.6f} MHz, B={abc_xyz[1]:.6f} MHz, C={abc_xyz[2]:.6f} MHz; "
-                        f"input constants interpreted as rep={_rep_label(rep_in)}, reduction={red_in}.\n",
+                        f"input constants interpreted as rep={_rep_label(rep_in)}, handedness={hand_in}, reduction={red_in}.\n",
                     )
-                    self.s_report.insert(
-                        tk.END,
-                        f"Manual A,B,C vs XYZ [{delta_info['status']}]: "
-                        f"manual=({manual_abc[0]:.6f}, {manual_abc[1]:.6f}, {manual_abc[2]:.6f}) MHz; "
-                        f"XYZ=({abc_xyz[0]:.6f}, {abc_xyz[1]:.6f}, {abc_xyz[2]:.6f}) MHz; "
-                        f"max|ΔABC|={delta_info['max_delta_abc_mhz']:.6f} MHz.\n",
-                    )
-            elif xyz_abc is not None:
-                delta_info = _abc_delta_info(manual_abc, xyz_abc)
-                self.s_report.insert(
-                    tk.END,
-                    f"Manual A,B,C vs XYZ [{delta_info['status']}]: "
-                    f"manual=({manual_abc[0]:.6f}, {manual_abc[1]:.6f}, {manual_abc[2]:.6f}) MHz; "
-                    f"XYZ=({xyz_abc[0]:.6f}, {xyz_abc[1]:.6f}, {xyz_abc[2]:.6f}) MHz; "
-                    f"max|ΔABC|={delta_info['max_delta_abc_mhz']:.6f} MHz.\n",
-                )
-            flip_abc = _flip_handedness_abc(A, B, C)
             self.s_report.insert(
                 tk.END,
-                f"Fixed-representation handedness flip: {_rep_label(rep_in)} <-> {_norm_rep(rep_in)}l is obtained by swapping the last two axes, "
-                f"so ABC=({A:.6f}, {B:.6f}, {C:.6f}) MHz -> ({flip_abc[0]:.6f}, {flip_abc[1]:.6f}, {flip_abc[2]:.6f}) MHz.\n",
-            )
-            h_flip = sextic_handedness_flip_constants(H_in, A, B, C, red_in)
-            names_flip = SEXTIC_A_NAMES if red_in == "A" else SEXTIC_S_NAMES
-            self.s_report.insert(
-                tk.END,
-                f"Same-representation opposite-handedness sextic constants at fixed {red_in} reduction ({_norm_rep(rep_in)}l): "
-                + ", ".join(f"{nm}={val:.6g}" for nm, val in zip(names_flip, h_flip))
-                + "\n",
-            )
-            h_flip_back = sextic_handedness_flip_constants(h_flip, *flip_abc, red_in)
-            self.s_report.insert(
-                tk.END,
-                f"Fixed-representation sextic handedness round-trip max diff: {float(np.max(np.abs(h_flip_back - H_in))):.3e}\n",
+                f"Output ABC after axis transport: ({abc_out[0]:.6f}, {abc_out[1]:.6f}, {abc_out[2]:.6f}) MHz.\n",
             )
             self.s_report.insert(
                 tk.END,
                 "Sextic transform uses the canonical 7D = 5+2 S-space route with explicit A<->S projection only at input/output.\n"
                 "The canonical coordinates are c=(sigma,g), with five physical coordinates sigma and a two-dimensional residual gauge sector g. "
-                "Cyclic I/II/III changes re-embed the same canonical coordinates into the target representation, so the full 7D round-trip closes exactly while the physical 5D sector is preserved when g=(0,0).\n"
+                "Cyclic I/II/III changes and fixed-representation handedness changes act on the same canonical object, while the output reduction only enters in the final projection.\n"
             )
-            self.s_report.insert(tk.END, f"\nPhysical-subspace residuals: in={phys_in:.3e}, out1={phys1:.3e}, out2={phys2:.3e}\n")
-            self.s_report.insert(
-                tk.END,
-                f"Round-trip check ({_rep_label(rep_in)}->{_rep_label(rep_outs[0])}->{_rep_label(rep_in)}) max error: {err1:.3e}\n",
-            )
-            self.s_report.insert(
-                tk.END,
-                f"Round-trip check ({_rep_label(rep_in)}->{_rep_label(rep_outs[1])}->{_rep_label(rep_in)}) max error: {err2:.3e}\n",
-            )
+            self.s_report.insert(tk.END, f"\nPhysical-subspace residuals: in={phys_in:.3e}, out={phys_out:.3e}\n")
+            self.s_report.insert(tk.END, f"Round-trip max error: {err:.3e}\n")
             self.s_report.insert(
                 tk.END,
                 "The full 7D round-trip closes at numerical precision for arbitrary sextic inputs; "
                 "large residuals only indicate that the input carries a nonzero component outside the modeled physical 5D sector.\n",
             )
             self.s_report.insert(tk.END, "\nSextic conditioning diagnostics\n")
-            for rep_to, cm in ((rep_outs[0], cm1), (rep_outs[1], cm2)):
-                self.s_report.insert(
-                    tk.END,
-                    f"{rep_in}->{rep_to}: cond2(T_full)={cm['T_full_cond2_nz']:.3e}, cond2(T_phys)={cm['T_phys_cond2_nz']:.3e}, "
-                    f"sigma_min(full)={cm['T_full_sigma_min_nz']:.3e}, sigma_max(full)={cm['T_full_sigma_max_nz']:.3e}, "
-                    f"cond2*eps(full)={cm['T_full_amp_eps_nz']:.3e}\n",
-                )
-                self.s_report.insert(
-                    tk.END,
-                    f"              cond2(B_{rep_in})={cm['B_from_cond2_nz']:.3e}, cond2(B_{rep_to})={cm['B_to_cond2_nz']:.3e}, "
-                    f"cond2(M_{rep_in})={cm['M_from_cond2_nz']:.3e}, cond2(M_{rep_to})={cm['M_to_cond2_nz']:.3e}, "
-                    f"warning={stability_warning(cm['T_full_cond2_nz'])}\n",
-                )
+            self.s_report.insert(
+                tk.END,
+                f"{rep_in}->{rep_out}: cond2(T_full)={cm['T_full_cond2_nz']:.3e}, cond2(T_phys)={cm['T_phys_cond2_nz']:.3e}, "
+                f"sigma_min(full)={cm['T_full_sigma_min_nz']:.3e}, sigma_max(full)={cm['T_full_sigma_max_nz']:.3e}, "
+                f"cond2*eps(full)={cm['T_full_amp_eps_nz']:.3e}\n",
+            )
+            self.s_report.insert(
+                tk.END,
+                f"              cond2(B_{rep_in})={cm['B_from_cond2_nz']:.3e}, cond2(B_{rep_out})={cm['B_to_cond2_nz']:.3e}, "
+                f"cond2(M_{rep_in})={cm['M_from_cond2_nz']:.3e}, cond2(M_{rep_out})={cm['M_to_cond2_nz']:.3e}, "
+                f"warning={stability_warning(cm['T_full_cond2_nz'])}\n",
+            )
             self.s_report.insert(tk.END, "\nSextic 5+2 decomposition in canonical S-subspace\n")
-            for label, dec in (
-                (rep_in, dec_in),
-                (rep_outs[0], dec1),
-                (rep_outs[1], dec2),
-            ):
+            for label, dec in ((rep_in, dec_in), (rep_out, dec_out)):
                 sigma = dec["sigma"]
                 gauge = dec["gauge_coords"]
                 self.s_report.insert(

@@ -42,6 +42,7 @@ from compare_gaussian_sextic import sextic_cubic_hierarchy_hz, sextic_h22_linear
 from ceditt_gui import (
     _M4,
     _flip_handedness_abc,
+    _norm_handedness,
     quartic_handedness_flip_constants,
     transform_quartic_general,
     quartic_change_reduction,
@@ -58,7 +59,9 @@ from ceditt_gui import (
     compute_s111,
     quartic_transform_matrix,
     stability_metrics,
+    transform_quartic_explicit,
     transform_quartic_tensor,
+    transform_sextic_explicit,
     transform_sextic_tensor,
 )
 from distortion_workflow import compute_order2_quartic
@@ -236,20 +239,18 @@ class RV3ManualQuarticRequest:
     B_mhz: float
     C_mhz: float
     rep_in: str
-    reduction: str
     constants: list[float]
-    reduction_out: str = "same"
+    hand_in: str = "r"
+    reduction: str = "A"
+    rep_out: str = "II"
+    hand_out: str = "r"
+    reduction_out: str = "A"
 
 
 @dataclass
 class RV3ManualQuarticResult:
     request: dict[str, Any]
-    outputs: dict[str, dict[str, Any]]
-    tau_input: list[float]
-    spectral_invariants: dict[str, Any]
-    reduced_3plus2: dict[str, Any]
-    handedness_flip: dict[str, Any]
-    reduction_change: dict[str, Any] | None = None
+    output: dict[str, Any]
 
     def to_jsonable(self) -> dict[str, Any]:
         return _sanitize_jsonable(asdict(self))
@@ -261,17 +262,18 @@ class RV3ManualSexticRequest:
     B_mhz: float
     C_mhz: float
     rep_in: str
-    reduction_in: str
-    reduction_out: str
     constants: list[float]
+    hand_in: str = "r"
+    reduction_in: str = "A"
+    rep_out: str = "II"
+    hand_out: str = "r"
+    reduction_out: str = "A"
 
 
 @dataclass
 class RV3ManualSexticResult:
     request: dict[str, Any]
-    outputs: dict[str, dict[str, Any]]
-    physical_subspace_input: dict[str, Any]
-    handedness_flip: dict[str, Any]
+    output: dict[str, Any]
 
     def to_jsonable(self) -> dict[str, Any]:
         return _sanitize_jsonable(asdict(self))
@@ -365,8 +367,11 @@ def _manual_transform_report(obj: Any) -> str:
 
 def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQuarticResult:
     rep_in = _norm_rep(request.rep_in)
+    hand_in = _norm_handedness(request.hand_in)
     red_in = _norm_reduction(request.reduction)
-    red_out = red_in if str(request.reduction_out).strip().lower() == "same" else _norm_reduction(request.reduction_out)
+    rep_out = _norm_rep(request.rep_out)
+    hand_out = _norm_handedness(request.hand_out)
+    red_out = _norm_reduction(request.reduction_out)
     A = float(request.A_mhz)
     B = float(request.B_mhz)
     C = float(request.C_mhz)
@@ -377,76 +382,40 @@ def run_manual_quartic_transform(request: RV3ManualQuarticRequest) -> RV3ManualQ
             "Manual quartic transform is reserved for asymmetric-top transforms. "
             "Use the harmonic RV3 route for exact symmetric-top or linear limits."
         )
-
-    rep_outs = [rep for rep in ("I", "II", "III") if rep != rep_in]
-    m_in = _M4(A, B, C, red_in)
-    tau_in = np.linalg.pinv(m_in) @ d_in
-    spec_in = _quartic_spectral_invariants_from_tau(tau_in)
-    red5_in = _quartic_reduced_3plus2_from_tau(tau_in, A, B, C)
-    outputs: dict[str, dict[str, Any]] = {}
-    for rep_out in rep_outs:
-        d_out = transform_quartic_general(d_in, A, B, C, rep_in, rep_out, red_in, red_out)
-        A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_out)
-        if red_in == red_out:
-            tmat = quartic_transform_matrix(A, B, C, rep_in, rep_out, red_in, "tensor")
-            metrics: dict[str, Any] = stability_metrics(tmat, A, B, C)
-        else:
-            metrics = {"note": "Quartic A<->S conversion is handled explicitly through the shared tau slice; fixed-reduction tensor stability metrics apply only when reduction is unchanged."}
-        m_out = _M4(A2, B2, C2, red_out)
-        tau_out = np.linalg.pinv(m_out) @ d_out
-        outputs[rep_out] = {
-            "A_mhz": A2,
-            "B_mhz": B2,
-            "C_mhz": C2,
-            "reduction_out": red_out,
-            "constants": [float(x) for x in d_out],
-            "tensor_roundtrip_max_error": float(np.max(np.abs(transform_quartic_general(d_out, A2, B2, C2, rep_out, rep_in, red_out, red_in) - d_in))),
-            "stability_metrics": metrics,
-            "s111": compute_s111(A2, B2, C2, d_out, red_out),
-            "T_over_B": compute_T_over_B(B2, d_out),
-            "spectral_invariants": spec_in if rep_out == rep_in else _quartic_spectral_invariants_from_tau(tau_out),
-            "reduced_3plus2": _quartic_reduced_3plus2_from_tau(tau_out, A2, B2, C2),
-        }
-    flip_abc = _flip_handedness_abc(A, B, C)
-    d_flip = quartic_handedness_flip_constants(d_in, red_in)
-    reduction_change = None
-    if red_in != red_out:
-        d_red = quartic_change_reduction(d_in, A, B, C, rep_in, red_in, red_out)
-        d_back = quartic_change_reduction(d_red, A, B, C, rep_in, red_out, red_in)
-        reduction_change = {
-            "rep": rep_in,
-            "reduction_in": red_in,
-            "reduction_out": red_out,
-            "constants": [float(x) for x in d_red],
-            "roundtrip_max_error": float(np.max(np.abs(d_back - d_in))),
-        }
+    d_out, abc_out = transform_quartic_explicit(d_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out)
+    d_back, _ = transform_quartic_explicit(d_out, abc_out[0], abc_out[1], abc_out[2], rep_out, hand_out, red_out, rep_in, hand_in, red_in)
     return RV3ManualQuarticResult(
         request={
             "A_mhz": A,
             "B_mhz": B,
             "C_mhz": C,
             "rep_in": rep_in,
+            "hand_in": hand_in,
             "reduction_in": red_in,
+            "rep_out": rep_out,
+            "hand_out": hand_out,
             "reduction_out": red_out,
             "constants": [float(x) for x in d_in],
         },
-        outputs=outputs,
-        tau_input=[float(x) for x in tau_in],
-        spectral_invariants=spec_in,
-        reduced_3plus2=red5_in,
-        handedness_flip={
-            "A_mhz": flip_abc[0],
-            "B_mhz": flip_abc[1],
-            "C_mhz": flip_abc[2],
-            "constants": [float(x) for x in d_flip],
+        output={
+            "A_mhz": float(abc_out[0]),
+            "B_mhz": float(abc_out[1]),
+            "C_mhz": float(abc_out[2]),
+            "rep_out": rep_out,
+            "hand_out": hand_out,
+            "reduction_out": red_out,
+            "constants": [float(x) for x in d_out],
+            "roundtrip_max_error": float(np.max(np.abs(d_back - d_in))),
         },
-        reduction_change=reduction_change,
     )
 
 
 def run_manual_sextic_transform(request: RV3ManualSexticRequest) -> RV3ManualSexticResult:
     rep_in = _norm_rep(request.rep_in)
+    hand_in = _norm_handedness(request.hand_in)
     red_in = _norm_reduction(request.reduction_in)
+    rep_out = _norm_rep(request.rep_out)
+    hand_out = _norm_handedness(request.hand_out)
     red_out = _norm_reduction(request.reduction_out)
     A = float(request.A_mhz)
     B = float(request.B_mhz)
@@ -458,52 +427,33 @@ def run_manual_sextic_transform(request: RV3ManualSexticRequest) -> RV3ManualSex
             "Manual sextic transform is reserved for asymmetric-top transforms. "
             "Use the harmonic RV3 route for exact symmetric-top or linear limits."
         )
-
-    rep_outs = [rep for rep in ("I", "II", "III") if rep != rep_in]
-    phys_in = _sextic_physical_subspace_residual(h_in, rep_in, red_in, A, B, C)
-    dec_in = _sextic_decomposition(h_in, rep_in, red_in, A, B, C)
-    outputs: dict[str, dict[str, Any]] = {}
-    for rep_out in rep_outs:
-        h_out = transform_sextic_tensor(h_in, A, B, C, rep_in, rep_out, red_in, red_out)
-        A2, B2, C2 = _rotate_abc(A, B, C, rep_in, rep_out)
-        outputs[rep_out] = {
-            "A_mhz": A2,
-            "B_mhz": B2,
-            "C_mhz": C2,
-            "constants": [float(x) for x in h_out],
-            "physical_subspace_residual": _sextic_physical_subspace_residual(h_out, rep_out, red_out, A2, B2, C2),
-            "roundtrip_max_error": float(np.max(np.abs(transform_sextic_tensor(h_out, A2, B2, C2, rep_out, rep_in, red_out, red_in) - h_in))),
-            "decomposition": _sextic_decomposition(h_out, rep_out, red_out, A2, B2, C2),
-            "condition_metrics": _sextic_condition_metrics(rep_in, rep_out),
-        }
-    flip_abc = _flip_handedness_abc(A, B, C)
-    h_flip = sextic_handedness_flip_constants(h_in, A, B, C, red_in)
-    h_flip_back = sextic_handedness_flip_constants(h_flip, *flip_abc, red_in)
+    h_out, abc_out = transform_sextic_explicit(h_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out)
+    h_back, _ = transform_sextic_explicit(h_out, abc_out[0], abc_out[1], abc_out[2], rep_out, hand_out, red_out, rep_in, hand_in, red_in)
     return RV3ManualSexticResult(
         request={
             "A_mhz": A,
             "B_mhz": B,
             "C_mhz": C,
             "rep_in": rep_in,
+            "hand_in": hand_in,
             "reduction_in": red_in,
+            "rep_out": rep_out,
+            "hand_out": hand_out,
             "reduction_out": red_out,
             "constants": [float(x) for x in h_in],
         },
-        outputs=outputs,
-        physical_subspace_input={
-            "residual": phys_in,
-            "decomposition": dec_in,
-        },
-        handedness_flip={
-            "A_mhz": flip_abc[0],
-            "B_mhz": flip_abc[1],
-            "C_mhz": flip_abc[2],
-            "constants": [float(x) for x in h_flip],
-            "roundtrip_max_error": float(np.max(np.abs(h_flip_back - h_in))),
-            "note": (
-                "The fixed-representation r<->l sextic flip is applied exactly on the same full 7D sextic object used by the cyclic transport; "
-                "the canonical 7D = 5+2 coordinates preserve the physical 5D sigma sector and the residual 2D gauge sector, while A<->S is handled only as input/output projection."
-            ),
+        output={
+            "A_mhz": float(abc_out[0]),
+            "B_mhz": float(abc_out[1]),
+            "C_mhz": float(abc_out[2]),
+            "rep_out": rep_out,
+            "hand_out": hand_out,
+            "reduction_out": red_out,
+            "constants": [float(x) for x in h_out],
+            "roundtrip_max_error": float(np.max(np.abs(h_back - h_in))),
+            "physical_subspace_residual": _sextic_physical_subspace_residual(h_out, rep_out, red_out, abc_out[0], abc_out[1], abc_out[2]),
+            "decomposition": _sextic_decomposition(h_out, rep_out, red_out, abc_out[0], abc_out[1], abc_out[2]),
+            "condition_metrics": _sextic_condition_metrics(rep_in, rep_out),
         },
     )
 
@@ -1317,14 +1267,14 @@ def launch_rv3_gui() -> int:
         "manual_A": tk.StringVar(),
         "manual_B": tk.StringVar(),
         "manual_C": tk.StringVar(),
-        "manual_q_rep_in": tk.StringVar(value="I"),
-        "manual_q_red": tk.StringVar(value="A"),
-        "manual_q_units": tk.StringVar(value="kHz"),
+        "manual_rep_in": tk.StringVar(value="I"),
+        "manual_hand_in": tk.StringVar(value="r"),
+        "manual_red_in": tk.StringVar(value="A"),
+        "manual_rep_out": tk.StringVar(value="II"),
+        "manual_hand_out": tk.StringVar(value="r"),
+        "manual_red_out": tk.StringVar(value="A"),
+        "manual_units": tk.StringVar(value="kHz"),
         "manual_q_constants": tk.StringVar(),
-        "manual_s_rep_in": tk.StringVar(value="I"),
-        "manual_s_red_in": tk.StringVar(value="S"),
-        "manual_s_red_out": tk.StringVar(value="S"),
-        "manual_s_units": tk.StringVar(value="kHz"),
         "manual_s_constants": tk.StringVar(),
     }
 
@@ -1409,66 +1359,74 @@ def launch_rv3_gui() -> int:
     ttk.Label(manual, text="C (MHz)").grid(row=0, column=4, sticky="w")
     ttk.Entry(manual, textvariable=vars["manual_C"], width=14).grid(row=0, column=5, sticky="w", padx=4)
 
-    ttk.Label(manual, text="Quartic rep").grid(row=1, column=0, sticky="w", pady=(6, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_q_rep_in"], values=["I", "II", "III"], width=6, state="readonly").grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
-    ttk.Label(manual, text="Quartic red").grid(row=1, column=2, sticky="w", pady=(6, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_q_red"], values=["A", "S"], width=6, state="readonly").grid(row=1, column=3, sticky="w", padx=4, pady=(6, 0))
-    ttk.Label(manual, text="Quartic units").grid(row=1, column=4, sticky="w", pady=(6, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_q_units"], values=["kHz", "MHz"], width=6, state="readonly").grid(row=1, column=5, sticky="w", padx=4, pady=(6, 0))
-    ttk.Label(manual, text="Quartic constants (DJ,DJK,DK,dJ,dK)").grid(row=2, column=0, sticky="w", pady=(6, 0))
-    ttk.Entry(manual, textvariable=vars["manual_q_constants"], width=100).grid(row=2, column=1, columnspan=5, sticky="we", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Input rep").grid(row=1, column=0, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_rep_in"], values=["I", "II", "III"], width=6, state="readonly").grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Input hand").grid(row=1, column=2, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_hand_in"], values=["r", "l"], width=6, state="readonly").grid(row=1, column=3, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Input red").grid(row=1, column=4, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_red_in"], values=["A", "S"], width=6, state="readonly").grid(row=1, column=5, sticky="w", padx=4, pady=(6, 0))
 
-    ttk.Label(manual, text="Sextic rep").grid(row=3, column=0, sticky="w", pady=(10, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_s_rep_in"], values=["I", "II", "III"], width=6, state="readonly").grid(row=3, column=1, sticky="w", padx=4, pady=(10, 0))
-    ttk.Label(manual, text="Sextic red in").grid(row=3, column=2, sticky="w", pady=(10, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_s_red_in"], values=["A", "S"], width=6, state="readonly").grid(row=3, column=3, sticky="w", padx=4, pady=(10, 0))
-    ttk.Label(manual, text="Sextic red out").grid(row=3, column=4, sticky="w", pady=(10, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_s_red_out"], values=["A", "S"], width=6, state="readonly").grid(row=3, column=5, sticky="w", padx=4, pady=(10, 0))
-    ttk.Label(manual, text="Sextic units").grid(row=4, column=0, sticky="w", pady=(6, 0))
-    ttk.Combobox(manual, textvariable=vars["manual_s_units"], values=["kHz", "MHz"], width=6, state="readonly").grid(row=4, column=1, sticky="w", padx=4, pady=(6, 0))
-    ttk.Label(manual, text="Sextic constants (HJ,HJK,HKJ,HK,h1,h2,h3)").grid(row=5, column=0, sticky="w", pady=(6, 0))
+    ttk.Label(manual, text="Output rep").grid(row=2, column=0, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_rep_out"], values=["I", "II", "III"], width=6, state="readonly").grid(row=2, column=1, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Output hand").grid(row=2, column=2, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_hand_out"], values=["r", "l"], width=6, state="readonly").grid(row=2, column=3, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Output red").grid(row=2, column=4, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_red_out"], values=["A", "S"], width=6, state="readonly").grid(row=2, column=5, sticky="w", padx=4, pady=(6, 0))
+
+    ttk.Label(manual, text="Units").grid(row=3, column=0, sticky="w", pady=(6, 0))
+    ttk.Combobox(manual, textvariable=vars["manual_units"], values=["kHz", "MHz"], width=6, state="readonly").grid(row=3, column=1, sticky="w", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Quartic constants (DJ,DJK,DK,dJ,dK)").grid(row=4, column=0, sticky="w", pady=(6, 0))
+    ttk.Entry(manual, textvariable=vars["manual_q_constants"], width=100).grid(row=4, column=1, columnspan=5, sticky="we", padx=4, pady=(6, 0))
+    ttk.Label(manual, text="Sextic constants (HJ,HJK,HKJ,HK,h1,h2,h3) optional").grid(row=5, column=0, sticky="w", pady=(6, 0))
     ttk.Entry(manual, textvariable=vars["manual_s_constants"], width=100).grid(row=5, column=1, columnspan=5, sticky="we", padx=4, pady=(6, 0))
     ttk.Label(
         manual,
-        text="Manual distortion constants can be entered in kHz or MHz. Gaussian/file routes remain available above.",
+        text="Provide A,B,C, input/output representation-handedness-reduction, quartic constants, and sextic constants only if available. Gaussian/file routes remain available above.",
     ).grid(row=6, column=0, columnspan=6, sticky="w", pady=(6, 0))
 
-    def _run_manual_quartic() -> None:
+    def _run_manual_transform() -> None:
         try:
-            result = run_manual_quartic_transform(
-                RV3ManualQuarticRequest(
-                    A_mhz=_as_float_gui(vars["manual_A"].get()),
-                    B_mhz=_as_float_gui(vars["manual_B"].get()),
-                    C_mhz=_as_float_gui(vars["manual_C"].get()),
-                    rep_in=vars["manual_q_rep_in"].get(),
-                    reduction=vars["manual_q_red"].get(),
-                    constants=_parse_manual_constant_list(vars["manual_q_constants"].get(), 5, vars["manual_q_units"].get()),
-                )
-            )
             report.delete("1.0", tk.END)
-            report.insert(tk.END, _manual_transform_report(result))
+            A = _as_float_gui(vars["manual_A"].get())
+            B = _as_float_gui(vars["manual_B"].get())
+            C = _as_float_gui(vars["manual_C"].get())
+            rep_in = _norm_rep(vars["manual_rep_in"].get())
+            rep_out = _norm_rep(vars["manual_rep_out"].get())
+            hand_in = _norm_handedness(vars["manual_hand_in"].get())
+            hand_out = _norm_handedness(vars["manual_hand_out"].get())
+            red_in = _norm_reduction(vars["manual_red_in"].get())
+            red_out = _norm_reduction(vars["manual_red_out"].get())
+            if rep_in == rep_out and hand_in == hand_out and red_in == red_out:
+                raise ValueError("Choose at least one output convention change.")
+            out: dict[str, Any] = {
+                "abc_mhz": [A, B, C],
+                "input": {"representation": rep_in, "handedness": hand_in, "reduction": red_in},
+                "output": {"representation": rep_out, "handedness": hand_out, "reduction": red_out},
+            }
+            q_text = vars["manual_q_constants"].get().strip()
+            if q_text:
+                q_in = np.asarray(_parse_manual_constant_list(q_text, 5, vars["manual_units"].get()), dtype=float)
+                q_out, abc_q = transform_quartic_explicit(q_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out)
+                out["quartic"] = {
+                    "input_constants_khz": [float(x) for x in q_in],
+                    "output_constants_khz": [float(x) for x in q_out],
+                    "output_abc_mhz": [float(x) for x in abc_q],
+                }
+            s_text = vars["manual_s_constants"].get().strip()
+            if s_text:
+                s_in = np.asarray(_parse_manual_constant_list(s_text, 7, vars["manual_units"].get()), dtype=float)
+                s_out, abc_s = transform_sextic_explicit(s_in, A, B, C, rep_in, hand_in, red_in, rep_out, hand_out, red_out)
+                out["sextic"] = {
+                    "input_constants_khz": [float(x) for x in s_in],
+                    "output_constants_khz": [float(x) for x in s_out],
+                    "output_abc_mhz": [float(x) for x in abc_s],
+                }
+            if "quartic" not in out and "sextic" not in out:
+                raise ValueError("Provide quartic constants and optionally sextic constants.")
+            report.insert(tk.END, json.dumps(_sanitize_jsonable(out), indent=2, sort_keys=True))
         except Exception as exc:
             report.delete("1.0", tk.END)
-            report.insert(tk.END, f"RV3 manual quartic error:\n{exc}\n")
-
-    def _run_manual_sextic() -> None:
-        try:
-            result = run_manual_sextic_transform(
-                RV3ManualSexticRequest(
-                    A_mhz=_as_float_gui(vars["manual_A"].get()),
-                    B_mhz=_as_float_gui(vars["manual_B"].get()),
-                    C_mhz=_as_float_gui(vars["manual_C"].get()),
-                    rep_in=vars["manual_s_rep_in"].get(),
-                    reduction_in=vars["manual_s_red_in"].get(),
-                    reduction_out=vars["manual_s_red_out"].get(),
-                    constants=_parse_manual_constant_list(vars["manual_s_constants"].get(), 7, vars["manual_s_units"].get()),
-                )
-            )
-            report.delete("1.0", tk.END)
-            report.insert(tk.END, _manual_transform_report(result))
-        except Exception as exc:
-            report.delete("1.0", tk.END)
-            report.insert(tk.END, f"RV3 manual sextic error:\n{exc}\n")
+            report.insert(tk.END, f"RV3 manual transform error:\n{exc}\n")
 
     def _export(kind: str) -> None:
         result = last_result["value"]
@@ -1493,8 +1451,7 @@ def launch_rv3_gui() -> int:
     ttk.Button(actions, text="Run Summary", command=lambda: _run("summary")).pack(side=tk.LEFT)
     ttk.Button(actions, text="Run Integrated Report", command=lambda: _run("report")).pack(side=tk.LEFT, padx=(8, 0))
     ttk.Button(actions, text="Run JSON", command=lambda: _run("json")).pack(side=tk.LEFT, padx=(8, 0))
-    ttk.Button(actions, text="Manual Quartic", command=_run_manual_quartic).pack(side=tk.LEFT, padx=(24, 0))
-    ttk.Button(actions, text="Manual Sextic", command=_run_manual_sextic).pack(side=tk.LEFT, padx=(8, 0))
+    ttk.Button(actions, text="Manual Transform", command=_run_manual_transform).pack(side=tk.LEFT, padx=(24, 0))
     ttk.Button(actions, text="Export JSON", command=lambda: _export("json")).pack(side=tk.LEFT, padx=(24, 0))
     ttk.Button(actions, text="Export Report", command=lambda: _export("report")).pack(side=tk.LEFT, padx=(8, 0))
     ttk.Button(actions, text="Export CSV", command=lambda: _export("csv")).pack(side=tk.LEFT, padx=(8, 0))
